@@ -8,11 +8,11 @@ export class AccountsController {
 
     @Post('login')
     checkAccount(@Body(ValidationPipe) account: AccountDto) {
-        return this.accountService.login(account)
+        return this.accountService.login(account);
     }
 
     @Post('regist')
     registAccount(@Body(ValidationPipe) account: AccountDto) {
-        return this.accountService
+        return this.accountService.regist(account);
     }
 }
