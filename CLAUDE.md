@@ -79,15 +79,22 @@ Prisma config file: `backend/prisma.config.ts` (uses dotenv, loads `prisma/schem
 
 ## 開発規約
 
-詳細な開発規約は **[ai-agent/docs/conventions.md](ai-agent/docs/conventions.md)** を参照すること。
+詳細な開発規約は **[.claude/guidelines/conventions.md](.claude/guidelines/conventions.md)** を参照すること。
 コードを生成・修正する前に必ずこのファイルを読み込んで規約に従うこと。
 
 ### 規約の自動更新ルール
 
-会話の中でユーザーが以下のような修正・指摘をした場合、`docs/conventions.md` を即座に更新すること:
+以下のタイミングで `.claude/guidelines/conventions.md` を即座に更新すること:
+
+**会話中の直接指摘**
 - 生成したコードに対して「こうしてほしい」「こうするべき」と指摘した場合
 - 「〜は使わないで」「〜にして」などのスタイル・設計の修正をした場合
 - 採用したアプローチを承認した場合（暗黙のルールとして追記）
+- 提案したアプローチをユーザーが承認しなかった場合（「やめておく」「このままでいい」「不要」など）→ そのアプローチを採用しない旨を追記
+
+**エージェントの承認フェーズ（orchestrator-agent が担当）**
+- 各ステップの承認ゲートでユーザーが承認せず修正を要求した場合、orchestrator-agent が却下内容（何を・なぜ変えるか）を規約として追記する
+- 対象ステップ: 実装計画・実装コード・テスト結果・ソースレビュー・設計書更新
 
 更新時は該当する規約セクションに追記・修正し、ユーザーに「規約を更新しました」と伝えること。
 
