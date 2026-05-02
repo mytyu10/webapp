@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/yuto/workspace/webapp/.claude/update-conventions.sh",
+            "timeout": 60,
+            "statusMessage": "規約を確認中..."
+          }
+        ]
+      }
+    ]
+  }
+}
