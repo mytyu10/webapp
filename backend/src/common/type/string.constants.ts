@@ -1,4 +1,3 @@
 export const STRING_CONSTANTS = {
-    EMPTY: '',
-
-} as const
+  EMPTY: '',
+} as const;
