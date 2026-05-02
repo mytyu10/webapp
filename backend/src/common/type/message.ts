@@ -6,11 +6,21 @@ export const MESSAGE = {
     REGIST_SUCCESS: 'アカウントの登録に成功しました',
     REGIST_FAILED: 'アカウントの作成に失敗しました',
     REGIST_DUPLICATE: 'このユーザー名は既に使用されています',
+    UNAUTHORIZED: '認証が必要です',
   },
   DB: {
     DB_ERROR: 'データベースエラーが発生しました',
   },
   VALIDATION: {
     INVALID_INPUT: '入力値が不正です',
+  },
+  TASK: {
+    CREATE_SUCCESS: 'タスクを作成しました',
+    UPDATE_SUCCESS: 'タスクを更新しました',
+    DELETE_SUCCESS: 'タスクを削除しました',
+    NOT_FOUND: '指定されたタスクが見つかりません',
+    CREATE_FAILED: 'タスクの作成に失敗しました',
+    UPDATE_FAILED: 'タスクの更新に失敗しました',
+    DELETE_FAILED: 'タスクの削除に失敗しました',
   },
 };

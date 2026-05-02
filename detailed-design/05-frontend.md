@@ -6,18 +6,69 @@
 // App.tsx
 <BrowserRouter>
   <Routes>
-    <Route path="/"       element={<HomePage />}   />
+    {/* 公開ルート */}
     <Route path="/login"  element={<LoginPage />}  />
     <Route path="/regist" element={<RegistPage />} />
+
+    {/* 認証済みルート（PrivateRoute + SidebarLayout） */}
+    <Route element={<PrivateRoute />}>
+      <Route element={<SidebarLayout />}>
+        <Route path="/"              element={<HomePage />}       />
+        <Route path="/tasks"         element={<TaskListPage />}   />
+        <Route path="/tasks/new"     element={<TaskFormPage />}   />
+        <Route path="/tasks/:id"     element={<TaskDetailPage />} />
+        <Route path="/tasks/:id/edit" element={<TaskFormPage />}  />
+      </Route>
+    </Route>
   </Routes>
 </BrowserRouter>
 ```
 
-| パス | コンポーネント | 状態 |
-|------|-------------|------|
-| `/` | `HomePage` | スタブ（未実装） |
-| `/login` | `LoginPage` | 実装済み |
-| `/regist` | `RegistPage` | 実装済み |
+| パス | コンポーネント | 認証 | 状態 |
+|------|-------------|------|------|
+| `/` | `HomePage` → `/tasks` リダイレクト | 要認証 | 実装済み |
+| `/login` | `LoginPage` | 不要 | 実装済み |
+| `/regist` | `RegistPage` | 不要 | 実装済み |
+| `/tasks` | `TaskListPage` | 要認証 | 実装済み |
+| `/tasks/new` | `TaskFormPage`（作成モード） | 要認証 | 実装済み |
+| `/tasks/:id` | `TaskDetailPage` | 要認証 | 実装済み |
+| `/tasks/:id/edit` | `TaskFormPage`（編集モード） | 要認証 | 実装済み |
+
+---
+
+## 認証フロー（PrivateRoute）
+
+```
+PrivateRoute
+├── localStorage.getItem('token') を取得
+├── token が null → /login へリダイレクト
+├── JWTをBase64デコードしてペイロードのexpを取得
+├── exp が未存在または現在時刻 <= exp → /login へリダイレクト
+└── 有効 → <Outlet /> をレンダリング（SidebarLayout → ページコンポーネント）
+```
+
+---
+
+## レイアウト
+
+### SidebarLayout
+
+ログイン後の全画面に共通するレイアウトコンポーネント。
+
+```
+SidebarLayout
+├── Sidebar（左固定、w-60）
+└── main（flex-1、p-8）
+    └── <Outlet />（各ページコンポーネント）
+```
+
+### Sidebar
+
+| 要素 | 内容 |
+|------|------|
+| ヘッダー | "WebApp" テキスト |
+| ナビゲーション | タスク管理（/tasks） |
+| フッター | ログアウトボタン（localStorage削除 → /login） |
 
 ---
 
@@ -49,6 +100,56 @@ RegistPage
     ├── FormErrorBanner（APIエラー表示）
     ├── SubmitButton（"登録"）
     └── <Link to="/login">ログインはこちら</Link>
+```
+
+### TaskListPage
+
+**責務**: タスク一覧の表示・削除確認・ナビゲーション。ロジックは `useTaskList` に委譲。
+
+```
+TaskListPage
+├── ヘッダー（タイトル + "タスクを作成"ボタン）
+├── FormErrorBanner（API/削除エラー）
+├── 読み込み中テキスト
+├── タスクなしメッセージ
+└── タスクカード一覧
+    └── 各カード
+        ├── タイトル・説明・期限・担当者
+        └── 詳細・編集・削除ボタン
+```
+
+### TaskFormPage
+
+**責務**: タスク作成・編集フォームの表示。ロジックは `useTaskForm` に委譲。
+URLパラメータに `id` がある場合は編集モード。
+
+```
+TaskFormPage
+└── FormCard（"タスクを作成" or "タスクを編集"）
+    ├── FormErrorBanner
+    ├── FormField（タイトル）
+    ├── textarea（説明文）
+    ├── input[datetime-local]（期限）
+    ├── FormField（担当者、カンマ区切り）
+    └── キャンセル / SubmitButton（"作成する" or "更新する"）
+```
+
+### TaskDetailPage
+
+**責務**: タスク詳細の表示。データ取得ロジックをコンポーネント内useEffectで管理。
+
+```
+TaskDetailPage
+├── 一覧に戻るボタン
+├── FormErrorBanner
+├── 読み込み中テキスト
+└── 詳細カード
+    ├── タイトル
+    ├── 説明文
+    ├── 期限
+    ├── 担当者（タグ表示）
+    ├── 作成日時
+    └── 編集するボタン
 ```
 
 ---
@@ -87,16 +188,38 @@ RegistPage
 | `apiError` | `string` | APIエラーメッセージ |
 | `loading` | `boolean` | 送信中フラグ |
 
+### useTaskList
+
+| state | 型 | 説明 |
+|-------|-----|------|
+| `tasks` | `Task[]` | タスク一覧 |
+| `loading` | `boolean` | 読み込み中フラグ |
+| `error` | `string` | 取得エラーメッセージ |
+
+| 関数 | 説明 |
+|------|------|
+| `handleDelete(id)` | タスクを削除しローカルstateを更新 |
+| `reload()` | 一覧を再読み込みするトリガーをインクリメント |
+
+### useTaskForm
+
+URLパラメータの `id` 有無で作成/編集モードを切り替える。
+
+| state | 型 | 説明 |
+|-------|-----|------|
+| `values` | `TaskFormValues` | フォーム入力値（title, description, due_date, assigneesText） |
+| `errors` | `TaskFormErrors` | バリデーションエラー |
+| `apiError` | `string` | APIエラーメッセージ |
+| `loading` | `boolean` | 送信/読み込み中フラグ |
+| `isEditMode` | `boolean` | 編集モードフラグ |
+
 **handleSubmit フロー**
 
 ```
-1. validateRegistForm(username, password) でクライアントバリデーション
-   → エラーあり: errors にセット、処理終了
-2. loading = true
-3. registRequest(username, password) を呼び出し
-4. 成功: navigate('/login')
-5. 失敗: apiError にエラーメッセージをセット
-6. loading = false
+1. validateTaskForm(values) でバリデーション
+2. 成功: createTask or updateTask を呼び出し
+3. 完了: navigate('/tasks')
+4. 失敗: apiError にセット
 ```
 
 ---
@@ -111,6 +234,18 @@ RegistPage
 | username | 11文字以上 | 「ユーザー名は10文字以内で入力してください。」 |
 | password | 空文字 | 「パスワードを入力してください。」 |
 | password | 8文字未満 または 21文字以上 | 「パスワードは8〜20文字で入力してください。」 |
+
+### taskValidation
+
+| フィールド | 条件 | エラーメッセージ |
+|-----------|------|----------------|
+| title | 空文字 | 「タイトルを入力してください」 |
+| title | 201文字以上 | 「タイトルは200文字以内で入力してください」 |
+| description | 空文字 | 「説明文を入力してください」 |
+| description | 1001文字以上 | 「説明文は1000文字以内で入力してください」 |
+| due_date | 空文字 | 「期限を入力してください」 |
+| due_date | 不正な日時形式 | 「正しい日時形式で入力してください」 |
+| assignees | 51人以上 | 「担当者は50人以内で設定してください」 |
 
 ---
 
@@ -128,6 +263,18 @@ const BASE_URL = `${process.env.REACT_APP_API_SCHEME}://${process.env.REACT_APP_
 |------|---------|-------------|-------|-------|
 | `loginRequest(username, password)` | POST | `/accounts/login` | `Promise<string>`（JWTトークン） | Error をthrow |
 | `registRequest(username, password)` | POST | `/accounts/regist` | `Promise<void>` | Error をthrow |
+
+### taskApi.ts
+
+Authorizationヘッダー（`Bearer <token>`）を全リクエストに付与。
+
+| 関数 | メソッド | エンドポイント | 戻り値 |
+|------|---------|-------------|-------|
+| `fetchTasks()` | GET | `/tasks` | `Promise<Task[]>` |
+| `fetchTask(id)` | GET | `/tasks/:id` | `Promise<Task>` |
+| `createTask(input)` | POST | `/tasks` | `Promise<Task>` |
+| `updateTask(id, input)` | PATCH | `/tasks/:id` | `Promise<Task>` |
+| `deleteTask(id)` | DELETE | `/tasks/:id` | `Promise<void>` |
 
 ---
 
@@ -155,7 +302,7 @@ const BASE_URL = `${process.env.REACT_APP_API_SCHEME}://${process.env.REACT_APP_
 | `label` | `string` | ✅ | - | ラベルテキスト |
 | `type` | `'text' \| 'password'` | ❌ | `'text'` | input の type |
 | `value` | `string` | ✅ | - | 入力値 |
-| `onChange` | `ChangeEventHandler` | ✅ | - | 変更ハンドラー |
+| `onChange` | `(v: string) => void` | ✅ | - | 変更ハンドラー |
 | `error` | `string` | ❌ | - | エラーメッセージ |
 | `disabled` | `boolean` | ❌ | `false` | 非活性フラグ |
 | `maxLength` | `number` | ❌ | - | 最大文字数 |
@@ -180,3 +327,29 @@ APIエラーメッセージを赤背景バナーで表示。
 | `label` | `string` | ✅ | - | ボタンラベル |
 | `loadingLabel` | `string` | ❌ | `'処理中...'` | ローディング中ラベル |
 | `loading` | `boolean` | ❌ | `false` | ローディングフラグ |
+
+### PrivateRoute
+
+JWT有効期限検証コンポーネント。
+
+- `localStorage` の `token` を取得
+- JWTのペイロード `exp`（UNIX秒）を検証
+- 無効・期限切れ → `<Navigate to="/login" replace />`
+- 有効 → `<Outlet />`
+
+### Sidebar
+
+| 要素 | 説明 |
+|------|------|
+| ブランド名 | "WebApp" |
+| NavLink | タスク管理（アクティブ時 `bg-sky-700`） |
+| ログアウトボタン | `localStorage.removeItem('token')` → `/login` |
+
+### SidebarLayout
+
+```
+div.flex.min-h-screen
+├── Sidebar
+└── main.flex-1
+    └── <Outlet />
+```

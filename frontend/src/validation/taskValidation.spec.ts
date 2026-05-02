@@ -1,0 +1,109 @@
+import { validateTaskForm, parseAssignees, TaskFormValues } from './taskValidation';
+
+/** テスト用の有効なフォーム値 */
+const validValues: TaskFormValues = {
+  title: 'テストタスク',
+  description: 'テスト説明文',
+  due_date: '2026-12-31T23:59',
+  assigneesText: 'user1, user2',
+};
+
+describe('validateTaskForm', () => {
+  it('全て正常な値の場合はエラーなしを返す', () => {
+    const errors = validateTaskForm(validValues);
+    expect(Object.keys(errors)).toHaveLength(0);
+  });
+
+  describe('title', () => {
+    it('タイトルが空の場合はエラーを返す', () => {
+      const errors = validateTaskForm({ ...validValues, title: '' });
+      expect(errors.title).toBeTruthy();
+    });
+
+    it('タイトルが空白のみの場合はエラーを返す', () => {
+      const errors = validateTaskForm({ ...validValues, title: '   ' });
+      expect(errors.title).toBeTruthy();
+    });
+
+    it('タイトルが200文字以内の場合はエラーなし', () => {
+      const errors = validateTaskForm({ ...validValues, title: 'a'.repeat(200) });
+      expect(errors.title).toBeUndefined();
+    });
+
+    it('タイトルが201文字以上の場合はエラーを返す', () => {
+      const errors = validateTaskForm({ ...validValues, title: 'a'.repeat(201) });
+      expect(errors.title).toBeTruthy();
+    });
+  });
+
+  describe('description', () => {
+    it('説明文が空の場合はエラーを返す', () => {
+      const errors = validateTaskForm({ ...validValues, description: '' });
+      expect(errors.description).toBeTruthy();
+    });
+
+    it('説明文が1000文字以内の場合はエラーなし', () => {
+      const errors = validateTaskForm({ ...validValues, description: 'a'.repeat(1000) });
+      expect(errors.description).toBeUndefined();
+    });
+
+    it('説明文が1001文字以上の場合はエラーを返す', () => {
+      const errors = validateTaskForm({ ...validValues, description: 'a'.repeat(1001) });
+      expect(errors.description).toBeTruthy();
+    });
+  });
+
+  describe('due_date', () => {
+    it('期限が空の場合はエラーを返す', () => {
+      const errors = validateTaskForm({ ...validValues, due_date: '' });
+      expect(errors.due_date).toBeTruthy();
+    });
+
+    it('不正な日時形式の場合はエラーを返す', () => {
+      const errors = validateTaskForm({ ...validValues, due_date: 'not-a-date' });
+      expect(errors.due_date).toBeTruthy();
+    });
+
+    it('正しいISO形式の場合はエラーなし', () => {
+      const errors = validateTaskForm({ ...validValues, due_date: '2026-12-31T23:59' });
+      expect(errors.due_date).toBeUndefined();
+    });
+  });
+
+  describe('assignees', () => {
+    it('担当者が空の場合はエラーなし', () => {
+      const errors = validateTaskForm({ ...validValues, assigneesText: '' });
+      expect(errors.assignees).toBeUndefined();
+    });
+
+    it('担当者が50人以内の場合はエラーなし', () => {
+      const assigneesText = Array.from({ length: 50 }, (_, i) => `user${i}`).join(', ');
+      const errors = validateTaskForm({ ...validValues, assigneesText });
+      expect(errors.assignees).toBeUndefined();
+    });
+
+    it('担当者が51人以上の場合はエラーを返す', () => {
+      const assigneesText = Array.from({ length: 51 }, (_, i) => `user${i}`).join(', ');
+      const errors = validateTaskForm({ ...validValues, assigneesText });
+      expect(errors.assignees).toBeTruthy();
+    });
+  });
+});
+
+describe('parseAssignees', () => {
+  it('カンマ区切り文字列をユーザー名リストに変換する', () => {
+    expect(parseAssignees('user1, user2, user3')).toEqual(['user1', 'user2', 'user3']);
+  });
+
+  it('前後の空白をトリムする', () => {
+    expect(parseAssignees('  user1  ,  user2  ')).toEqual(['user1', 'user2']);
+  });
+
+  it('空文字列の場合は空配列を返す', () => {
+    expect(parseAssignees('')).toEqual([]);
+  });
+
+  it('空白のみのエントリーを除外する', () => {
+    expect(parseAssignees('user1,,user2')).toEqual(['user1', 'user2']);
+  });
+});

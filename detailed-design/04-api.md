@@ -30,6 +30,17 @@ HTTP 400
 | `HttpException` | 例外のステータスをそのまま使用 | `{ message: 例外メッセージ }` |
 | その他（Prismaエラー等） | 500 | `{ message: "データベースエラーが発生しました" }` |
 
+### JwtAuthGuard
+
+保護されたルートに適用するJWT検証Guard。
+
+| 項目 | 内容 |
+|------|------|
+| 実装 | `CanActivate` を直接実装 |
+| トークン取得 | `Authorization: Bearer <token>` ヘッダー |
+| 検証 | `jsonwebtoken.verify(token, JWT_SECRET)` |
+| エラー | 401 `{ "message": "認証が必要です" }` |
+
 ---
 
 ## エンドポイント一覧
@@ -122,6 +133,131 @@ HTTP 400
 
 ---
 
+### GET /tasks ※要認証
+
+タスク一覧を取得する。
+
+**リクエストヘッダー**
+
+```
+Authorization: Bearer <JWT>
+```
+
+**レスポンス**
+
+| ステータス | 条件 | レスポンスボディ |
+|-----------|------|----------------|
+| 200 | 取得成功 | `TaskResponseDto[]` |
+| 401 | 認証エラー | `{ "message": "認証が必要です" }` |
+
+---
+
+### GET /tasks/:id ※要認証
+
+指定IDのタスク詳細を取得する。
+
+**リクエストヘッダー**
+
+```
+Authorization: Bearer <JWT>
+```
+
+**レスポンス**
+
+| ステータス | 条件 | レスポンスボディ |
+|-----------|------|----------------|
+| 200 | 取得成功 | `TaskResponseDto` |
+| 401 | 認証エラー | `{ "message": "認証が必要です" }` |
+| 404 | タスク不存在 | `{ "message": "指定されたタスクが見つかりません" }` |
+
+---
+
+### POST /tasks ※要認証
+
+タスクを新規作成する。
+
+**リクエストヘッダー**
+
+```
+Authorization: Bearer <JWT>
+```
+
+**リクエストボディ**
+
+```json
+{
+  "title": "string",        // 必須、最大200文字
+  "description": "string",  // 必須、最大1000文字
+  "due_date": "string",     // 必須、ISO8601形式
+  "assignees": ["string"]   // 任意、ユーザー名リスト（最大50人）
+}
+```
+
+**レスポンス**
+
+| ステータス | 条件 | レスポンスボディ |
+|-----------|------|----------------|
+| 201 | 作成成功 | `{ "message": "タスクを作成しました", "task": TaskResponseDto }` |
+| 400 | バリデーションエラー | `{ "message": "入力値が不正です" }` |
+| 401 | 認証エラー | `{ "message": "認証が必要です" }` |
+| 500 | DBエラー | `{ "message": "タスクの作成に失敗しました" }` |
+
+---
+
+### PATCH /tasks/:id ※要認証
+
+タスクを更新する。
+
+**リクエストヘッダー**
+
+```
+Authorization: Bearer <JWT>
+```
+
+**リクエストボディ（全フィールド任意）**
+
+```json
+{
+  "title": "string",
+  "description": "string",
+  "due_date": "string",
+  "assignees": ["string"]
+}
+```
+
+**レスポンス**
+
+| ステータス | 条件 | レスポンスボディ |
+|-----------|------|----------------|
+| 200 | 更新成功 | `{ "message": "タスクを更新しました", "task": TaskResponseDto }` |
+| 400 | バリデーションエラー | `{ "message": "入力値が不正です" }` |
+| 401 | 認証エラー | `{ "message": "認証が必要です" }` |
+| 404 | タスク不存在 | `{ "message": "指定されたタスクが見つかりません" }` |
+| 500 | DBエラー | `{ "message": "タスクの更新に失敗しました" }` |
+
+---
+
+### DELETE /tasks/:id ※要認証
+
+タスクを削除する。
+
+**リクエストヘッダー**
+
+```
+Authorization: Bearer <JWT>
+```
+
+**レスポンス**
+
+| ステータス | 条件 | レスポンスボディ |
+|-----------|------|----------------|
+| 200 | 削除成功 | `{ "message": "タスクを削除しました" }` |
+| 401 | 認証エラー | `{ "message": "認証が必要です" }` |
+| 404 | タスク不存在 | `{ "message": "指定されたタスクが見つかりません" }` |
+| 500 | DBエラー | `{ "message": "タスクの削除に失敗しました" }` |
+
+---
+
 ## DTO定義
 
 ### AccountDto
@@ -139,6 +275,49 @@ class AccountDto {
   @MinLength(8)
   @MaxLength(20)
   readonly password: string;
+}
+```
+
+### CreateTaskDto
+
+```typescript
+class CreateTaskDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  title: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(1000)
+  description: string;
+
+  @IsDateString()
+  due_date: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMaxSize(50)
+  @IsOptional()
+  assignees: string[];
+}
+```
+
+### UpdateTaskDto
+
+`CreateTaskDto` の全フィールドが `@IsOptional()` になったDTO。
+
+### TaskResponseDto
+
+```typescript
+interface TaskResponseDto {
+  id: number;
+  title: string;
+  description: string;
+  due_date: string;     // ISO8601形式
+  created_at: string;   // ISO8601形式
+  updated_at: string;   // ISO8601形式
+  assignees: string[];  // ユーザー名リスト
 }
 ```
 
