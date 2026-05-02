@@ -3,28 +3,36 @@
 ## 全体構成
 
 ```
-┌─────────────────────────────────┐     ┌──────────────────────────────────────┐
-│         Frontend (React)        │     │           Backend (NestJS)           │
-│         localhost:3000          │     │           localhost:8000             │
-│                                 │     │                                      │
-│  BrowserRouter                  │     │  main.ts                             │
-│  ├── / → HomePage               │ HTTP│  ├── ValidationPipe (global)         │
-│  ├── /login → LoginPage  ───────┼─────┤  ├── AllExceptionsFilter (global)    │
-│  └── /regist → RegistPage       │     │  └── AppModule                       │
-│                                 │     │       └── AccountsModule             │
-│  src/                           │     │            ├── AccountController      │
-│  ├── api/          API通信       │     │            ├── AccountService         │
-│  ├── hooks/        状態管理       │     │            ├── AccountRepository      │
-│  ├── validation/   バリデーション  │     │            ├── PrismaService          │
-│  ├── pages/        画面          │     │            ├── JwtService             │
-│  └── components/   共通UI        │     │            └── HashService            │
-└─────────────────────────────────┘     └──────────────────┬───────────────────┘
-                                                           │ Prisma ORM
-                                                           ▼
-                                                   ┌───────────────┐
-                                                   │  SQLite DB    │
-                                                   │  (dev.db)     │
-                                                   └───────────────┘
+┌──────────────────────────────────────────┐     ┌──────────────────────────────────────┐
+│           Frontend (React)               │     │           Backend (NestJS)           │
+│           localhost:3000                 │     │           localhost:8000             │
+│                                          │     │                                      │
+│  BrowserRouter                           │     │  main.ts                             │
+│  ├── /login → LoginPage          ────────┼─────┤  ├── ValidationPipe (global)         │
+│  ├── /regist → RegistPage                │ HTTP│  ├── AllExceptionsFilter (global)    │
+│  └── PrivateRoute (JWT検証)              │     │  └── AppModule                       │
+│      └── SidebarLayout                   │     │       ├── AccountsModule             │
+│          ├── / → HomePage(リダイレクト)  │     │       │    ├── AccountController      │
+│          ├── /tasks → TaskListPage       │     │       │    ├── AccountService         │
+│          ├── /tasks/new → TaskFormPage   │     │       │    └── AccountRepository      │
+│          ├── /tasks/:id → TaskDetailPage │     │       └── TaskModule                 │
+│          └── /tasks/:id/edit             │     │            ├── TaskController        │
+│                                          │     │            ├── TaskService           │
+│  src/                                    │     │            └── TaskRepository        │
+│  ├── api/          API通信               │     │                                      │
+│  ├── hooks/        状態管理               │     │  共通                                │
+│  ├── validation/   バリデーション          │     │  ├── JwtAuthGuard                    │
+│  ├── pages/        画面                  │     │  ├── PrismaService                   │
+│  └── components/   共通UI                │     │  ├── JwtService                      │
+└──────────────────────────────────────────┘     │  ├── HashService                     │
+                                                 │  └── LoggerService                   │
+                                                 └──────────────────┬───────────────────┘
+                                                                    │ Prisma ORM
+                                                                    ▼
+                                                            ┌───────────────┐
+                                                            │  SQLite DB    │
+                                                            │  (dev.db)     │
+                                                            └───────────────┘
 ```
 
 ## バックエンド レイヤー構成
@@ -34,25 +42,33 @@ HTTP Request
     │
     ▼
 ┌──────────────────────┐
+│  JwtAuthGuard         │  ← 保護ルートのみ。BearerトークンのJWT検証
+└──────────┬───────────┘
+           │
+    ▼
+┌──────────────────────┐
 │  ValidationPipe       │  ← DTOのclass-validatorでリクエストをバリデーション
 └──────────┬───────────┘
            │
     ▼
 ┌──────────────────────┐
 │  Controller           │  ← HTTPエンドポイント定義・レスポンス整形のみ
-│  (AccountController)  │
+│  (AccountController   │
+│   TaskController)     │
 └──────────┬───────────┘
            │
     ▼
 ┌──────────────────────┐
-│  Service              │  ← ビジネスロジック（認証・パスワード検証等）
-│  (AccountService)     │
+│  Service              │  ← ビジネスロジック
+│  (AccountService      │
+│   TaskService)        │
 └──────────┬───────────┘
            │
     ▼
 ┌──────────────────────┐
 │  Repository           │  ← DBアクセスのみ（Prisma呼び出し）
-│  (AccountRepository)  │
+│  (AccountRepository   │
+│   TaskRepository)     │
 └──────────┬───────────┘
            │
     ▼
@@ -71,7 +87,7 @@ HTTP Request
 ```
 backend/src/
 ├── main.ts                          # エントリーポイント・グローバル設定
-├── app.module.ts                    # ルートモジュール
+├── app.module.ts                    # ルートモジュール（AccountsModule, TaskModule をimport）
 ├── accounts/                        # アカウント機能モジュール
 │   ├── controller/
 │   │   └── account.controller.ts   # POST /accounts/login, /regist, GET /logout
@@ -83,6 +99,17 @@ backend/src/
 │   │   └── account.repository.ts   # Prismaを使ったDBアクセス
 │   └── service/
 │       └── account.service.ts      # ログイン・登録のビジネスロジック
+├── tasks/                           # タスク管理機能モジュール
+│   ├── controller/
+│   │   └── task.controller.ts      # GET/POST/PATCH/DELETE /tasks（JwtAuthGuard適用）
+│   ├── dto/
+│   │   └── task.dto.ts             # CreateTaskDto, UpdateTaskDto, TaskResponseDto
+│   ├── module/
+│   │   └── task.module.ts          # モジュール定義・DI設定
+│   ├── repository/
+│   │   └── task.repository.ts      # Prismaを使ったDBアクセス
+│   └── service/
+│       └── task.service.ts         # タスクCRUDのビジネスロジック
 ├── common/                          # 共通ユーティリティ
 │   ├── filter/
 │   │   └── http-exception.filter.ts # グローバル例外フィルター
@@ -94,6 +121,7 @@ backend/src/
 │       ├── status.enum.ts           # HTTPステータス定数
 │       └── string.constants.ts      # 文字列定数
 ├── jwt/
+│   ├── jwt-auth.guard.ts            # JWT認証Guard（CanActivate実装）
 │   ├── jwt.payload.ts               # JWTペイロード型定義
 │   └── jwt.service.ts               # JWT生成
 └── prisma/
@@ -104,39 +132,56 @@ backend/src/
 
 ```
 frontend/src/
-├── App.tsx                          # ルーティング定義
+├── App.tsx                          # ルーティング定義（PrivateRoute/SidebarLayout含む）
 ├── index.tsx                        # エントリーポイント
 ├── logger.ts                        # コンソールロガー
 ├── api/
-│   └── accountApi.ts                # バックエンドHTTP通信
+│   ├── accountApi.ts                # バックエンドHTTP通信（ログイン・登録）
+│   └── taskApi.ts                   # バックエンドHTTP通信（タスクCRUD、Bearer認証）
 ├── components/                      # 共通UIコンポーネント
 │   ├── FormCard.tsx                 # フォーム外枠カード
 │   ├── FormField.tsx                # ラベル＋入力欄＋エラー表示
 │   ├── FormErrorBanner.tsx          # APIエラー表示バナー
-│   └── SubmitButton.tsx             # 送信ボタン（ローディング対応）
+│   ├── SubmitButton.tsx             # 送信ボタン（ローディング対応）
+│   ├── PrivateRoute.tsx             # JWT有効期限検証（exp チェック）
+│   ├── Sidebar.tsx                  # サイドバーナビゲーション
+│   └── SidebarLayout.tsx            # サイドバー付きレイアウト
 ├── hooks/                           # カスタムフック（状態管理・オーケストレーション）
 │   ├── useLoginForm.ts              # ログインフォームの状態・送信処理
-│   └── useRegistForm.ts             # 登録フォームの状態・送信処理
+│   ├── useRegistForm.ts             # 登録フォームの状態・送信処理
+│   ├── useTaskList.ts               # タスク一覧・削除フック
+│   └── useTaskForm.ts               # タスク作成・編集フォームフック
 ├── pages/                           # ページコンポーネント（描画のみ）
-│   ├── HomePage.tsx                 # ホーム（スタブ）
+│   ├── HomePage.tsx                 # ホーム（/tasks へリダイレクト）
 │   ├── LoginPage.tsx                # ログイン画面
-│   └── RegistPage.tsx               # アカウント登録画面
+│   ├── RegistPage.tsx               # アカウント登録画面
+│   ├── TaskListPage.tsx             # タスク一覧画面
+│   ├── TaskFormPage.tsx             # タスク作成・編集画面
+│   └── TaskDetailPage.tsx           # タスク詳細画面
 └── validation/                      # バリデーション（純粋関数）
     ├── loginValidation.ts           # ログインフォームバリデーション
-    └── registValidation.ts          # 登録フォームバリデーション
+    ├── registValidation.ts          # 登録フォームバリデーション
+    └── taskValidation.ts            # タスクフォームバリデーション
 ```
 
 ## DI（依存性注入）構成
 
 ```
-AccountsModule
-├── provides
-│   ├── AccountController
-│   ├── AccountService      ← HashService, JwtService, AccountRepository に依存
-│   ├── AccountRepository   ← PrismaService に依存
-│   ├── PrismaService
-│   ├── JwtService
-│   ├── HashService
-│   └── LoggerService
-└── imports (なし)
+AppModule
+├── AccountsModule
+│   └── provides
+│       ├── AccountController
+│       ├── AccountService      ← HashService, JwtService, AccountRepository に依存
+│       ├── AccountRepository   ← PrismaService に依存
+│       ├── PrismaService
+│       ├── JwtService
+│       ├── HashService
+│       └── LoggerService
+└── TaskModule
+    └── provides
+        ├── TaskController      ← JwtAuthGuard（@UseGuards）適用
+        ├── TaskService         ← TaskRepository, LoggerService に依存
+        ├── TaskRepository      ← PrismaService に依存
+        ├── PrismaService
+        └── LoggerService
 ```

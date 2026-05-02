@@ -86,6 +86,7 @@ src/<feature>/
 
 - 関数コンポーネント＋Hooksのみ使用（クラスコンポーネント禁止）
 - 1ファイル1コンポーネントを原則とする
+- [2026-05-03] 関数コンポーネントの戻り値型に`JSX.Element`を使用しない（`tsconfig.json`の`jsx: "react-jsx"`設定では`JSX`名前空間が存在しないため）。戻り値型は省略するか`React.ReactElement`を使用すること
 
 ### 共通UIコンポーネント
 
@@ -125,6 +126,10 @@ src/
 - 変数名: `REACT_APP_API_SCHEME` / `REACT_APP_API_HOST` / `REACT_APP_API_PORT`
 - 開発デフォルト値は`.env`に定義し、ローカル上書きは`.env.local`を使用する（`.env.local`はgit管理外）
 - JWTは現状`localStorage`に保存（セキュリティ改善は別途対応）
+
+### 認証済みルート（PrivateRoute）
+
+- [2026-05-03] PrivateRouteではトークンの存在チェックのみでなく、JWTをデコードして`exp`（有効期限）も検証すること。トークンが存在しない・期限切れの場合はログイン画面（`/login`）へリダイレクトする（トークン存在チェックのみの実装は却下）
 
 ### ルーティング
 

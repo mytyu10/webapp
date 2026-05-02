@@ -7,6 +7,26 @@ datasource db {
 }
 
 model Account {
-  username        String @id
+  username        String         @id
   hashed_password String
+  task_assignees  TaskAssignee[]
+}
+
+model Task {
+  id          Int            @id @default(autoincrement())
+  title       String
+  description String
+  due_date    DateTime
+  created_at  DateTime       @default(now())
+  updated_at  DateTime       @updatedAt
+  assignees   TaskAssignee[]
+}
+
+model TaskAssignee {
+  task_id  Int
+  username String
+  task     Task    @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  account  Account @relation(fields: [username], references: [username], onDelete: Cascade)
+
+  @@id([task_id, username])
 }

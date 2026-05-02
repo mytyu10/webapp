@@ -1,4 +1,9 @@
 {
+  "statusLine": {
+    "type": "command",
+    "command": "cat /tmp/claude-current-agent.txt 2>/dev/null || true",
+    "refreshInterval": 3
+  },
   "hooks": {
     "Stop": [
       {
