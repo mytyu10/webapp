@@ -7,6 +7,7 @@ export const MESSAGE = {
     REGIST_FAILED: 'アカウントの作成に失敗しました',
     REGIST_DUPLICATE: 'このユーザー名は既に使用されています',
     UNAUTHORIZED: '認証が必要です',
+    AUTH_INFO_FAILED: '認証情報の取得に失敗しました',
   },
   DB: {
     DB_ERROR: 'データベースエラーが発生しました',

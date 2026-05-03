@@ -129,6 +129,8 @@ export interface TaskResponseDto {
   created_at: string;
   updated_at: string;
   is_completed: boolean;
+  /** タスクをクローズ（完了）したユーザー名。未完了の場合はnull */
+  closed_by: string | null;
   assignees: string[];
   children: TaskResponseDto[];
 }

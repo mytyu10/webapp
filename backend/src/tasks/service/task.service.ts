@@ -75,14 +75,33 @@ export class TaskService {
 
   /**
    * タスクを更新する。存在しない場合は404例外をスローする
+   * is_completed が true に変化したとき closed_by にリクエストユーザー名をセット、
+   * false に戻したとき closed_by を null にクリアする
    */
-  async update(id: number, dto: UpdateTaskDto): Promise<TaskResponseDto> {
+  async update(
+    id: number,
+    dto: UpdateTaskDto,
+    requestUsername: string,
+  ): Promise<TaskResponseDto> {
     this.logger.log(CONTEXT, `タスク更新開始: id=${id}`);
 
     const existing = await this.taskRepository.findById(id);
     if (!existing) {
       this.logger.warn(CONTEXT, `タスクが見つかりません: id=${id}`);
       throw new NotFoundException(MESSAGE.TASK.NOT_FOUND);
+    }
+
+    /** is_completed の変化に基づいて closed_by を決定する */
+    let closedByUpdate: { closed_by: string | null } | Record<string, never> =
+      {};
+    if (dto.is_completed !== undefined) {
+      const wasCompleted = existing.is_completed;
+      const willBeCompleted = dto.is_completed;
+      if (!wasCompleted && willBeCompleted) {
+        closedByUpdate = { closed_by: requestUsername };
+      } else if (wasCompleted && !willBeCompleted) {
+        closedByUpdate = { closed_by: null };
+      }
     }
 
     try {
@@ -95,6 +114,7 @@ export class TaskService {
         parent_id: dto.parent_id,
         assignees: dto.assignees,
         is_completed: dto.is_completed,
+        ...closedByUpdate,
       });
       this.logger.log(CONTEXT, `タスク更新完了: id=${id}`);
       return this.toResponseDto(task);
@@ -164,6 +184,7 @@ export class TaskService {
       created_at: task.created_at.toISOString(),
       updated_at: task.updated_at.toISOString(),
       is_completed: task.is_completed,
+      closed_by: task.closed_by,
       assignees: task.assignees.map((a) => a.username),
       children: task.children.map((child) => ({
         id: child.id,
@@ -177,6 +198,7 @@ export class TaskService {
         created_at: child.created_at.toISOString(),
         updated_at: child.updated_at.toISOString(),
         is_completed: child.is_completed,
+        closed_by: child.closed_by,
         assignees: child.assignees.map((a) => a.username),
         children: [],
       })),

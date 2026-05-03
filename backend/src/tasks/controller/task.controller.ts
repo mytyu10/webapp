@@ -3,15 +3,17 @@ import {
   Controller,
   Delete,
   Get,
+  InternalServerErrorException,
   Param,
   ParseIntPipe,
   Patch,
   Post,
+  Req,
   Res,
   UseGuards,
   ValidationPipe,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { TaskService } from '../service/task.service';
 import { CreateTaskDto, UpdateTaskDto } from '../dto/task.dto';
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
@@ -88,10 +90,15 @@ export class TaskController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body(ValidationPipe) dto: UpdateTaskDto,
+    @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `タスク更新リクエスト: id=${id}`);
-    const task = await this.taskService.update(id, dto);
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
+    const task = await this.taskService.update(id, dto, requestUser.username);
     return response
       .status(HttpStatus.OK)
       .json({ message: MESSAGE.TASK.UPDATE_SUCCESS, task });

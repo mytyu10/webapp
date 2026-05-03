@@ -25,6 +25,7 @@ model Task {
   created_at   DateTime       @default(now())
   updated_at   DateTime       @updatedAt
   is_completed Boolean        @default(false)
+  closed_by    String?
   assignees    TaskAssignee[]
   creator      Account        @relation("TaskCreator", fields: [created_by], references: [username])
   parent       Task?          @relation("TaskChildren", fields: [parent_id], references: [id])

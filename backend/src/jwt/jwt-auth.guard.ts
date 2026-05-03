@@ -7,16 +7,18 @@ import {
 import jwt from 'jsonwebtoken';
 import type { Request } from 'express';
 import { MESSAGE } from 'src/common/type/message';
+import type { JwtPayload } from 'src/jwt/jwt.payload';
 
 /**
  * JWT認証ガード
  * AuthorizationヘッダーのBearerトークンを検証し、無効・未存在の場合は401を返す
+ * 検証成功時はデコードされたペイロードを request.user にセットする
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   /**
    * リクエストのJWTトークンを検証する
-   * 検証成功時はtrueを返し、失敗時はUnauthorizedExceptionをスローする
+   * 検証成功時はtrueを返しrequest.userにJwtPayloadをセットする。失敗時はUnauthorizedExceptionをスローする
    */
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
@@ -29,7 +31,8 @@ export class JwtAuthGuard implements CanActivate {
     const token = authHeader.slice('Bearer '.length);
 
     try {
-      jwt.verify(token, process.env.JWT_SECRET!);
+      const payload = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
+      request.user = payload;
       return true;
     } catch {
       throw new UnauthorizedException(MESSAGE.AUTH.UNAUTHORIZED);

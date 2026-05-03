@@ -93,6 +93,7 @@ export class TaskRepository {
       parent_id?: number;
       assignees?: string[];
       is_completed?: boolean;
+      closed_by?: string | null;
     },
   ): Promise<TaskWithRelations> {
     return this.prisma.$transaction(async (tx) => {
@@ -114,6 +115,7 @@ export class TaskRepository {
           ...(data.is_completed !== undefined && {
             is_completed: data.is_completed,
           }),
+          ...('closed_by' in data && { closed_by: data.closed_by }),
           ...(data.assignees !== undefined && {
             assignees: {
               create: data.assignees.map((username) => ({ username })),
