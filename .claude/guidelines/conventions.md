@@ -194,6 +194,7 @@ model TaskAssignee {
 - categoryはオプショナル（`String?`）。カテゴリ一覧は`GET /tasks/categories`で取得する
 - parent_idによる親子タスク構造をサポートする。子タスクは`children`リレーションで取得
 - is_completedフィールドはタスクの完了状態を管理する（デフォルト: `false`）。`PATCH /tasks/:id` の `is_completed` フィールドで切り替える
+- SQLiteはBooleanをinteger（0/1）で保存するため、Prismaから返る値をフロントエンドで比較する際は `=== true/false` の厳密比較ではなく `Boolean(value)` に変換してから比較すること（例: `Boolean(t.is_completed) === completedFilter`）
 - TaskAssigneeの担当者更新はdelete+insertトランザクションで対応する
 - Taskの削除はCascade設定によりTaskAssigneeも連動削除される
 
