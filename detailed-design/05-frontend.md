@@ -13,11 +13,9 @@
     {/* 認証済みルート（PrivateRoute + SidebarLayout） */}
     <Route element={<PrivateRoute />}>
       <Route element={<SidebarLayout />}>
-        <Route path="/"              element={<HomePage />}       />
-        <Route path="/tasks"         element={<TaskListPage />}   />
-        <Route path="/tasks/new"     element={<TaskFormPage />}   />
-        <Route path="/tasks/:id"     element={<TaskDetailPage />} />
-        <Route path="/tasks/:id/edit" element={<TaskFormPage />}  />
+        <Route path="/"          element={<HomePage />}     />
+        <Route path="/tasks"     element={<TaskListPage />} />
+        <Route path="/tasks/new" element={<TaskFormPage />} />
       </Route>
     </Route>
   </Routes>
@@ -30,9 +28,7 @@
 | `/login` | `LoginPage` | 不要 | 実装済み |
 | `/regist` | `RegistPage` | 不要 | 実装済み |
 | `/tasks` | `TaskListPage` | 要認証 | 実装済み |
-| `/tasks/new` | `TaskFormPage`（作成モード） | 要認証 | 実装済み |
-| `/tasks/:id` | `TaskDetailPage` | 要認証 | 実装済み |
-| `/tasks/:id/edit` | `TaskFormPage`（編集モード） | 要認証 | 実装済み |
+| `/tasks/new` | `TaskFormPage`（作成モード・子タスク作成モード） | 要認証 | 実装済み |
 
 ---
 
@@ -104,28 +100,35 @@ RegistPage
 
 ### TaskListPage
 
-**責務**: タスク一覧の表示・削除確認・ナビゲーション。ロジックは `useTaskList` に委譲。
+**責務**: タスク一覧の表示・削除確認・詳細サイドパネル表示。ロジックは `useTaskList` に委譲。
 
 タスクは親子の階層構造で表示し、未完了セクション・完了済みセクションに分けて表示する。
 ルートタスク（depth === 0）かつ子タスクを持つ場合、左端のトグルボタンで子タスク一覧の表示/非表示を切り替えられる。
+カードをクリックすると右側にサイドパネル（`TaskDetailPanel`）が開く（ページ遷移なし・URL変更なし）。
+パネル表示中は flex 左右分割（左: 一覧、右: 詳細パネル）。一覧とパネルの間にドラッグ可能なディバイダーがあり、パネル幅を 240px〜700px の範囲で変更できる（画面更新でリセット）。
 
 ```
 TaskListPage
-├── ConfirmModal（削除確認モーダル）
-├── ヘッダー（タイトル + ActionButton "タスクを作成"）
-├── CategoryFilterBar（"すべて" + 各カテゴリのピルボタン）
-├── FormErrorBanner（API/削除/完了切り替えエラー）
-├── 読み込み中テキスト
-├── タスクなしメッセージ
-├── 未完了タスクセクション（incompleteTrees を isNodeHidden でフィルター済み）
-│   └── 階層ツリー表示（DEPTH_INDENT_CLASSES による depth ごとのインデント）
-│       └── 各タスクカード（renderTaskCard → TaskCard）
-│           ├── [depth === 0 かつ children あり] カード内左端にトグルボタン（展開時 rotate-90）
-│           ├── [depth === 0 かつ children なし] カード内左端に同幅スペーサー
-│           └── [depth > 0] インデント・「└」アイコン付き（既存構造を維持）
-└── 完了済みタスクセクション（completedTrees を isNodeHidden でフィルター済み）
-    ├── SectionToggleButton（"完了済み (N件)"、折りたたみ可）
-    └── 折りたたみ展開時: 階層ツリー表示（同上）
+├── [パネル表示時] 外側: flex コンテナ（ref={containerRef}）
+│   ├── 一覧エリア（flex-1 min-w-0 / パネル非表示時は w-full）
+│   │   ├── ConfirmModal（削除確認モーダル）
+│   │   ├── ヘッダー（タイトル + ActionButton "タスクを作成"）
+│   │   ├── CategoryFilterBar（"すべて" + 各カテゴリのピルボタン）
+│   │   ├── FormErrorBanner（API/削除/完了切り替えエラー）
+│   │   ├── 読み込み中テキスト
+│   │   ├── タスクなしメッセージ
+│   │   ├── 未完了タスクセクション（incompleteTrees を isNodeHidden でフィルター済み）
+│   │   │   └── 階層ツリー表示（DEPTH_INDENT_CLASSES による depth ごとのインデント）
+│   │   │       └── 各タスクカード（renderTaskCard → TaskCard）
+│   │   │           ├── [depth === 0 かつ children あり] カード内左端にトグルボタン（展開時 rotate-90）
+│   │   │           ├── [depth === 0 かつ children なし] カード内左端に同幅スペーサー
+│   │   │           └── [depth > 0] インデント・「└」アイコン付き（既存構造を維持）
+│   │   └── 完了済みタスクセクション（completedTrees を isNodeHidden でフィルター済み）
+│   │       ├── SectionToggleButton（"完了済み (N件)"、折りたたみ可）
+│   │       └── 折りたたみ展開時: 階層ツリー表示（同上）
+│   ├── [パネル表示時] ディバイダー（w-3, cursor-col-resize, ドラッグでパネル幅変更）
+│   └── [パネル表示時] パネルコンテナ（style={{ width: panelWidth }}）
+│       └── TaskDetailPanel（task・isToggling・isOwner・各コールバック）
 ```
 
 **インデントクラス定数 `DEPTH_INDENT_CLASSES`**
@@ -189,13 +192,40 @@ function isNodeHidden(
 
 | ステート | 型 | 初期値 | 説明 |
 |---------|-----|--------|------|
+| `deleteError` | `string` | `''` | 削除エラーメッセージ |
+| `deleteTargetId` | `number \| null` | `null` | 削除確認対象タスクID |
+| `isCompletedSectionOpen` | `boolean` | `false` | 完了済みセクション展開フラグ |
 | `collapsedParentIds` | `Set<number>` | `new Set()` | 折りたたみ中の親タスク ID セット（空 = 全展開） |
+| `selectedTaskId` | `number \| null` | `null` | 詳細パネル表示中のタスクID（null: 非表示） |
+| `panelWidth` | `number` | `360`（px） | サイドパネル幅（px）。ドラッグで変更され、画面更新でリセット） |
+
+**導出値**
+
+| 変数 | 算出方法 | 説明 |
+|------|---------|------|
+| `selectedTask` | `findTaskById(tasks, selectedTaskId)` | パネルに表示するタスク（tasks ステートから取得） |
+| `isDetailOwner` | `selectedTask?.created_by === currentUsername` | 表示中タスクの作成者かどうか |
+| `isDetailToggling` | `togglingIds.has(selectedTaskId)` | 表示中タスクのPATCH処理中フラグ |
+| `isPanelOpen` | `selectedTaskId !== null` | パネル表示中かどうか |
 
 **ローカル関数**
 
 | 関数 | 説明 |
 |------|------|
+| `findTaskById(tasks, id)` | tasks ツリーから指定 ID のタスクを再帰的に探して返す（コンポーネント外の純粋関数） |
+| `openDetailPanel(id)` | `awaitToggle(id)` で進行中 PATCH の完了を待機してから `setSelectedTaskId(id)` |
+| `closeDetailPanel()` | `setSelectedTaskId(null)` |
+| `handleDividerMouseDown(e)` | ドラッグ開始フラグをセット（`isDraggingRef.current = true`） |
 | `toggleCollapse(parentId: number)` | 指定 ID を `collapsedParentIds` に追加/削除して子タスクの表示/非表示を切り替える |
+| `onDeleteClick(id)` | 削除確認モーダルを開く |
+| `onConfirmDelete()` | 削除実行後にパネルが開いていたら閉じる |
+
+**リサイズロジック（useEffect）**
+
+- `window.addEventListener('mousemove', onMouseMove)` でドラッグ中のパネル幅を更新
+- `containerRef.current.getBoundingClientRect().right - e.clientX` でパネル幅を計算
+- 最小 240px、最大 700px にクランプ
+- `window.addEventListener('mouseup', ...)` でドラッグ終了
 
 ### TaskFormPage
 
@@ -215,28 +245,7 @@ TaskFormPage
 
 ### TaskDetailPage
 
-**責務**: タスク詳細の表示・完了状態の切り替え。ロジックは `useTaskDetail` に委譲。
-
-```
-TaskDetailPage
-├── ヘッダー（"← 一覧に戻る"ボタン + "タスク詳細"タイトル）
-├── FormErrorBanner
-├── 読み込み中テキスト
-└── 詳細カード（完了時: 緑枠 `border-green-500`）
-    ├── 完了済みバナー（完了時のみ: 緑背景 "完了済み" + `closed_by` が存在する場合は "クローズ: {username}" を併記）
-    ├── "← 親タスクへ" リンク（parent_id がある場合のみ表示）
-    ├── タイトル（完了時: 打ち消し線）
-    ├── 説明文
-    ├── 優先度バッジ・カテゴリバッジ
-    ├── 期限
-    ├── 担当者（タグ表示）
-    ├── 作成者
-    ├── 作成日時
-    ├── 子タスク一覧（クリッカブルリンク、完了済みは打ち消し線 + 薄表示）
-    ├── 完了にする / 未完了に戻すボタン（完了状態に応じて切り替え）
-    ├── 編集するボタン（全ユーザーに表示）
-    └── 子タスクを作成ボタン
-```
+> **削除済み**: このページコンポーネントおよびルート（`/tasks/:id`、`/tasks/:id/edit`）は削除された。タスク詳細・編集の機能は `TaskListPage` の右サイドパネル（`TaskDetailPanel`）に統合された。
 
 ---
 
@@ -278,7 +287,7 @@ TaskDetailPage
 
 | state | 型 | 説明 |
 |-------|-----|------|
-| `tasks` | `Task[]` | タスク一覧（全件） |
+| `tasks` | `Task[]` | タスク一覧（全件）。`TaskDetailPanel` と共有する |
 | `incompleteTrees` | `TaskTreeNode[]` | 未完了タスクの階層ツリー（カテゴリフィルター済み） |
 | `completedTrees` | `TaskTreeNode[]` | 完了済みタスクの階層ツリー（カテゴリフィルター済み） |
 | `categories` | `string[]` | カテゴリ一覧 |
@@ -286,15 +295,37 @@ TaskDetailPage
 | `loading` | `boolean` | 読み込み中フラグ |
 | `error` | `string` | 取得エラーメッセージ |
 | `toggleCompleteError` | `string` | 完了切り替えエラーメッセージ（楽観的更新失敗時にセット） |
+| `togglingIds` | `Set<number>` | 現在PATCH処理中のタスクIDセット |
 
 > `deleteError` はフック外（`TaskListPage` のローカルstate）で管理する。
+
+**ref（内部）**
+
+| ref | 型 | 説明 |
+|-----|-----|------|
+| `tasksRef` | `MutableRefObject<Task[]>` | 並走トグル操作のロールバック競合防止のため最新 tasks を保持 |
+| `togglePromisesRef` | `MutableRefObject<Map<number, Promise<void>>>` | PATCH中の各タスクIDに対応する Promise を保持（外部から await するために使用） |
 
 | 関数 | 説明 |
 |------|------|
 | `handleDelete(id)` | タスクを削除しローカルstateを更新 |
-| `handleToggleComplete(id, is_completed)` | タスクの完了状態を楽観的UI更新で切り替える。ボタン押下直後にローカルステートを更新し、APIコール成功時はサーバーレスポンスで上書き、失敗時はスナップショットにロールバックする |
+| `handleToggleComplete(id, is_completed)` | タスクの完了状態を楽観的UI更新で切り替える。ボタン押下直後にローカルステートを更新し、`togglingIds` にIDを追加してPATCH処理中フラグを立てる。APIコール成功時はサーバーレスポンスで上書き、失敗時はスナップショットにロールバック。`finally` で `togglingIds` からIDを削除しPromiseを削除する |
+| `awaitToggle(id)` | 指定IDのタスクにPATCHが進行中であれば完了まで待機する。進行中でなければ即座に resolve。refベースのため常に最新状態を参照（React stateの更新遅延に依存しない） |
+| `handleUpdate(id, input)` | `updateTask` APIを呼び出し、成功時に `replaceTaskInTree` でローカル tasks ステートを更新して返す |
 | `setSelectedCategory(category)` | カテゴリフィルターを更新する |
 | `reload()` | 一覧を再読み込みするトリガーをインクリメント |
+
+**ヘルパー関数（モジュールレベル）**
+
+```typescript
+function replaceTaskInTree(tasks: Task[], updated: Task): Task[]
+```
+
+ツリー内の指定IDのタスクを `updated` で再帰的に置き換える。
+
+**UseTaskListReturn に含まれるフィールド（抜粋）**
+
+`tasks`、`togglingIds`、`awaitToggle`、`handleUpdate`、`handleToggleComplete`、`handleDelete`、`incompleteTrees`、`completedTrees`、`categories`、`selectedCategory`、`setSelectedCategory`、`loading`、`error`、`toggleCompleteError`、`reload`
 
 **TaskTreeNode 型**
 
@@ -323,6 +354,8 @@ interface TaskTreeNode extends Task {
 
 ### useTaskDetail
 
+> **現在未使用**: `TaskDetailPage` の削除に伴い呼び出し元がなくなった。ファイルは存在するが実質的に未使用状態。
+
 タスク詳細ページのデータ取得・完了状態切り替えを管理するフック。
 
 | state | 型 | 説明 |
@@ -347,6 +380,8 @@ interface TaskTreeNode extends Task {
 ```
 
 ### useTaskForm
+
+> **編集モードは現在未使用**: `/tasks/:id/edit` ルート削除により `isEditMode === true` のパスは実行されない。作成・子タスク作成モードは引き続き有効。なお、子タスク作成後の遷移先 `/tasks/:parentId` はすでに削除されたルートのため、子タスク作成後のナビゲーションは Dead code となっている。
 
 `id`（編集対象タスクID）と `parentId`（子タスク作成時の親タスクID）で3モードを切り替える。
 
@@ -547,27 +582,101 @@ div.flex.min-h-screen
 
 ### TaskCard
 
-タスク1件の表示と操作ボタンを提供するコンポーネント。`TaskListPage` から切り出し。
+タスク1件の表示を提供するコンポーネント。`TaskListPage` から切り出し。カード全体をクリック可能にし、詳細サイドパネルを開くコールバックを呼び出す。
 
 | props | 型 | 必須 | 説明 |
 |-------|-----|------|------|
 | `node` | `TaskTreeNode` | ✅ | 表示対象のタスクツリーノード |
 | `isCollapsed` | `boolean` | ✅ | 子タスクが折りたたまれているか（depth=0 のみ使用） |
-| `onToggleCollapse` | `() => void` | ✅ | 子タスク表示/非表示の切り替えコールバック |
-| `onToggleComplete` | `(id: number, is_completed: boolean) => void` | ✅ | 完了状態切り替えコールバック |
-| `onNavigateDetail` | `(id: number) => void` | ✅ | 詳細ページへの遷移コールバック |
-| `onNavigateEdit` | `(id: number) => void` | ✅ | 編集ページへの遷移コールバック |
-| `onDeleteClick` | `(id: number) => void` | ✅ | 削除確認ダイアログを開くコールバック |
-| `isOwner` | `boolean` | ✅ | 現在のユーザーがタスクの作成者かどうか |
+| `onToggleCollapse` | `() => void` | ✅ | 子タスク表示/非表示の切り替えコールバック（`e.stopPropagation()` でカードクリックと分離） |
+| `onSelect` | `() => void` | ✅ | カードクリック時に詳細パネルを開くコールバック |
 
 **depth 別レンダリング:**
 - `depth === 0` かつ `children.length > 0`: カード内部の左端にトグルボタン（＞）を表示。展開中は `rotate-90`
 - `depth === 0` かつ `children.length === 0`: カード内部の左端に同幅スペーサーを表示
 - `depth > 0`: タイトル行の先頭に「└」アイコンを表示
 
-**アクションボタン（カード右端）:** 完了切り替え・詳細・編集（全ユーザー）・削除（`isOwner` のみ）
+**カードクリック:** カード全体（外側 div）が clickable（`onClick={onSelect}`、`cursor-pointer`、`hover:bg-slate-600 transition-colors`）。完了切り替えボタン・詳細ボタン・編集ボタン・削除ボタンはすべて削除。展開/折りたたみボタンは `e.stopPropagation()` でカードクリックと分離。
 
 **`closed_by` 表示:** タスクが完了状態（`isCompleted === true`）かつ `node.closed_by` が存在する場合、期限・担当者行に "クローズ: {username}" を緑文字（`text-green-400`）で表示する。
+
+### TaskDetailPanel
+
+タスク一覧画面の右側に表示するサイドパネルコンポーネント。`useTaskList` の `tasks` ステートを props 経由で受け取り、独自のAPIコールは行わない。詳細表示モードとインライン編集モードを切り替え可能。
+
+| props | 型 | 必須 | 説明 |
+|-------|-----|------|------|
+| `task` | `Task \| null` | ✅ | 表示対象のタスク（null の場合は「見つかりません」表示） |
+| `isToggling` | `boolean` | ✅ | PATCH処理中フラグ（true の間は全ボタンを disabled） |
+| `isOwner` | `boolean` | ✅ | 現在のユーザーがタスクの作成者かどうか（削除ボタン表示制御） |
+| `onClose` | `() => void` | ✅ | パネルを閉じるコールバック |
+| `onToggleComplete` | `(id: number, is_completed: boolean) => Promise<void>` | ✅ | 完了状態切り替え（useTaskList と共有） |
+| `onSelectTask` | `(id: number) => void` | ✅ | 子タスク・親タスクのリンクをクリックしたときの切り替えコールバック |
+| `onDeleteClick` | `(id: number) => void` | ✅ | 削除確認モーダルを開くコールバック |
+| `onUpdate` | `(id: number, input: Partial<TaskInput>) => Promise<Task>` | ✅ | タスク更新コールバック（useTaskList と共有） |
+
+**ローカルステート**
+
+| ステート | 型 | 説明 |
+|---------|-----|------|
+| `isEditing` | `boolean` | 編集モードフラグ |
+| `editValues` | `TaskFormValues` | 編集フォーム入力値 |
+| `editErrors` | `TaskFormErrors` | 編集フォームバリデーションエラー |
+| `saveError` | `string` | 保存APIエラーメッセージ |
+| `isSaving` | `boolean` | 保存処理中フラグ |
+
+`task?.id` が変わると `useEffect` で `isEditing` / `editErrors` / `saveError` をリセット。
+
+**コンポーネント構造（詳細表示モード）:**
+
+```
+TaskDetailPanel（w-full bg-slate-800 border-l）
+├── ヘッダー（sticky top-0）: "タスク詳細" または "タスク編集" + ×ボタン
+└── コンテンツ（p-5 flex-1）
+    └── 詳細カード（bg-slate-700 border rounded-xl）
+        ├── 親タスクへのリンク（parent_id がある場合）
+        ├── [詳細表示モード]
+        │   ├── 完了済みバナー（is_completed 時: closed_by 含む）
+        │   ├── タイトル・説明文・優先度・カテゴリ・期限・担当者・作成者・作成日時
+        │   ├── 子タスク一覧（各行クリックで onSelectTask 経由切り替え）
+        │   └── アクションボタン
+        │       ├── 完了にする / 未完了に戻す（isToggling 時は "処理中..." + disabled）
+        │       ├── 編集する（isToggling 時は disabled）
+        │       ├── 子タスクを作成（/tasks/new?parent_id=X へ遷移）
+        │       └── 削除する（isOwner のみ表示、isToggling 時は disabled）
+        └── [編集フォームモード]
+            ├── タイトル（text input）
+            ├── 説明文（textarea, resize-none, rows=4）
+            ├── 期限（datetime-local input）
+            ├── 優先度（select）
+            ├── カテゴリ（text input, 任意）
+            ├── 担当者（text input, カンマ区切り）
+            ├── エラーメッセージ
+            └── 保存する / キャンセルボタン
+```
+
+**ヘルパー関数（モジュールレベル）:**
+
+```typescript
+function toDatetimeLocal(iso: string): string
+```
+
+ISO文字列を datetime-local input 用のローカル時刻文字列（`YYYY-MM-DDTHH:MM`）に変換する。
+
+**バリデーション:** `validateTaskForm(editValues)` を保存前に実行。エラーがあれば各フィールド直下に表示。
+
+**保存フロー:**
+
+```
+1. validateTaskForm でバリデーション
+2. onUpdate(task.id, { title, description, due_date: ISO変換, assignees, priority, category }) を呼び出し
+3. 成功: isEditing = false（詳細表示に戻る）
+4. 失敗: saveError にセット
+```
+
+**幅:** `w-full`（親の `<div style={{ width: panelWidth }}>` が幅を制御）
+
+---
 
 ### ActionButton
 

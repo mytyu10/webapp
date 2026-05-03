@@ -242,7 +242,7 @@ Authorization: Bearer <JWT>
 
 | ステータス | 条件 | レスポンスボディ |
 |-----------|------|----------------|
-| 200 | 更新成功 | `{ "message": "タスクを更新しました", "task": TaskResponseDto }` |
+| 200 | 更新成功 | `{ "message": "タスクをキューで処理し更新しました", "task": TaskResponseDto }` |
 | 400 | バリデーションエラー | `{ "message": "入力値が不正です" }` |
 | 401 | 認証エラー | `{ "message": "認証が必要です" }` |
 | 404 | タスク不存在 | `{ "message": "指定されたタスクが見つかりません" }` |
@@ -264,9 +264,12 @@ Authorization: Bearer <JWT>
 1. JwtAuthGuard: JWTを検証し request.user にペイロードをセット
 2. TaskController.update(): request.user.username を TaskService.update() に渡す
 3. TaskService.update():
-   3-1. TaskRepository.findById(id) で既存タスクを取得（なければ 404）
-   3-2. is_completed の変化を判定して closed_by 値を決定
-   3-3. TaskRepository.update(id, { ...dto, closed_by }) で更新
+   3-1. TaskQueueService.enqueue() にジョブとして登録（FIFO処理・同時書き込み競合防止）
+   3-2. TaskQueueService が executeUpdate() を順番に実行:
+        3-2-1. TaskRepository.findById(id) で既存タスクを取得（なければ 404）
+        3-2-2. is_completed の変化を判定して closed_by 値を決定
+        3-2-3. TaskRepository.update(id, { ...dto, closed_by }) で更新
+   3-3. キュー内の全ジョブが完了するまで enqueue() は resolve しない
 4. 200 レスポンス
 ```
 
