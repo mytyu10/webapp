@@ -12,6 +12,14 @@ const DEPTH_INDENT_CLASSES: Record<number, string> = {
   2: 'pl-10',
 };
 
+/** タスクカードの完了状態別ボーダー・背景クラス */
+const CARD_COMPLETED_CLASSES = 'border-green-800 opacity-75';
+const CARD_PARTIAL_CLASSES = 'border-yellow-700 bg-yellow-950';
+const CARD_DEFAULT_CLASSES = 'border-slate-600';
+
+/** 「一部完了」バッジのTailwindクラス */
+const PARTIAL_COMPLETE_BADGE_CLASSES = 'shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-800 text-yellow-200';
+
 /**
  * タスク一覧ページ
  * タスクの一覧表示・カテゴリフィルタリング・削除・作成・編集・詳細遷移を提供する
@@ -36,7 +44,7 @@ function TaskListPage() {
 
   const [deleteError, setDeleteError] = useState('');
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
-  const [isCompletedSectionOpen, setIsCompletedSectionOpen] = useState(false);
+  const [isCompletedSectionOpen, setIsCompletedSectionOpen] = useState(true);
 
   const currentUsername = getCurrentUsername();
 
@@ -77,10 +85,16 @@ function TaskListPage() {
     const isOwner = currentUsername !== null && node.created_by === currentUsername;
     const indentClass = DEPTH_INDENT_CLASSES[node.depth] ?? 'pl-14';
 
+    const cardStateClass = node.is_completed
+      ? CARD_COMPLETED_CLASSES
+      : node.hasPartiallyCompletedChildren
+        ? CARD_PARTIAL_CLASSES
+        : CARD_DEFAULT_CLASSES;
+
     return (
       <div className={indentClass}>
         <div
-          className={`bg-slate-700 border rounded-lg p-5 ${node.is_completed ? 'border-green-800 opacity-75' : 'border-slate-600'} ${node.depth > 0 ? 'border-l-2 border-l-slate-500' : ''}`}
+          className={`bg-slate-700 border rounded-lg p-5 ${cardStateClass} ${node.depth > 0 ? 'border-l-2 border-l-slate-500' : ''}`}
         >
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
@@ -96,6 +110,9 @@ function TaskListPage() {
                 >
                   {PRIORITY_LABELS[node.priority]}
                 </span>
+                {node.hasPartiallyCompletedChildren && (
+                  <span className={PARTIAL_COMPLETE_BADGE_CLASSES}>一部完了</span>
+                )}
                 {node.category && (
                   <span className="shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-slate-600 text-slate-300">
                     {node.category}

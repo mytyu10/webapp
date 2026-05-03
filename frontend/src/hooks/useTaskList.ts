@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { fetchTasks, fetchCategories, deleteTask, toggleTaskCompletion, Task } from '../api/taskApi';
 import { logger } from '../logger';
 
@@ -8,9 +8,15 @@ const CONTEXT = 'useTaskList';
 export interface TaskTreeNode extends Task {
   /** 階層の深さ（ルートタスク: 0, 子タスク: 1, ...） */
   depth: number;
+  /** 自身が未完了かつ直接の子タスク（孫以下は対象外）に1件以上完了があるかどうか */
+  hasPartiallyCompletedChildren: boolean;
 }
 
-/** useTaskListフックの戻り値型 */
+/**
+ * useTaskList フックの戻り値型
+ * タスク一覧・削除・完了切り替え・カテゴリフィルタリング・ツリー構築に必要な
+ * ステートとハンドラーをまとめて提供する
+ */
 interface UseTaskListReturn {
   tasks: Task[];
   /** 未完了タスクのツリー展開済みフラット配列（階層順・depth付き） */
@@ -61,16 +67,19 @@ function buildTaskTrees(
    * タスクを再帰的にフラット配列へ展開する
    */
   function flatten(task: Task, depth: number): TaskTreeNode[] {
-    const node: TaskTreeNode = { ...task, depth };
+    const hasPartiallyCompletedChildren =
+      !Boolean(task.is_completed) &&
+      task.children.some((child) => Boolean(child.is_completed));
+    const node: TaskTreeNode = { ...task, depth, hasPartiallyCompletedChildren };
     const childNodes = task.children
-      .filter((child) => child.is_completed === completedFilter)
+      .filter((child) => Boolean(child.is_completed) === completedFilter)
       .flatMap((child) => flatten(child, depth + 1));
     return [node, ...childNodes];
   }
 
   // ルートタスク（parent_idなし）のうち完了状態が一致し、フィルターに合致するものを抽出
   const rootTasks = tasks.filter(
-    (t) => t.parent_id === null && t.is_completed === completedFilter && matchesCategory(t),
+    (t) => t.parent_id === null && Boolean(t.is_completed) === completedFilter && matchesCategory(t),
   );
 
   // due_date でソートしてツリー展開
@@ -94,6 +103,12 @@ export function useTaskList(): UseTaskListReturn {
   const [error, setError] = useState('');
   const [toggleCompleteError, setToggleCompleteError] = useState('');
   const [reloadTrigger, setReloadTrigger] = useState(0);
+  // 並走する複数トグル操作でのロールバック競合を防ぐため ref で最新ステートを保持する
+  const tasksRef = useRef<Task[]>(tasks);
+
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
 
   /**
    * タスク一覧を再読み込みするトリガーをインクリメントする
@@ -167,17 +182,24 @@ export function useTaskList(): UseTaskListReturn {
   }, []);
 
   /**
-   * タスクの完了状態を切り替える。成功後は state の該当タスクを更新する
+   * タスクの完了状態を切り替える。
+   * 楽観的UI更新: ボタン押下直後にローカルステートを更新し、
+   * APIコール成功時はサーバーレスポンスで上書き、失敗時はスナップショットにロールバックする
    */
   const handleToggleComplete = useCallback(async (id: number, is_completed: boolean): Promise<void> => {
+    const snapshot = tasksRef.current;
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, is_completed } : t)));
+
     try {
       logger.info(CONTEXT, `タスク完了状態切り替え実行: id=${id}, is_completed=${String(is_completed)}`);
       const updated = await toggleTaskCompletion(id, is_completed);
+      // サーバーレスポンスで上書き（整合性担保）
       setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
       logger.info(CONTEXT, `タスク完了状態切り替え完了: id=${id}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'タスクの更新に失敗しました。';
       logger.warn(CONTEXT, `タスク完了状態切り替え失敗: id=${id} - ${message}`);
+      setTasks(snapshot);
       setToggleCompleteError(message);
     }
   }, []);
