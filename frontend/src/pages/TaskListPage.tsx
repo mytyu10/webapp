@@ -57,8 +57,10 @@ function TaskListPage() {
     loading,
     error,
     toggleCompleteError,
+    togglingIds,
     handleDelete,
     handleToggleComplete,
+    awaitToggle,
     setSelectedCategory,
   } = useTaskList();
 
@@ -130,7 +132,13 @@ function TaskListPage() {
           isCollapsed={collapsedParentIds.has(node.id)}
           onToggleCollapse={() => toggleCollapse(node.id)}
           onToggleComplete={(id, is_completed) => void handleToggleComplete(id, is_completed)}
-          onNavigateDetail={(id) => navigate(`/tasks/${id}`)}
+          onNavigateDetail={async (id) => {
+            // 完了切り替え PATCH が進行中の場合は完了を待ってから詳細画面へ遷移する
+            if (togglingIds.has(id)) {
+              await awaitToggle(id);
+            }
+            navigate(`/tasks/${id}`);
+          }}
           onNavigateEdit={(id) => navigate(`/tasks/${id}/edit`)}
           onDeleteClick={onDeleteClick}
           isOwner={isOwner}

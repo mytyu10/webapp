@@ -28,8 +28,15 @@ interface UseTaskListReturn {
   loading: boolean;
   error: string;
   toggleCompleteError: string;
+  /** 現在 PATCH 処理中のタスク ID 集合 */
+  togglingIds: Set<number>;
   handleDelete: (id: number) => Promise<void>;
   handleToggleComplete: (id: number, is_completed: boolean) => Promise<void>;
+  /**
+   * 指定 ID のタスクに PATCH が進行中であれば完了（成功・失敗問わず）まで待機する。
+   * 進行中でなければ即座に resolve する
+   */
+  awaitToggle: (id: number) => Promise<void>;
   setSelectedCategory: (category: string) => void;
   reload: () => void;
 }
@@ -116,8 +123,12 @@ export function useTaskList(): UseTaskListReturn {
   const [error, setError] = useState('');
   const [toggleCompleteError, setToggleCompleteError] = useState('');
   const [reloadTrigger, setReloadTrigger] = useState(0);
+  /** 現在 PATCH 処理中のタスク ID 集合 */
+  const [togglingIds, setTogglingIds] = useState<Set<number>>(new Set());
   // 並走する複数トグル操作でのロールバック競合を防ぐため ref で最新ステートを保持する
   const tasksRef = useRef<Task[]>(tasks);
+  /** PATCH 中の各タスク ID に対応する Promise を保持する ref（外部から await するために使用） */
+  const togglePromisesRef = useRef<Map<number, Promise<void>>>(new Map());
 
   useEffect(() => {
     tasksRef.current = tasks;
@@ -197,21 +208,52 @@ export function useTaskList(): UseTaskListReturn {
   /**
    * タスクの完了状態を切り替える。
    * 楽観的UI更新: ボタン押下直後にローカルステートを更新し、
-   * APIコール成功時はサーバーレスポンスで上書き、失敗時はスナップショットにロールバックする
+   * APIコール成功時はサーバーレスポンスで上書き、失敗時はスナップショットにロールバックする。
+   * PATCH 実行中は togglingIds に id を追加し、完了後（成功・失敗問わず）に除去する
    */
   const handleToggleComplete = useCallback(async (id: number, is_completed: boolean): Promise<void> => {
     const snapshot = tasksRef.current;
     setTasks((prev) => updateIsCompletedInTree(prev, id, is_completed));
 
-    try {
-      logger.info(CONTEXT, `タスク完了状態切り替え実行: id=${id}, is_completed=${String(is_completed)}`);
-      await toggleTaskCompletion(id, is_completed);
-      logger.info(CONTEXT, `タスク完了状態切り替え完了: id=${id}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'タスクの更新に失敗しました。';
-      logger.warn(CONTEXT, `タスク完了状態切り替え失敗: id=${id} - ${message}`);
-      setTasks(snapshot);
-      setToggleCompleteError(message);
+    // PATCH 処理中フラグを立て、Promise を外部から参照できるよう保存する
+    setTogglingIds((prev) => {
+      const next = new Set(Array.from(prev));
+      next.add(id);
+      return next;
+    });
+    const promise = (async (): Promise<void> => {
+      try {
+        logger.info(CONTEXT, `タスク完了状態切り替え実行: id=${id}, is_completed=${String(is_completed)}`);
+        await toggleTaskCompletion(id, is_completed);
+        logger.info(CONTEXT, `タスク完了状態切り替え完了: id=${id}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'タスクの更新に失敗しました。';
+        logger.warn(CONTEXT, `タスク完了状態切り替え失敗: id=${id} - ${message}`);
+        setTasks(snapshot);
+        setToggleCompleteError(message);
+      } finally {
+        // 成功・失敗問わず処理中フラグを解除する
+        setTogglingIds((prev) => {
+          const next = new Set(Array.from(prev));
+          next.delete(id);
+          return next;
+        });
+        togglePromisesRef.current.delete(id);
+      }
+    })();
+    togglePromisesRef.current.set(id, promise);
+
+    await promise;
+  }, []);
+
+  /**
+   * 指定 ID のタスクに PATCH が進行中であれば完了（成功・失敗問わず）まで待機する。
+   * 進行中でなければ即座に resolve する
+   */
+  const awaitToggle = useCallback(async (id: number): Promise<void> => {
+    const promise = togglePromisesRef.current.get(id);
+    if (promise !== undefined) {
+      await promise;
     }
   }, []);
 
@@ -224,8 +266,10 @@ export function useTaskList(): UseTaskListReturn {
     loading,
     error,
     toggleCompleteError,
+    togglingIds,
     handleDelete,
     handleToggleComplete,
+    awaitToggle,
     setSelectedCategory,
     reload,
   };
