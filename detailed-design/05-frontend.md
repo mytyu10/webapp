@@ -112,22 +112,19 @@ RegistPage
 ```
 TaskListPage
 ├── ConfirmModal（削除確認モーダル）
-├── ヘッダー（タイトル + "タスクを作成"ボタン）
-├── カテゴリフィルターボタン群（"すべて" + 各カテゴリ）
+├── ヘッダー（タイトル + ActionButton "タスクを作成"）
+├── CategoryFilterBar（"すべて" + 各カテゴリのピルボタン）
 ├── FormErrorBanner（API/削除/完了切り替えエラー）
 ├── 読み込み中テキスト
 ├── タスクなしメッセージ
 ├── 未完了タスクセクション（incompleteTrees を isNodeHidden でフィルター済み）
 │   └── 階層ツリー表示（DEPTH_INDENT_CLASSES による depth ごとのインデント）
-│       └── 各タスクカード（renderTaskCard）
-│           ├── [depth === 0 かつ children あり] トグルボタン（展開時 rotate-90） + カード
-│           ├── [depth === 0 かつ children なし] 同幅スペーサー + カード
-│           ├── [depth > 0] インデント・「└」アイコン付きカード（既存構造を維持）
-│           │   ├── タイトル（完了時: 打ち消し線 + 薄表示）・優先度バッジ・カテゴリバッジ
-│           │   ├── 説明文・期限・担当者
-│           │   └── 完了切り替えボタン・詳細ボタン・編集ボタン（作成者のみ）・削除ボタン（作成者のみ）
+│       └── 各タスクカード（renderTaskCard → TaskCard）
+│           ├── [depth === 0 かつ children あり] カード内左端にトグルボタン（展開時 rotate-90）
+│           ├── [depth === 0 かつ children なし] カード内左端に同幅スペーサー
+│           └── [depth > 0] インデント・「└」アイコン付き（既存構造を維持）
 └── 完了済みタスクセクション（completedTrees を isNodeHidden でフィルター済み）
-    ├── 折りたたみトグル（"完了済みタスク (N件)"）
+    ├── SectionToggleButton（"完了済み (N件)"、折りたたみ可）
     └── 折りたたみ展開時: 階層ツリー表示（同上）
 ```
 
@@ -146,13 +143,13 @@ depth 0 がルートタスク、depth 1 以降が子・孫タスクに対応す�
 
 **子タスクトグル関連定数**
 
-| 定数 | 値 | 説明 |
-|------|-----|------|
-| `TOGGLE_BUTTON_WIDTH_CLASS` | `'w-6'` | トグルボタン・スペーサーの幅クラス |
-| `MAX_TREE_DEPTH` | `10` | ツリーノードの最大階層深さ（再帰打ち切り用） |
-| `DEPTH_INDENT_FALLBACK_CLASS` | `'pl-14'` | `DEPTH_INDENT_CLASSES` に存在しない depth のフォールバック |
+| 定数 | 値 | 定義場所 | 説明 |
+|------|-----|---------|------|
+| `TOGGLE_BUTTON_WIDTH_CLASS` | `'w-6'` | `TaskCard.tsx` | トグルボタン・スペーサーの幅クラス |
+| `MAX_TREE_DEPTH` | `10` | `TaskListPage.tsx` | ツリーノードの最大階層深さ（再帰打ち切り用） |
+| `DEPTH_INDENT_FALLBACK_CLASS` | `'pl-14'` | `TaskListPage.tsx` | `DEPTH_INDENT_CLASSES` に存在しない depth のフォールバック |
 
-**タスクカード状態別スタイル定数**
+**タスクカード状態別スタイル定数**（`TaskCard.tsx` に定義）
 
 | 定数 | Tailwindクラス | 適用条件 |
 |------|--------------|---------|
@@ -162,7 +159,7 @@ depth 0 がルートタスク、depth 1 以降が子・孫タスクに対応す�
 
 `CARD_COMPLETED_CLASSES` → `CARD_PARTIAL_CLASSES` → `CARD_DEFAULT_CLASSES` の優先順で適用する。
 
-**「一部完了」バッジ**
+**「一部完了」バッジ**（`TaskCard.tsx` に定義）
 
 `node.hasPartiallyCompletedChildren` が `true` の場合、タイトル行に「一部完了」バッジを表示する。
 
@@ -543,3 +540,59 @@ div.flex.min-h-screen
 └── main.flex-1
     └── <Outlet />
 ```
+
+### TaskCard
+
+タスク1件の表示と操作ボタンを提供するコンポーネント。`TaskListPage` から切り出し。
+
+| props | 型 | 必須 | 説明 |
+|-------|-----|------|------|
+| `node` | `TaskTreeNode` | ✅ | 表示対象のタスクツリーノード |
+| `isCollapsed` | `boolean` | ✅ | 子タスクが折りたたまれているか（depth=0 のみ使用） |
+| `onToggleCollapse` | `() => void` | ✅ | 子タスク表示/非表示の切り替えコールバック |
+| `onToggleComplete` | `(id: number, is_completed: boolean) => void` | ✅ | 完了状態切り替えコールバック |
+| `onNavigateDetail` | `(id: number) => void` | ✅ | 詳細ページへの遷移コールバック |
+| `onNavigateEdit` | `(id: number) => void` | ✅ | 編集ページへの遷移コールバック |
+| `onDeleteClick` | `(id: number) => void` | ✅ | 削除確認ダイアログを開くコールバック |
+| `isOwner` | `boolean` | ✅ | 現在のユーザーがタスクの作成者かどうか |
+
+**depth 別レンダリング:**
+- `depth === 0` かつ `children.length > 0`: カード内部の左端にトグルボタン（＞）を表示。展開中は `rotate-90`
+- `depth === 0` かつ `children.length === 0`: カード内部の左端に同幅スペーサーを表示
+- `depth > 0`: タイトル行の先頭に「└」アイコンを表示
+
+**アクションボタン（カード右端）:** 完了切り替え・詳細・編集（`isOwner` のみ）・削除（`isOwner` のみ）
+
+### ActionButton
+
+ナビゲーション・アクション用の汎用ボタンコンポーネント。スカイブルー塗りつぶしスタイル。
+
+| props | 型 | 必須 | 説明 |
+|-------|-----|------|------|
+| `label` | `string` | ✅ | ボタンに表示するラベル |
+| `onClick` | `() => void` | ✅ | クリック時のコールバック |
+
+### CategoryFilterBar
+
+カテゴリフィルターバーコンポーネント。「すべて」ボタンと各カテゴリのピルボタンを横並びで表示。
+
+| props | 型 | 必須 | 説明 |
+|-------|-----|------|------|
+| `categories` | `string[]` | ✅ | カテゴリ名の一覧 |
+| `selectedCategory` | `string` | ✅ | 現在選択中のカテゴリ（空文字は「すべて」） |
+| `onSelect` | `(category: string) => void` | ✅ | カテゴリ選択時のコールバック |
+
+選択中: `bg-sky-600 text-white`、非選択: `bg-slate-600 text-slate-300 hover:bg-slate-500`
+
+### SectionToggleButton
+
+セクション折りたたみボタンコンポーネント。
+
+| props | 型 | 必須 | 説明 |
+|-------|-----|------|------|
+| `label` | `string` | ✅ | セクション名（例: "完了済み"） |
+| `count` | `number` | ✅ | 表示する件数 |
+| `isOpen` | `boolean` | ✅ | セクションが展開中かどうか |
+| `onClick` | `() => void` | ✅ | クリック時のコールバック |
+
+展開中は `▾`、折りたたみ中は `▸` を表示。ラベルと件数を "ラベル (N件)" の形式で表示。
