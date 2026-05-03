@@ -6,6 +6,8 @@ const validValues: TaskFormValues = {
   description: 'テスト説明文',
   due_date: '2026-12-31T23:59',
   assigneesText: 'user1, user2',
+  priority: 'MEDIUM',
+  category: '',
 };
 
 describe('validateTaskForm', () => {
@@ -86,6 +88,40 @@ describe('validateTaskForm', () => {
       const assigneesText = Array.from({ length: 51 }, (_, i) => `user${i}`).join(', ');
       const errors = validateTaskForm({ ...validValues, assigneesText });
       expect(errors.assignees).toBeTruthy();
+    });
+  });
+
+  describe('priority', () => {
+    it('HIGHの場合はエラーなし', () => {
+      const errors = validateTaskForm({ ...validValues, priority: 'HIGH' });
+      expect(errors.priority).toBeUndefined();
+    });
+
+    it('MEDIUMの場合はエラーなし', () => {
+      const errors = validateTaskForm({ ...validValues, priority: 'MEDIUM' });
+      expect(errors.priority).toBeUndefined();
+    });
+
+    it('LOWの場合はエラーなし', () => {
+      const errors = validateTaskForm({ ...validValues, priority: 'LOW' });
+      expect(errors.priority).toBeUndefined();
+    });
+  });
+
+  describe('category', () => {
+    it('カテゴリが空の場合はエラーなし', () => {
+      const errors = validateTaskForm({ ...validValues, category: '' });
+      expect(errors.category).toBeUndefined();
+    });
+
+    it('カテゴリが100文字以内の場合はエラーなし', () => {
+      const errors = validateTaskForm({ ...validValues, category: 'a'.repeat(100) });
+      expect(errors.category).toBeUndefined();
+    });
+
+    it('カテゴリが101文字以上の場合はエラーを返す', () => {
+      const errors = validateTaskForm({ ...validValues, category: 'a'.repeat(101) });
+      expect(errors.category).toBeTruthy();
     });
   });
 });

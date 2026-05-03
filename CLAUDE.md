@@ -52,30 +52,88 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/accounts/service/` — business logic
 - `src/accounts/repository/` — Prisma queries
 - `src/accounts/dto/` — validation DTOs (class-validator)
+- `src/tasks/controller/` — REST endpoints (`GET /tasks`, `GET /tasks/categories`, `GET /tasks/:id`, `POST /tasks`, `PATCH /tasks/:id`, `DELETE /tasks/:id`) — JwtAuthGuard適用済み
+- `src/tasks/service/` — タスクのビジネスロジック
+- `src/tasks/repository/` — Prisma CRUD・カテゴリ取得
+- `src/tasks/dto/task.dto.ts` — CreateTaskDto / UpdateTaskDto / TaskResponseDto / Priority型
 - `src/jwt/jwt.service.ts` — JWT creation (1h expiry, secret from `JWT_SECRET` env)
+- `src/jwt/jwt-auth.guard.ts` — JwtAuthGuard（Bearerトークン検証）
 - `src/prisma/prisma.service.ts` — Prisma client singleton
 - `src/common/service/hash.service.ts` — SHA256 password hashing
+- `src/common/service/logger.service.ts` — ロガーサービス
 - `src/common/type/message.ts` — Japanese message constants (centralised)
 - `src/common/type/status.enum.ts` — HTTP status enums
 
-`AppModule` imports `AccountsModule`. `PrismaService` and `JwtService` are provided at the `AppModule` level and injected into `AccountsModule`.
+`AppModule` imports `AccountsModule` and `TasksModule`. `PrismaService` and `JwtService` are provided at the `AppModule` level.
 
 **Login flow**: DTO validation → SHA256 hash password → query DB by username → compare hashes → issue JWT.
 
+**Task flow**: JwtAuthGuard → Controller → Service → Repository → Prisma.
+
 ### Frontend (React + CRA)
 
-- `src/App.tsx` — router: `/` → `HomePage`, `/login` → `LoginPage`
-- `src/pages/LoginPage.tsx` — login form with client-side validation, posts to `http://localhost:8000/accounts/login`, stores JWT in `localStorage`
+- `src/App.tsx` — router: `/` → `HomePage`（タスク一覧へリダイレクト）, `/login` → `LoginPage`, `/tasks` → `TaskListPage`, `/tasks/new` → `TaskFormPage`, `/tasks/:id` → `TaskDetailPage`, `/tasks/:id/edit` → `TaskFormPage`
+- `src/components/PrivateRoute.tsx` — JWT存在チェック + exp有効期限検証。無効時は`/login`へリダイレクト
+- `src/components/Sidebar.tsx` — サイドバーコンポーネント（タスク管理リンク・ログアウト）
+- `src/components/SidebarLayout.tsx` — サイドバー付きレイアウト（Outlet使用）
+- `src/pages/LoginPage.tsx` — login form, posts to backend `/accounts/login`, stores JWT in `localStorage`
+- `src/pages/TaskListPage.tsx` — タスク一覧・カテゴリフィルター・削除確認モーダル。作成者のみ編集/削除表示
+- `src/pages/TaskFormPage.tsx` — タスク作成・編集・子タスク作成（URLクエリ`parent_id`で切り替え）
+- `src/pages/TaskDetailPage.tsx` — タスク詳細・子タスク一覧・子タスク作成ボタン。作成者のみ編集ボタン表示
+- `src/api/taskApi.ts` — タスクAPI通信（`fetchTasks`, `fetchTask`, `fetchCategories`, `createTask`, `updateTask`, `deleteTask`, `getCurrentUsername`）
+- `src/hooks/useTaskList.ts` — タスク一覧・削除・カテゴリフィルタリングフック
+- `src/hooks/useTaskForm.ts` — タスクフォーム（作成/編集/子タスク作成モード対応）フック
+- `src/validation/taskValidation.ts` — タスクフォームバリデーション（priority/category含む）
+- `src/components/ConfirmModal.tsx` — 削除確認モーダル
+- `src/components/TextAreaField.tsx` — textareaラッパー共通コンポーネント
+- `src/components/DateTimeField.tsx` — datetime-local入力ラッパー共通コンポーネント
+- `src/components/SelectField.tsx` — selectラッパー共通コンポーネント
+- `src/components/CancelButton.tsx` — キャンセルボタン共通コンポーネント
 
-Frontend hardcodes `localhost:8000` as the backend URL — no `.env` configuration.
+API base URL is built from env vars: `REACT_APP_API_SCHEME`, `REACT_APP_API_HOST`, `REACT_APP_API_PORT`.
 
 ### Database
 
-PostgreSQL hosted on Prisma (db.prisma.io). Connection string and `JWT_SECRET` live in `backend/.env`.
-
-Schema: single `Account` model with `id`, `username` (unique), `hashed_password`.
+SQLite（開発環境）。接続URLは `backend/prisma.config.ts` で管理。`JWT_SECRET` は `backend/.env`。
 
 Prisma config file: `backend/prisma.config.ts` (uses dotenv, loads `prisma/schema.prisma`).
+
+**Schema:**
+
+```prisma
+model Account {
+  username        String         @id
+  hashed_password String
+  task_assignees  TaskAssignee[]
+  created_tasks   Task[]         @relation("TaskCreator")
+}
+
+model Task {
+  id          Int            @id @default(autoincrement())
+  title       String
+  description String
+  due_date    DateTime
+  priority    String         @default("MEDIUM")  // HIGH / MEDIUM / LOW
+  category    String?
+  parent_id   Int?
+  created_by  String
+  created_at  DateTime       @default(now())
+  updated_at  DateTime       @updatedAt
+  assignees   TaskAssignee[]
+  creator     Account        @relation("TaskCreator", fields: [created_by], references: [username])
+  parent      Task?          @relation("TaskChildren", fields: [parent_id], references: [id])
+  children    Task[]         @relation("TaskChildren")
+}
+
+model TaskAssignee {
+  task_id  Int
+  username String
+  task     Task    @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  account  Account @relation(fields: [username], references: [username], onDelete: Cascade)
+
+  @@id([task_id, username])
+}
+```
 
 ## 開発規約
 

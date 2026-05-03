@@ -1,31 +1,45 @@
 import { Injectable } from '@nestjs/common';
 import { Task, TaskAssignee } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { Priority } from '../dto/task.dto';
 
-/** タスクとアサイニーを含む型 */
-export type TaskWithAssignees = Task & { assignees: TaskAssignee[] };
+/** タスクとアサイニー・子タスクを含む型 */
+export type TaskWithRelations = Task & {
+  assignees: TaskAssignee[];
+  children: (Task & { assignees: TaskAssignee[] })[];
+};
 
 @Injectable()
 export class TaskRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * 全タスクを担当者情報込みで取得する
+   * 全タスクを担当者・子タスク情報込みで取得する
    */
-  async findAll(): Promise<TaskWithAssignees[]> {
+  async findAll(): Promise<TaskWithRelations[]> {
     return this.prisma.task.findMany({
-      include: { assignees: true },
+      include: {
+        assignees: true,
+        children: {
+          include: { assignees: true },
+        },
+      },
       orderBy: { created_at: 'desc' },
     });
   }
 
   /**
-   * 指定IDのタスクを担当者情報込みで取得する
+   * 指定IDのタスクを担当者・子タスク情報込みで取得する
    */
-  async findById(id: number): Promise<TaskWithAssignees | null> {
+  async findById(id: number): Promise<TaskWithRelations | null> {
     return this.prisma.task.findUnique({
       where: { id },
-      include: { assignees: true },
+      include: {
+        assignees: true,
+        children: {
+          include: { assignees: true },
+        },
+      },
     });
   }
 
@@ -36,18 +50,31 @@ export class TaskRepository {
     title: string;
     description: string;
     due_date: Date;
+    priority: Priority;
+    category: string | null;
+    parent_id: number | null;
+    created_by: string;
     assignees: string[];
-  }): Promise<TaskWithAssignees> {
+  }): Promise<TaskWithRelations> {
     return this.prisma.task.create({
       data: {
         title: data.title,
         description: data.description,
         due_date: data.due_date,
+        priority: data.priority,
+        category: data.category,
+        parent_id: data.parent_id,
+        created_by: data.created_by,
         assignees: {
           create: data.assignees.map((username) => ({ username })),
         },
       },
-      include: { assignees: true },
+      include: {
+        assignees: true,
+        children: {
+          include: { assignees: true },
+        },
+      },
     });
   }
 
@@ -60,9 +87,12 @@ export class TaskRepository {
       title?: string;
       description?: string;
       due_date?: Date;
+      priority?: Priority;
+      category?: string;
+      parent_id?: number;
       assignees?: string[];
     },
-  ): Promise<TaskWithAssignees> {
+  ): Promise<TaskWithRelations> {
     return this.prisma.$transaction(async (tx) => {
       if (data.assignees !== undefined) {
         await tx.taskAssignee.deleteMany({ where: { task_id: id } });
@@ -76,13 +106,21 @@ export class TaskRepository {
             description: data.description,
           }),
           ...(data.due_date !== undefined && { due_date: data.due_date }),
+          ...(data.priority !== undefined && { priority: data.priority }),
+          ...(data.category !== undefined && { category: data.category }),
+          ...(data.parent_id !== undefined && { parent_id: data.parent_id }),
           ...(data.assignees !== undefined && {
             assignees: {
               create: data.assignees.map((username) => ({ username })),
             },
           }),
         },
-        include: { assignees: true },
+        include: {
+          assignees: true,
+          children: {
+            include: { assignees: true },
+          },
+        },
       });
     });
   }
@@ -92,5 +130,20 @@ export class TaskRepository {
    */
   async delete(id: number): Promise<void> {
     await this.prisma.task.delete({ where: { id } });
+  }
+
+  /**
+   * 全タスクから設定されているカテゴリ一覧を重複なしで取得する
+   */
+  async findAllCategories(): Promise<string[]> {
+    const tasks = await this.prisma.task.findMany({
+      where: { category: { not: null } },
+      select: { category: true },
+      distinct: ['category'],
+      orderBy: { category: 'asc' },
+    });
+    return tasks
+      .map((t) => t.category)
+      .filter((c): c is string => c !== null);
   }
 }

@@ -1,18 +1,27 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTaskForm } from '../hooks/useTaskForm';
+import { PRIORITY_VALUES, PRIORITY_LABELS } from '../api/taskApi';
 import FormCard from '../components/FormCard';
 import FormField from '../components/FormField';
 import FormErrorBanner from '../components/FormErrorBanner';
 import SubmitButton from '../components/SubmitButton';
+import TextAreaField from '../components/TextAreaField';
+import DateTimeField from '../components/DateTimeField';
+import SelectField from '../components/SelectField';
+import CancelButton from '../components/CancelButton';
 
 /**
  * タスク作成・編集ページ
  * URLパラメータにidが存在する場合は編集モード、存在しない場合は作成モードで動作する
+ * クエリパラメータ parent_id が存在する場合は子タスク作成モードになる
  */
 function TaskFormPage() {
   const { id } = useParams<{ id?: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const taskId = id !== undefined ? Number(id) : undefined;
+  const parentIdParam = searchParams.get('parent_id');
+  const parentId = parentIdParam !== null ? Number(parentIdParam) : undefined;
 
   const {
     values,
@@ -24,13 +33,39 @@ function TaskFormPage() {
     setDescription,
     setDueDate,
     setAssigneesText,
+    setPriority,
+    setCategory,
     handleSubmit,
-  } = useTaskForm(taskId);
+  } = useTaskForm({ id: taskId, parentId });
+
+  /** フォームタイトルを決定する */
+  function getFormTitle(): string {
+    if (isEditMode) return 'タスクを編集';
+    if (parentId !== undefined) return '子タスクを作成';
+    return 'タスクを作成';
+  }
+
+  /** キャンセル時の遷移先を決定する */
+  function handleCancel(): void {
+    if (isEditMode && taskId !== undefined) {
+      navigate(`/tasks/${taskId}`);
+    } else if (parentId !== undefined) {
+      navigate(`/tasks/${parentId}`);
+    } else {
+      navigate('/tasks');
+    }
+  }
+
+  /** 優先度の選択肢を生成する */
+  const priorityOptions = PRIORITY_VALUES.map((p) => ({
+    value: p,
+    label: PRIORITY_LABELS[p],
+  }));
 
   return (
     <div className="max-w-xl mx-auto">
       <FormCard
-        title={isEditMode ? 'タスクを編集' : 'タスクを作成'}
+        title={getFormTitle()}
         onSubmit={(e) => void handleSubmit(e)}
       >
         <FormErrorBanner message={apiError} />
@@ -45,48 +80,45 @@ function TaskFormPage() {
           maxLength={200}
         />
 
-        <div className="mb-5">
-          <label htmlFor="description" className="block text-sm font-medium text-slate-300 mb-1.5">
-            説明文
-          </label>
-          <textarea
-            id="description"
-            className={`w-full px-3 py-2.5 bg-slate-700 border rounded-md text-sm text-slate-100 outline-none transition-shadow placeholder-slate-500 resize-y
-              ${errors.description
-                ? 'border-red-500 focus:ring-2 focus:ring-red-500/30'
-                : 'border-slate-600 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20'}
-              disabled:opacity-50 disabled:cursor-not-allowed`}
-            value={values.description}
-            onChange={(e) => setDescription(e.target.value)}
-            maxLength={1000}
-            rows={4}
-            disabled={loading}
-          />
-          {errors.description && (
-            <p className="mt-1.5 text-xs text-red-400">{errors.description}</p>
-          )}
-        </div>
+        <TextAreaField
+          id="description"
+          label="説明文"
+          value={values.description}
+          onChange={setDescription}
+          error={errors.description}
+          disabled={loading}
+          maxLength={1000}
+          rows={4}
+        />
 
-        <div className="mb-5">
-          <label htmlFor="due_date" className="block text-sm font-medium text-slate-300 mb-1.5">
-            期限
-          </label>
-          <input
-            id="due_date"
-            type="datetime-local"
-            className={`w-full px-3 py-2.5 bg-slate-700 border rounded-md text-sm text-slate-100 outline-none transition-shadow
-              ${errors.due_date
-                ? 'border-red-500 focus:ring-2 focus:ring-red-500/30'
-                : 'border-slate-600 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20'}
-              disabled:opacity-50 disabled:cursor-not-allowed`}
-            value={values.due_date}
-            onChange={(e) => setDueDate(e.target.value)}
-            disabled={loading}
-          />
-          {errors.due_date && (
-            <p className="mt-1.5 text-xs text-red-400">{errors.due_date}</p>
-          )}
-        </div>
+        <DateTimeField
+          id="due_date"
+          label="期限"
+          value={values.due_date}
+          onChange={setDueDate}
+          error={errors.due_date}
+          disabled={loading}
+        />
+
+        <SelectField
+          id="priority"
+          label="優先度"
+          value={values.priority}
+          onChange={(v) => setPriority(v as typeof PRIORITY_VALUES[number])}
+          options={priorityOptions}
+          error={errors.priority}
+          disabled={loading}
+        />
+
+        <FormField
+          id="category"
+          label="カテゴリ（任意）"
+          value={values.category}
+          onChange={setCategory}
+          error={errors.category}
+          disabled={loading}
+          maxLength={100}
+        />
 
         <FormField
           id="assignees"
@@ -98,14 +130,7 @@ function TaskFormPage() {
         />
 
         <div className="flex gap-3 mt-2">
-          <button
-            type="button"
-            onClick={() => navigate('/tasks')}
-            disabled={loading}
-            className="flex-1 py-2.5 bg-slate-600 hover:bg-slate-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-md transition-colors"
-          >
-            キャンセル
-          </button>
+          <CancelButton onClick={handleCancel} disabled={loading} />
           <div className="flex-1">
             <SubmitButton
               label={isEditMode ? '更新する' : '作成する'}

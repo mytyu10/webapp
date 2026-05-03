@@ -9,7 +9,7 @@
 | ORM | Prisma |
 | 認証 | JWT |
 | スタイリング | Tailwind CSS |
-| DB | PostgreSQL (db.prisma.io) |
+| DB | SQLite（開発）/ PostgreSQL（本番: db.prisma.io） |
 
 ---
 
@@ -56,14 +56,16 @@ src/<feature>/
 - DBアクセスは必ずRepositoryレイヤーで行う
 - モデルは`backend/prisma/schema.prisma`に定義する
 - マイグレーションは`npx prisma migrate dev`で実施
+- **スキーマ変更後は必ず`npx prisma migrate dev --name <migration_name>`を実行してマイグレーションファイルを作成・適用すること**。`prisma generate`だけでは不十分でDBに反映されない
 - `PrismaService`のシャットダウン処理は`OnModuleDestroy`を実装し`onModuleDestroy()`で`$disconnect()`を呼ぶ（Prisma 7で廃止された`$on('beforeExit')`は使用しない）
+- [2026-05-03] Prisma 7では`schema.prisma`の`datasource`ブロックに`url`を書かない。接続URLは`prisma.config.ts`の`datasource.url`で管理する
 
 ### 認証（JWT）
 
 - JWTの生成は`src/jwt/jwt.service.ts`で行う（有効期限1h、`JWT_SECRET`環境変数使用）
 - JWTのペイロード型は`src/jwt/jwt.payload.ts`に`JwtPayload`インターフェースとして定義する（`AccountDto`を渡さない）
 - トークン生成はServiceレイヤーで行う（Controllerでは行わない）
-- 保護されたルートには`JwtAuthGuard`を適用する
+- 保護されたルートには`JwtAuthGuard`を適用する（`src/jwt/jwt-auth.guard.ts`）
 
 ### パスワード
 
@@ -92,7 +94,7 @@ src/<feature>/
 
 - フォーム要素は`src/components/`に定義したPJ固有の共通コンポーネントを使用する
 - `<input>`・`<button>`・`<form>`などのHTML要素をページコンポーネントに直接書かない
-- 共通コンポーネントの例: `FormCard`（フォーム外枠）、`FormField`（ラベル＋入力欄＋エラー表示）、`FormErrorBanner`（APIエラー表示）、`SubmitButton`（送信ボタン）
+- 共通コンポーネントの例: `FormCard`（フォーム外枠）、`FormField`（ラベル＋入力欄＋エラー表示）、`FormErrorBanner`（APIエラー表示）、`SubmitButton`（送信ボタン）、`TextAreaField`（テキストエリア）、`DateTimeField`（日時入力）、`SelectField`（セレクトボックス）、`CancelButton`（キャンセルボタン）、`ConfirmModal`（削除確認モーダル）
 - 新しい画面を追加する際も同様に共通コンポーネントを呼び出す形で実装する
 
 ### スタイリング
@@ -136,6 +138,10 @@ src/
 - `src/App.tsx`でルート定義を管理する
 - ページコンポーネントは`src/pages/`に1ファイル1コンポーネントで配置する
 
+### アクセス制御
+
+- タスクの編集・削除ボタンは作成者（`created_by`）とログイン中ユーザー（`getCurrentUsername()`）が一致する場合のみ表示する
+
 ---
 
 ## データベース規約
@@ -144,11 +150,50 @@ src/
 
 ```prisma
 model Account {
-  id              Int    @id @default(autoincrement())
-  username        String @unique
+  username        String         @id
   hashed_password String
+  task_assignees  TaskAssignee[]
+  created_tasks   Task[]         @relation("TaskCreator")
 }
 ```
+
+- [2026-05-03] `username`を主キーとして使用する（`id: Int @id @default(autoincrement())`は使用しない）。実装を正として採用済み
+
+### Taskモデル（現行スキーマ）
+
+```prisma
+model Task {
+  id          Int            @id @default(autoincrement())
+  title       String
+  description String
+  due_date    DateTime
+  priority    String         @default("MEDIUM")  // HIGH / MEDIUM / LOW
+  category    String?
+  parent_id   Int?
+  created_by  String
+  created_at  DateTime       @default(now())
+  updated_at  DateTime       @updatedAt
+  assignees   TaskAssignee[]
+  creator     Account        @relation("TaskCreator", fields: [created_by], references: [username])
+  parent      Task?          @relation("TaskChildren", fields: [parent_id], references: [id])
+  children    Task[]         @relation("TaskChildren")
+}
+
+model TaskAssignee {
+  task_id  Int
+  username String
+  task     Task    @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  account  Account @relation(fields: [username], references: [username], onDelete: Cascade)
+
+  @@id([task_id, username])
+}
+```
+
+- priorityフィールドは`HIGH` / `MEDIUM` / `LOW`の文字列で管理する（デフォルト: `MEDIUM`）
+- categoryはオプショナル（`String?`）。カテゴリ一覧は`GET /tasks/categories`で取得する
+- parent_idによる親子タスク構造をサポートする。子タスクは`children`リレーションで取得
+- TaskAssigneeの担当者更新はdelete+insertトランザクションで対応する
+- Taskの削除はCascade設定によりTaskAssigneeも連動削除される
 
 ### 命名規則
 
