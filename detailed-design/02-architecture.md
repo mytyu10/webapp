@@ -15,18 +15,19 @@
 │          ├── / → HomePage(リダイレクト)  │     │       │    ├── AccountController      │
 │          ├── /tasks → TaskListPage       │     │       │    ├── AccountService         │
 │          └── /tasks/new → TaskFormPage   │     │       │    └── AccountRepository      │
-│                                          │     │       └── TaskModule                 │
-│                                          │     │            ├── TaskController        │
-│                                          │     │            ├── TaskService           │
-│  src/                                    │     │            ├── TaskQueueService      │
-│                                          │     │            └── TaskRepository        │
-│  ├── api/          API通信               │     │                                      │
-│  ├── hooks/        状態管理               │     │  共通                                │
-│  ├── validation/   バリデーション          │     │  ├── JwtAuthGuard                    │
-│  ├── pages/        画面                  │     │  ├── PrismaService                   │
-│  └── components/   共通UI                │     │  ├── JwtService                      │
-└──────────────────────────────────────────┘     │  ├── HashService                     │
-                                                 │  └── LoggerService                   │
+│                                          │     │       ├── TaskModule                 │
+│                                          │     │       │    ├── TaskController        │
+│                                          │     │       │    ├── TaskService           │
+│  src/                                    │     │       │    └── TaskRepository        │
+│                                          │     │       └── CommonModule               │
+│  ├── api/          API通信               │     │            ├── LoggerService         │
+│  ├── hooks/        状態管理               │     │            └── BatchQueueService     │
+│  ├── validation/   バリデーション          │     │                                      │
+│  ├── pages/        画面                  │     │  共通                                │
+│  └── components/   共通UI                │     │  ├── JwtAuthGuard                    │
+└──────────────────────────────────────────┘     │  ├── PrismaService                   │
+                                                 │  ├── JwtService                      │
+                                                 │  └── HashService                     │
                                                  └──────────────────┬───────────────────┘
                                                                     │ Prisma ORM
                                                                     ▼
@@ -110,12 +111,13 @@ backend/src/
 │   ├── repository/
 │   │   └── task.repository.ts      # Prismaを使ったDBアクセス（is_completed 対応）
 │   └── service/
-│       ├── task.service.ts         # タスクCRUDのビジネスロジック
-│       └── task-queue.service.ts   # タスク更新をバッチ処理方式で実行（100msウィンドウ内のリクエストをまとめて順次処理）
+│       └── task.service.ts         # タスクCRUDのビジネスロジック（BatchQueueService 経由で更新をバッチ処理）
 ├── common/                          # 共通ユーティリティ
+│   ├── common.module.ts             # CommonModule（LoggerService・BatchQueueService を providers/exports に登録）
 │   ├── filter/
 │   │   └── http-exception.filter.ts # グローバル例外フィルター
 │   ├── service/
+│   │   ├── batch-queue.service.ts   # 汎用バッチキューサービス（100msウィンドウ・順次処理）
 │   │   ├── hash.service.ts          # SHA-256ハッシュ化
 │   │   └── logger.service.ts        # ロガーラッパー
 │   └── type/
@@ -182,12 +184,16 @@ AppModule
 │       ├── JwtService
 │       ├── HashService
 │       └── LoggerService
-└── TaskModule
-    └── provides
-        ├── TaskController      ← JwtAuthGuard（@UseGuards）適用
-        ├── TaskService         ← TaskQueueService, TaskRepository, LoggerService に依存
-        ├── TaskQueueService    ← LoggerService に依存（バッチ処理ログ出力）
-        ├── TaskRepository      ← PrismaService に依存
-        ├── PrismaService
-        └── LoggerService
+├── TaskModule
+│   ├── imports
+│   │   └── CommonModule        ← LoggerService / BatchQueueService を提供
+│   └── provides
+│       ├── TaskController      ← JwtAuthGuard（@UseGuards）適用
+│       ├── TaskService         ← BatchQueueService, TaskRepository, LoggerService に依存
+│       ├── TaskRepository      ← PrismaService に依存
+│       └── PrismaService
+└── CommonModule
+    └── provides/exports
+        ├── LoggerService
+        └── BatchQueueService   ← LoggerService に依存（バッチ処理ログ出力）
 ```
