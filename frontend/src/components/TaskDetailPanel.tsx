@@ -1,31 +1,40 @@
 import { useNavigate } from 'react-router-dom';
-import { PRIORITY_LABELS, PRIORITY_BADGE_CLASSES } from '../api/taskApi';
-import { useTaskDetail } from '../hooks/useTaskDetail';
-import FormErrorBanner from './FormErrorBanner';
+import { Task, PRIORITY_LABELS, PRIORITY_BADGE_CLASSES } from '../api/taskApi';
 
 /** TaskDetailPanel コンポーネントのProps型 */
 interface TaskDetailPanelProps {
-  /** 表示対象のタスクID。null の場合はパネルを非表示にする */
-  taskId: number | null;
+  /** 表示対象のタスク。null の場合は「見つかりません」を表示 */
+  task: Task | null;
+  /** PATCH 処理中かどうか（完了ボタンを非活性にする） */
+  isToggling: boolean;
+  /** 現在のユーザーがタスクの作成者かどうか（削除ボタンの表示制御） */
+  isOwner: boolean;
   /** パネルを閉じるコールバック */
   onClose: () => void;
-  /**
-   * 子タスク・親タスクのリンクをクリックしたときに呼ばれるコールバック
-   * パネル内で別タスクの詳細に切り替える
-   */
+  /** 完了状態切り替えコールバック（useTaskList と共有） */
+  onToggleComplete: (id: number, is_completed: boolean) => Promise<void>;
+  /** 子タスク・親タスクのリンクをクリックしたときに呼ばれるコールバック */
   onSelectTask: (id: number) => void;
+  /** 削除確認モーダルを開くコールバック */
+  onDeleteClick: (id: number) => void;
 }
 
 /**
  * タスク詳細サイドパネルコンポーネント
  * タスク一覧画面の右側に表示するサイドパネル。
- * 指定されたタスクIDの詳細・子タスク一覧・完了切り替えを提供する。
- * 子タスク・親タスクのリンクはページ遷移ではなくパネル内で切り替える。
+ * タスクデータは useTaskList と共有した props で受け取り、独自の API 呼び出しは行わない。
+ * 完了切り替え・編集・削除・子タスク作成のアクションを提供する。
  */
-function TaskDetailPanel({ taskId, onClose, onSelectTask }: TaskDetailPanelProps) {
+function TaskDetailPanel({
+  task,
+  isToggling,
+  isOwner,
+  onClose,
+  onToggleComplete,
+  onSelectTask,
+  onDeleteClick,
+}: TaskDetailPanelProps) {
   const navigate = useNavigate();
-  const { task, loading, error, toggleCompleteError, isToggling, handleToggleComplete } =
-    useTaskDetail(taskId !== null ? String(taskId) : undefined);
 
   return (
     <div className="w-96 shrink-0 bg-slate-800 border-l border-slate-600 flex flex-col h-full overflow-y-auto">
@@ -44,11 +53,11 @@ function TaskDetailPanel({ taskId, onClose, onSelectTask }: TaskDetailPanelProps
 
       {/* パネルコンテンツ */}
       <div className="p-5 flex-1">
-        <FormErrorBanner message={error || toggleCompleteError} />
+        {task === null && (
+          <p className="text-slate-400 text-sm">タスクが見つかりません。</p>
+        )}
 
-        {loading && <p className="text-slate-400 text-sm">読み込み中...</p>}
-
-        {!loading && task && (
+        {task !== null && (
           <div
             className={`bg-slate-700 border rounded-xl p-5 space-y-4 ${task.is_completed ? 'border-green-700 opacity-80' : 'border-slate-600'}`}
           >
@@ -77,42 +86,29 @@ function TaskDetailPanel({ taskId, onClose, onSelectTask }: TaskDetailPanelProps
 
             {/* タイトル */}
             <div>
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">
-                タイトル
-              </p>
-              <p
-                className={`text-base font-semibold text-slate-100 ${task.is_completed ? 'line-through opacity-60' : ''}`}
-              >
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">タイトル</p>
+              <p className={`text-base font-semibold text-slate-100 ${task.is_completed ? 'line-through opacity-60' : ''}`}>
                 {task.title}
               </p>
             </div>
 
             {/* 説明文 */}
             <div>
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">
-                説明文
-              </p>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">説明文</p>
               <p className="text-sm text-slate-200 whitespace-pre-wrap">{task.description}</p>
             </div>
 
             {/* 優先度・カテゴリ */}
             <div className="flex gap-4 flex-wrap">
               <div>
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">
-                  優先度
-                </p>
-                <span
-                  className={`inline-block px-2.5 py-1 text-xs font-medium rounded-full ${PRIORITY_BADGE_CLASSES[task.priority]}`}
-                >
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">優先度</p>
+                <span className={`inline-block px-2.5 py-1 text-xs font-medium rounded-full ${PRIORITY_BADGE_CLASSES[task.priority]}`}>
                   {PRIORITY_LABELS[task.priority]}
                 </span>
               </div>
-
               {task.category && (
                 <div>
-                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">
-                    カテゴリ
-                  </p>
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">カテゴリ</p>
                   <span className="inline-block px-2.5 py-1 text-xs font-medium rounded-full bg-slate-600 text-slate-300">
                     {task.category}
                   </span>
@@ -122,9 +118,7 @@ function TaskDetailPanel({ taskId, onClose, onSelectTask }: TaskDetailPanelProps
 
             {/* 期限 */}
             <div>
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">
-                期限
-              </p>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">期限</p>
               <p className="text-sm text-slate-200">
                 {new Date(task.due_date).toLocaleString('ja-JP', {
                   year: 'numeric',
@@ -138,16 +132,11 @@ function TaskDetailPanel({ taskId, onClose, onSelectTask }: TaskDetailPanelProps
 
             {/* 担当者 */}
             <div>
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">
-                担当者
-              </p>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">担当者</p>
               {task.assignees.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {task.assignees.map((username) => (
-                    <span
-                      key={username}
-                      className="px-2.5 py-1 bg-slate-600 text-slate-200 text-xs rounded-full"
-                    >
+                    <span key={username} className="px-2.5 py-1 bg-slate-600 text-slate-200 text-xs rounded-full">
                       {username}
                     </span>
                   ))}
@@ -159,17 +148,13 @@ function TaskDetailPanel({ taskId, onClose, onSelectTask }: TaskDetailPanelProps
 
             {/* 作成者 */}
             <div>
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">
-                作成者
-              </p>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">作成者</p>
               <p className="text-sm text-slate-200">{task.created_by}</p>
             </div>
 
             {/* 作成日時 */}
             <div>
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">
-                作成日時
-              </p>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">作成日時</p>
               <p className="text-sm text-slate-400">
                 {new Date(task.created_at).toLocaleString('ja-JP', {
                   year: 'numeric',
@@ -184,9 +169,7 @@ function TaskDetailPanel({ taskId, onClose, onSelectTask }: TaskDetailPanelProps
             {/* 子タスク一覧 */}
             {task.children.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">
-                  子タスク
-                </p>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">子タスク</p>
                 <div className="space-y-2">
                   {task.children.map((child) => (
                     <button
@@ -201,14 +184,10 @@ function TaskDetailPanel({ taskId, onClose, onSelectTask }: TaskDetailPanelProps
                             完了
                           </span>
                         )}
-                        <span
-                          className={`text-sm font-medium text-slate-100 truncate ${child.is_completed ? 'line-through opacity-60' : ''}`}
-                        >
+                        <span className={`text-sm font-medium text-slate-100 truncate ${child.is_completed ? 'line-through opacity-60' : ''}`}>
                           {child.title}
                         </span>
-                        <span
-                          className={`shrink-0 px-2 py-0.5 text-xs font-medium rounded-full ${PRIORITY_BADGE_CLASSES[child.priority]}`}
-                        >
+                        <span className={`shrink-0 px-2 py-0.5 text-xs font-medium rounded-full ${PRIORITY_BADGE_CLASSES[child.priority]}`}>
                           {PRIORITY_LABELS[child.priority]}
                         </span>
                         {child.category && (
@@ -217,9 +196,7 @@ function TaskDetailPanel({ taskId, onClose, onSelectTask }: TaskDetailPanelProps
                           </span>
                         )}
                       </div>
-                      <p className="mt-0.5 text-xs text-slate-400 line-clamp-1">
-                        {child.description}
-                      </p>
+                      <p className="mt-0.5 text-xs text-slate-400 line-clamp-1">{child.description}</p>
                     </button>
                   ))}
                 </div>
@@ -230,7 +207,7 @@ function TaskDetailPanel({ taskId, onClose, onSelectTask }: TaskDetailPanelProps
             <div className="pt-2 flex gap-3 flex-wrap">
               <button
                 type="button"
-                onClick={() => void handleToggleComplete()}
+                onClick={() => void onToggleComplete(task.id, !task.is_completed)}
                 disabled={isToggling}
                 className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
                   task.is_completed
@@ -254,6 +231,15 @@ function TaskDetailPanel({ taskId, onClose, onSelectTask }: TaskDetailPanelProps
               >
                 子タスクを作成
               </button>
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={() => onDeleteClick(task.id)}
+                  className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white text-sm font-semibold rounded-md transition-colors"
+                >
+                  削除する
+                </button>
+              )}
             </div>
           </div>
         )}

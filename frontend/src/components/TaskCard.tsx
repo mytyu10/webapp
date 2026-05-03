@@ -23,20 +23,14 @@ interface TaskCardProps {
   onToggleCollapse: () => void;
   /** 完了状態切り替えコールバック */
   onToggleComplete: (id: number, is_completed: boolean) => void;
-  /** タスク詳細ページへの遷移コールバック */
-  onNavigateDetail: (id: number) => void;
-  /** タスク編集ページへの遷移コールバック */
-  onNavigateEdit: (id: number) => void;
-  /** タスク削除確認ダイアログを開くコールバック */
-  onDeleteClick: (id: number) => void;
-  /** 現在のユーザーがタスクの作成者かどうか */
-  isOwner: boolean;
+  /** カードクリック時に詳細パネルを開くコールバック */
+  onSelect: () => void;
 }
 
 /**
  * タスクカードコンポーネント
- * タスク1件の情報を表示し、完了切り替え・詳細・編集・削除・子タスクトグルの
- * アクションボタンを提供する。
+ * タスク1件の情報を表示し、完了切り替えアクションを提供する。
+ * カード全体がクリック可能で、クリックすると詳細パネルが開く。
  * depth === 0 の場合はカード内部の左端にトグルボタン（子あり）またはスペーサー（子なし）を表示する。
  * depth > 0 の場合はタイトル行の先頭に「└」アイコンを表示する。
  */
@@ -45,10 +39,7 @@ function TaskCard({
   isCollapsed,
   onToggleCollapse,
   onToggleComplete,
-  onNavigateDetail,
-  onNavigateEdit,
-  onDeleteClick,
-  isOwner,
+  onSelect,
 }: TaskCardProps) {
   const isCompleted = Boolean(node.is_completed);
   const cardStateClass = isCompleted
@@ -59,7 +50,8 @@ function TaskCard({
 
   return (
     <div
-      className={`bg-slate-700 border rounded-lg p-5 ${cardStateClass} ${node.depth > 0 ? 'border-l-2 border-l-slate-500' : ''}`}
+      onClick={onSelect}
+      className={`bg-slate-700 border rounded-lg p-5 cursor-pointer hover:bg-slate-600 transition-colors ${cardStateClass} ${node.depth > 0 ? 'border-l-2 border-l-slate-500' : ''}`}
     >
       <div className={node.depth === 0 ? 'flex items-start gap-2' : undefined}>
         {/* depth === 0 のみ: 子タスクあり → トグルボタン、なし → スペーサー */}
@@ -67,7 +59,7 @@ function TaskCard({
           (node.children.length > 0 ? (
             <button
               type="button"
-              onClick={onToggleCollapse}
+              onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }}
               aria-label="子タスクの表示切り替え"
               className={`${TOGGLE_BUTTON_WIDTH_CLASS} h-6 shrink-0 mt-0.5 flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors`}
             >
@@ -129,10 +121,10 @@ function TaskCard({
               </div>
             </div>
 
-            <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+            <div className="shrink-0">
               <button
                 type="button"
-                onClick={() => onToggleComplete(node.id, !isCompleted)}
+                onClick={(e) => { e.stopPropagation(); onToggleComplete(node.id, !isCompleted); }}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                   isCompleted
                     ? 'text-slate-300 bg-green-700 hover:bg-green-600'
@@ -141,29 +133,6 @@ function TaskCard({
               >
                 {isCompleted ? '未完了に戻す' : '完了にする'}
               </button>
-              <button
-                type="button"
-                onClick={() => onNavigateDetail(node.id)}
-                className="px-3 py-1.5 text-xs font-medium text-slate-300 bg-slate-600 hover:bg-slate-500 rounded-md transition-colors"
-              >
-                詳細
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigateEdit(node.id)}
-                className="px-3 py-1.5 text-xs font-medium text-slate-300 bg-slate-600 hover:bg-slate-500 rounded-md transition-colors"
-              >
-                編集
-              </button>
-              {isOwner && (
-                <button
-                  type="button"
-                  onClick={() => onDeleteClick(node.id)}
-                  className="px-3 py-1.5 text-xs font-medium text-white bg-red-700 hover:bg-red-600 rounded-md transition-colors"
-                >
-                  削除
-                </button>
-              )}
             </div>
           </div>
         </div>

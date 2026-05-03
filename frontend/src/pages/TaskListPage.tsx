@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTaskList, TaskTreeNode } from '../hooks/useTaskList';
-import { getCurrentUsername } from '../api/taskApi';
+import { getCurrentUsername, Task } from '../api/taskApi';
 import FormErrorBanner from '../components/FormErrorBanner';
 import ConfirmModal from '../components/ConfirmModal';
 import TaskCard from '../components/TaskCard';
@@ -41,17 +41,32 @@ function isNodeHidden(
 }
 
 /**
+ * tasks ツリーから指定 ID のタスクを再帰的に探して返す
+ */
+function findTaskById(tasks: Task[], id: number): Task | undefined {
+  for (const task of tasks) {
+    if (task.id === id) return task;
+    if (task.children.length > 0) {
+      const found = findTaskById(task.children, id);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+/**
  * タスク一覧ページ
- * タスクの一覧表示・カテゴリフィルタリング・削除・作成・編集・詳細表示を提供する
- * 削除ボタンはタスク作成者のみ表示する。編集ボタンは全ユーザーに表示する
- * 未完了タスクと完了済みタスクをセクションで分けて表示する（完了済みは折りたたみ可）
- * 親子タスクは階層インデントで表示する
- * 子タスクを持つ親タスクはトグルボタンで子タスクの表示/非表示を切り替えられる
- * 「詳細」ボタン押下時は右側のサイドパネルにタスク詳細を表示する（ページ遷移なし）
+ * タスクの一覧表示・カテゴリフィルタリング・削除・作成・編集・詳細表示を提供する。
+ * 削除・編集ボタンは詳細サイドパネル内に配置する。削除は作成者のみ表示する。
+ * 未完了タスクと完了済みタスクをセクションで分けて表示する（完了済みは折りたたみ可）。
+ * 親子タスクは階層インデントで表示する。
+ * タスクカードをクリックすると右側のサイドパネルにタスク詳細を表示する（ページ遷移なし）。
+ * 一覧と詳細は useTaskList の同一 tasks ステートを共有する。
  */
 function TaskListPage() {
   const navigate = useNavigate();
   const {
+    tasks,
     incompleteTrees,
     completedTrees,
     categories,
@@ -59,6 +74,7 @@ function TaskListPage() {
     loading,
     error,
     toggleCompleteError,
+    togglingIds,
     handleDelete,
     handleToggleComplete,
     awaitToggle,
@@ -77,6 +93,16 @@ function TaskListPage() {
 
   const currentUsername = getCurrentUsername();
 
+  /** 詳細パネルに表示するタスク（useTaskList の tasks から取得して一覧と同じデータを共有） */
+  const selectedTask = selectedTaskId !== null ? (findTaskById(tasks, selectedTaskId) ?? null) : null;
+
+  /** 詳細パネルで表示中のタスクが現在ユーザーの作成物かどうか */
+  const isDetailOwner =
+    selectedTask !== null && currentUsername !== null && selectedTask.created_by === currentUsername;
+
+  /** 詳細パネルで表示中のタスクが PATCH 処理中かどうか */
+  const isDetailToggling = selectedTaskId !== null && togglingIds.has(selectedTaskId);
+
   /**
    * 削除確認モーダルを開く
    */
@@ -92,7 +118,6 @@ function TaskListPage() {
     setDeleteError('');
     try {
       await handleDelete(deleteTargetId);
-      // 削除したタスクがパネルに表示中ならパネルを閉じる
       if (selectedTaskId === deleteTargetId) {
         setSelectedTaskId(null);
       }
@@ -129,7 +154,7 @@ function TaskListPage() {
    * 詳細サイドパネルを開く。
    * PATCH 進行中なら完了を待ってからパネルを表示する。
    * ref ベースの awaitToggle は常に最新状態を参照するため
-   * React state（togglingIds）の更新遅延に依存せずここで直接呼ぶ
+   * React state（togglingIds）の更新遅延に依存せずここで直接呼ぶ。
    */
   async function openDetailPanel(id: number): Promise<void> {
     await awaitToggle(id);
@@ -148,7 +173,6 @@ function TaskListPage() {
    * インデントクラスで階層を表現し、カード内部の表示は TaskCard コンポーネントに委譲する
    */
   function renderTaskCard(node: TaskTreeNode) {
-    const isOwner = currentUsername !== null && node.created_by === currentUsername;
     const indentClass = DEPTH_INDENT_CLASSES[node.depth] ?? DEPTH_INDENT_FALLBACK_CLASS;
 
     return (
@@ -158,10 +182,7 @@ function TaskListPage() {
           isCollapsed={collapsedParentIds.has(node.id)}
           onToggleCollapse={() => toggleCollapse(node.id)}
           onToggleComplete={(id, is_completed) => void handleToggleComplete(id, is_completed)}
-          onNavigateDetail={(id) => void openDetailPanel(id)}
-          onNavigateEdit={(id) => navigate(`/tasks/${id}/edit`)}
-          onDeleteClick={onDeleteClick}
-          isOwner={isOwner}
+          onSelect={() => void openDetailPanel(node.id)}
         />
       </div>
     );
@@ -172,8 +193,8 @@ function TaskListPage() {
 
   return (
     <div className={`flex gap-0 ${isPanelOpen ? 'items-start' : ''}`}>
-      {/* タスク一覧エリア */}
-      <div className={isPanelOpen ? 'flex-1 min-w-0' : 'w-full'}>
+      {/* タスク一覧エリア（パネル表示中は幅を制約して詳細パネルとのバランスを調整） */}
+      <div className={isPanelOpen ? 'flex-1 min-w-0 max-w-2xl' : 'w-full'}>
         <ConfirmModal
           open={deleteTargetId !== null}
           title="タスクを削除"
@@ -253,12 +274,16 @@ function TaskListPage() {
         )}
       </div>
 
-      {/* タスク詳細サイドパネル */}
+      {/* タスク詳細サイドパネル（一覧の tasks ステートを共有） */}
       {isPanelOpen && (
         <TaskDetailPanel
-          taskId={selectedTaskId}
+          task={selectedTask}
+          isToggling={isDetailToggling}
+          isOwner={isDetailOwner}
           onClose={closeDetailPanel}
+          onToggleComplete={handleToggleComplete}
           onSelectTask={(id) => setSelectedTaskId(id)}
+          onDeleteClick={onDeleteClick}
         />
       )}
     </div>
