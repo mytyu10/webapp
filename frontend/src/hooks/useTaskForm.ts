@@ -57,6 +57,29 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
   const [loading, setLoading] = useState(false);
 
   /**
+   * 子タスク作成モード時は親タスクのカテゴリを初期値として設定する
+   */
+  useEffect(() => {
+    if (parentId === undefined) return;
+
+    async function loadParentCategory(): Promise<void> {
+      if (parentId === undefined) return;
+      try {
+        logger.info(CONTEXT, `親タスクのカテゴリ取得: parentId=${parentId}`);
+        const parent = await fetchTask(parentId);
+        if (parent.category) {
+          setValues((prev) => ({ ...prev, category: parent.category as string }));
+          logger.info(CONTEXT, `親タスクのカテゴリ設定完了: category=${parent.category}`);
+        }
+      } catch (err) {
+        logger.warn(CONTEXT, `親タスクのカテゴリ取得失敗: parentId=${parentId} - ${err instanceof Error ? err.message : '不明なエラー'}`);
+      }
+    }
+
+    void loadParentCategory();
+  }, [parentId]);
+
+  /**
    * 編集モード時は既存タスクデータを取得してフォームに反映する
    */
   useEffect(() => {

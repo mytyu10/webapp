@@ -94,6 +94,7 @@ export class TaskService {
         category: dto.category,
         parent_id: dto.parent_id,
         assignees: dto.assignees,
+        is_completed: dto.is_completed,
       });
       this.logger.log(CONTEXT, `タスク更新完了: id=${id}`);
       return this.toResponseDto(task);
@@ -162,6 +163,7 @@ export class TaskService {
       created_by: task.created_by,
       created_at: task.created_at.toISOString(),
       updated_at: task.updated_at.toISOString(),
+      is_completed: task.is_completed,
       assignees: task.assignees.map((a) => a.username),
       children: task.children.map((child) => ({
         id: child.id,
@@ -174,6 +176,7 @@ export class TaskService {
         created_by: child.created_by,
         created_at: child.created_at.toISOString(),
         updated_at: child.updated_at.toISOString(),
+        is_completed: child.is_completed,
         assignees: child.assignees.map((a) => a.username),
         children: [],
       })),

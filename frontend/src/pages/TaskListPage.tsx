@@ -18,7 +18,9 @@ function TaskListPage() {
     selectedCategory,
     loading,
     error,
+    toggleCompleteError,
     handleDelete,
+    handleToggleComplete,
     setSelectedCategory,
   } = useTaskList();
 
@@ -107,7 +109,7 @@ function TaskListPage() {
         </div>
       )}
 
-      <FormErrorBanner message={error || deleteError} />
+      <FormErrorBanner message={error || deleteError || toggleCompleteError} />
 
       {loading && (
         <p className="text-slate-400 text-sm">読み込み中...</p>
@@ -130,7 +132,7 @@ function TaskListPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <h2 className="text-base font-semibold text-slate-100 truncate">
+                      <h2 className={`text-base font-semibold text-slate-100 truncate ${task.is_completed ? 'line-through opacity-60' : ''}`}>
                         {task.title}
                       </h2>
                       <span
@@ -165,6 +167,17 @@ function TaskListPage() {
                   </div>
 
                   <div className="flex gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleComplete(task.id, !task.is_completed)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                        task.is_completed
+                          ? 'text-slate-300 bg-green-700 hover:bg-green-600'
+                          : 'text-slate-300 bg-slate-600 hover:bg-slate-500'
+                      }`}
+                    >
+                      {task.is_completed ? '完了済み' : '完了にする'}
+                    </button>
                     <button
                       type="button"
                       onClick={() => navigate(`/tasks/${task.id}`)}

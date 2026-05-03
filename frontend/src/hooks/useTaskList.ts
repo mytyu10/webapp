@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { fetchTasks, fetchCategories, deleteTask, Task } from '../api/taskApi';
+import { fetchTasks, fetchCategories, deleteTask, toggleTaskCompletion, Task } from '../api/taskApi';
 import { logger } from '../logger';
 
 const CONTEXT = 'useTaskList';
@@ -12,14 +12,27 @@ interface UseTaskListReturn {
   selectedCategory: string;
   loading: boolean;
   error: string;
+  deleteError: string;
+  toggleCompleteError: string;
   handleDelete: (id: number) => Promise<void>;
+  handleToggleComplete: (id: number, is_completed: boolean) => Promise<void>;
   setSelectedCategory: (category: string) => void;
   reload: () => void;
 }
 
 /**
+ * タスクの有効な期限日を返すヘルパー関数
+ * 子タスクを持つ親タスクは子タスクの最短 due_date を基準とする
+ */
+function getEffectiveDueDate(task: Task): Date {
+  if (!task.children || task.children.length === 0) return new Date(task.due_date);
+  const childDates = task.children.map((c) => new Date(c.due_date).getTime());
+  return new Date(Math.min(...childDates));
+}
+
+/**
  * タスク一覧・削除・カテゴリフィルタリングカスタムフック
- * タスクの取得・削除・カテゴリフィルタリング処理を管理する
+ * タスクの取得・削除・完了状態切り替え・カテゴリフィルタリング処理を管理する
  */
 export function useTaskList(): UseTaskListReturn {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -27,6 +40,8 @@ export function useTaskList(): UseTaskListReturn {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [toggleCompleteError, setToggleCompleteError] = useState('');
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
   /**
@@ -69,12 +84,16 @@ export function useTaskList(): UseTaskListReturn {
   }, [reloadTrigger]);
 
   /**
-   * 選択カテゴリでフィルタリングしたタスク一覧
-   * 未選択（空文字）の場合は全件返す
+   * 選択カテゴリでフィルタリングし、有効期限（子タスクがある場合は子の最短期限）でソートしたタスク一覧
+   * 未選択（空文字）の場合は全件を対象とする
    */
   const filteredTasks = useMemo((): Task[] => {
-    if (!selectedCategory) return tasks;
-    return tasks.filter((t) => t.category === selectedCategory);
+    const filtered = selectedCategory
+      ? tasks.filter((t) => t.category === selectedCategory)
+      : tasks;
+    return [...filtered].sort(
+      (a, b) => getEffectiveDueDate(a).getTime() - getEffectiveDueDate(b).getTime(),
+    );
   }, [tasks, selectedCategory]);
 
   /**
@@ -93,6 +112,22 @@ export function useTaskList(): UseTaskListReturn {
     }
   }, []);
 
+  /**
+   * タスクの完了状態を切り替える。成功後は state の該当タスクを更新する
+   */
+  const handleToggleComplete = useCallback(async (id: number, is_completed: boolean): Promise<void> => {
+    try {
+      logger.info(CONTEXT, `タスク完了状態切り替え実行: id=${id}, is_completed=${String(is_completed)}`);
+      const updated = await toggleTaskCompletion(id, is_completed);
+      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      logger.info(CONTEXT, `タスク完了状態切り替え完了: id=${id}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'タスクの更新に失敗しました。';
+      logger.warn(CONTEXT, `タスク完了状態切り替え失敗: id=${id} - ${message}`);
+      setToggleCompleteError(message);
+    }
+  }, []);
+
   return {
     tasks,
     filteredTasks,
@@ -100,7 +135,10 @@ export function useTaskList(): UseTaskListReturn {
     selectedCategory,
     loading,
     error,
+    deleteError,
+    toggleCompleteError,
     handleDelete,
+    handleToggleComplete,
     setSelectedCategory,
     reload,
   };

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { fetchTask, getCurrentUsername, Task, PRIORITY_LABELS, PRIORITY_BADGE_CLASSES } from '../api/taskApi';
 import FormErrorBanner from '../components/FormErrorBanner';
 import { logger } from '../logger';
@@ -65,6 +65,17 @@ function TaskDetailPage() {
 
       {!loading && task && (
         <div className="bg-slate-700 border border-slate-600 rounded-xl p-6 space-y-5">
+          {task.parent_id !== null && (
+            <div>
+              <Link
+                to={`/tasks/${task.parent_id}`}
+                className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                ← 親タスクへ
+              </Link>
+            </div>
+          )}
+
           <div>
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">タイトル</p>
             <p className="text-base font-semibold text-slate-100">{task.title}</p>
@@ -149,14 +160,15 @@ function TaskDetailPage() {
               <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">子タスク</p>
               <div className="space-y-2">
                 {task.children.map((child) => (
-                  <button
+                  <Link
                     key={child.id}
-                    type="button"
-                    onClick={() => navigate(`/tasks/${child.id}`)}
-                    className="w-full text-left px-3 py-2.5 bg-slate-600 hover:bg-slate-500 border border-slate-500 rounded-md transition-colors"
+                    to={`/tasks/${child.id}`}
+                    className="block px-3 py-2.5 bg-slate-600 hover:bg-slate-500 border border-slate-500 rounded-md transition-colors"
                   >
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-slate-100 truncate">{child.title}</span>
+                      <span className={`text-sm font-medium text-slate-100 truncate ${child.is_completed ? 'line-through opacity-60' : ''}`}>
+                        {child.title}
+                      </span>
                       <span
                         className={`shrink-0 px-2 py-0.5 text-xs font-medium rounded-full ${PRIORITY_BADGE_CLASSES[child.priority]}`}
                       >
@@ -169,7 +181,7 @@ function TaskDetailPage() {
                       )}
                     </div>
                     <p className="mt-0.5 text-xs text-slate-400 line-clamp-1">{child.description}</p>
-                  </button>
+                  </Link>
                 ))}
               </div>
             </div>

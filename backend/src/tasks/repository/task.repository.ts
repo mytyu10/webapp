@@ -14,17 +14,18 @@ export class TaskRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * 全タスクを担当者・子タスク情報込みで取得する
+   * 全タスクを担当者・子タスク情報込みで取得する。子タスクは一覧に含めない
    */
   async findAll(): Promise<TaskWithRelations[]> {
     return this.prisma.task.findMany({
+      where: { parent_id: null },
       include: {
         assignees: true,
         children: {
           include: { assignees: true },
         },
       },
-      orderBy: { created_at: 'desc' },
+      orderBy: { due_date: 'asc' },
     });
   }
 
@@ -91,6 +92,7 @@ export class TaskRepository {
       category?: string;
       parent_id?: number;
       assignees?: string[];
+      is_completed?: boolean;
     },
   ): Promise<TaskWithRelations> {
     return this.prisma.$transaction(async (tx) => {
@@ -109,6 +111,9 @@ export class TaskRepository {
           ...(data.priority !== undefined && { priority: data.priority }),
           ...(data.category !== undefined && { category: data.category }),
           ...(data.parent_id !== undefined && { parent_id: data.parent_id }),
+          ...(data.is_completed !== undefined && {
+            is_completed: data.is_completed,
+          }),
           ...(data.assignees !== undefined && {
             assignees: {
               create: data.assignees.map((username) => ({ username })),
