@@ -106,6 +106,8 @@ RegistPage
 
 **責務**: タスク一覧の表示・削除確認・ナビゲーション。ロジックは `useTaskList` に委譲。
 
+タスクは親子の階層構造で表示し、未完了セクション・完了済みセクションに分けて表示する。
+
 ```
 TaskListPage
 ├── ConfirmModal（削除確認モーダル）
@@ -114,12 +116,24 @@ TaskListPage
 ├── FormErrorBanner（API/削除/完了切り替えエラー）
 ├── 読み込み中テキスト
 ├── タスクなしメッセージ
-└── タスクカード一覧（filteredTasks / 有効期限昇順ソート済み）
-    └── 各カード
-        ├── タイトル（完了時: 打ち消し線 + 薄表示）・優先度バッジ・カテゴリバッジ
-        ├── 説明文・期限・担当者
-        └── 完了切り替えボタン・詳細ボタン・編集ボタン（作成者のみ）・削除ボタン（作成者のみ）
+├── 未完了タスクセクション（incompleteTrees）
+│   └── 階層ツリー表示（DEPTH_INDENT_CLASSES による depth ごとのインデント）
+│       └── 各タスクカード
+│           ├── タイトル（完了時: 打ち消し線 + 薄表示）・優先度バッジ・カテゴリバッジ
+│           ├── 説明文・期限・担当者
+│           └── 完了切り替えボタン・詳細ボタン・編集ボタン（作成者のみ）・削除ボタン（作成者のみ）
+└── 完了済みタスクセクション（completedTrees）
+    ├── 折りたたみトグル（"完了済みタスク (N件)"）
+    └── 折りたたみ展開時: 階層ツリー表示（同上）
 ```
+
+**インデントクラス定数 `DEPTH_INDENT_CLASSES`**
+
+```typescript
+const DEPTH_INDENT_CLASSES = ['ml-0', 'ml-6', 'ml-12', 'ml-18', 'ml-24'];
+```
+
+depth 0 がルートタスク、depth 1 以降が子・孫タスクに対応する。
 
 ### TaskFormPage
 
@@ -139,16 +153,17 @@ TaskFormPage
 
 ### TaskDetailPage
 
-**責務**: タスク詳細の表示。データ取得ロジックをコンポーネント内useEffectで管理。
+**責務**: タスク詳細の表示・完了状態の切り替え。ロジックは `useTaskDetail` に委譲。
 
 ```
 TaskDetailPage
 ├── ヘッダー（"← 一覧に戻る"ボタン + "タスク詳細"タイトル）
 ├── FormErrorBanner
 ├── 読み込み中テキスト
-└── 詳細カード
+└── 詳細カード（完了時: 緑枠 `border-green-500`）
+    ├── 完了済みバナー（完了時のみ: 緑背景 "このタスクは完了済みです"）
     ├── "← 親タスクへ" リンク（parent_id がある場合のみ表示）
-    ├── タイトル
+    ├── タイトル（完了時: 打ち消し線）
     ├── 説明文
     ├── 優先度バッジ・カテゴリバッジ
     ├── 期限
@@ -156,6 +171,7 @@ TaskDetailPage
     ├── 作成者
     ├── 作成日時
     ├── 子タスク一覧（クリッカブルリンク、完了済みは打ち消し線 + 薄表示）
+    ├── 完了にする / 未完了に戻すボタン（完了状態に応じて切り替え）
     ├── 編集するボタン（作成者のみ）
     └── 子タスクを作成ボタン
 ```
@@ -201,7 +217,8 @@ TaskDetailPage
 | state | 型 | 説明 |
 |-------|-----|------|
 | `tasks` | `Task[]` | タスク一覧（全件） |
-| `filteredTasks` | `Task[]` | カテゴリフィルタ＋有効期限昇順ソート済みタスク一覧 |
+| `incompleteTrees` | `TaskTreeNode[]` | 未完了タスクの階層ツリー（カテゴリフィルター済み） |
+| `completedTrees` | `TaskTreeNode[]` | 完了済みタスクの階層ツリー（カテゴリフィルター済み） |
 | `categories` | `string[]` | カテゴリ一覧 |
 | `selectedCategory` | `string` | 選択中カテゴリ（空文字 = 全件） |
 | `loading` | `boolean` | 読み込み中フラグ |
@@ -216,10 +233,50 @@ TaskDetailPage
 | `setSelectedCategory(category)` | カテゴリフィルターを更新する |
 | `reload()` | 一覧を再読み込みするトリガーをインクリメント |
 
+**TaskTreeNode 型**
+
+```typescript
+interface TaskTreeNode {
+  task: Task;
+  depth: number;
+  children: TaskTreeNode[];
+}
+```
+
+**buildTaskTrees 関数**
+
+ルートタスク（`parent_id: null`）を起点に、`children` リレーションを再帰的に展開して `TaskTreeNode[]` を構築する。
+
 **ソートロジック（getEffectiveDueDate）**
 
-`filteredTasks` は `getEffectiveDueDate` 関数で計算した有効期限の昇順にソートされる。
+`incompleteTrees` / `completedTrees` の並び順は `getEffectiveDueDate` 関数で計算した有効期限の昇順。
 子タスクを持つ親タスクは、子タスクの中で最も早い `due_date` を有効期限として扱う。
+
+**フィルタリングロジック**
+
+`selectedCategory` が指定されている場合、自タスクまたはいずれかの子孫タスクがそのカテゴリを持つツリーのみを表示する。
+
+### useTaskDetail
+
+タスク詳細ページのデータ取得・完了状態切り替えを管理するフック。
+
+| state | 型 | 説明 |
+|-------|-----|------|
+| `task` | `Task \| null` | 取得したタスクデータ |
+| `loading` | `boolean` | データ取得中フラグ |
+| `error` | `string` | エラーメッセージ |
+| `toggleLoading` | `boolean` | 完了切り替え中フラグ |
+
+| 関数 | 説明 |
+|------|------|
+| `handleToggleComplete()` | 現在の `is_completed` を反転して `toggleTaskCompletion` を呼び出す。成功後に task state を更新 |
+
+**初期化フロー**
+
+```
+1. useEffect: fetchTask(id) でタスク取得 → task に格納
+2. エラー時: error にメッセージをセット
+```
 
 ### useTaskForm
 
@@ -304,7 +361,7 @@ Authorizationヘッダー（`Bearer <token>`）を全リクエストに付与。
 
 | 関数 | メソッド | エンドポイント | 戻り値 | 説明 |
 |------|---------|-------------|-------|------|
-| `fetchTasks()` | GET | `/tasks` | `Promise<Task[]>` | ルートタスク一覧取得（期限昇順） |
+| `fetchTasks()` | GET | `/tasks` | `Promise<Task[]>` | ルートタスク一覧取得（期限昇順）。`children` リレーション込み |
 | `fetchTask(id)` | GET | `/tasks/:id` | `Promise<Task>` | 指定IDのタスク取得 |
 | `fetchCategories()` | GET | `/tasks/categories` | `Promise<string[]>` | カテゴリ一覧取得 |
 | `createTask(input)` | POST | `/tasks` | `Promise<Task>` | タスク作成 |

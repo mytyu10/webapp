@@ -4,15 +4,23 @@ import { logger } from '../logger';
 
 const CONTEXT = 'useTaskList';
 
+/** ツリー構造を持つタスク型（インデントレベルを付与） */
+export interface TaskTreeNode extends Task {
+  /** 階層の深さ（ルートタスク: 0, 子タスク: 1, ...） */
+  depth: number;
+}
+
 /** useTaskListフックの戻り値型 */
 interface UseTaskListReturn {
   tasks: Task[];
-  filteredTasks: Task[];
+  /** 未完了タスクのツリー展開済みフラット配列（階層順・depth付き） */
+  incompleteTrees: TaskTreeNode[];
+  /** 完了済みタスクのツリー展開済みフラット配列（階層順・depth付き） */
+  completedTrees: TaskTreeNode[];
   categories: string[];
   selectedCategory: string;
   loading: boolean;
   error: string;
-  deleteError: string;
   toggleCompleteError: string;
   handleDelete: (id: number) => Promise<void>;
   handleToggleComplete: (id: number, is_completed: boolean) => Promise<void>;
@@ -31,8 +39,52 @@ function getEffectiveDueDate(task: Task): Date {
 }
 
 /**
+ * タスク一覧をツリー構造（depth付きフラット配列）に展開する
+ * 親タスク → 子タスクの順に DFS で並べる
+ * カテゴリフィルターが指定されている場合、タスク自身またはいずれかの子孫がフィルター対象なら含める
+ */
+function buildTaskTrees(
+  tasks: Task[],
+  selectedCategory: string,
+  completedFilter: boolean,
+): TaskTreeNode[] {
+  /**
+   * タスク（子孫を含む）がカテゴリフィルターに一致するか再帰チェック
+   */
+  function matchesCategory(task: Task): boolean {
+    if (!selectedCategory) return true;
+    if (task.category === selectedCategory) return true;
+    return task.children.some((child) => matchesCategory(child));
+  }
+
+  /**
+   * タスクを再帰的にフラット配列へ展開する
+   */
+  function flatten(task: Task, depth: number): TaskTreeNode[] {
+    const node: TaskTreeNode = { ...task, depth };
+    const childNodes = task.children
+      .filter((child) => child.is_completed === completedFilter)
+      .flatMap((child) => flatten(child, depth + 1));
+    return [node, ...childNodes];
+  }
+
+  // ルートタスク（parent_idなし）のうち完了状態が一致し、フィルターに合致するものを抽出
+  const rootTasks = tasks.filter(
+    (t) => t.parent_id === null && t.is_completed === completedFilter && matchesCategory(t),
+  );
+
+  // due_date でソートしてツリー展開
+  const sorted = [...rootTasks].sort(
+    (a, b) => getEffectiveDueDate(a).getTime() - getEffectiveDueDate(b).getTime(),
+  );
+
+  return sorted.flatMap((task) => flatten(task, 0));
+}
+
+/**
  * タスク一覧・削除・カテゴリフィルタリングカスタムフック
  * タスクの取得・削除・完了状態切り替え・カテゴリフィルタリング処理を管理する
+ * 完了/未完了セクションをツリー構造（depth付きフラット配列）として返す
  */
 export function useTaskList(): UseTaskListReturn {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -40,7 +92,6 @@ export function useTaskList(): UseTaskListReturn {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [deleteError, setDeleteError] = useState('');
   const [toggleCompleteError, setToggleCompleteError] = useState('');
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
@@ -84,17 +135,20 @@ export function useTaskList(): UseTaskListReturn {
   }, [reloadTrigger]);
 
   /**
-   * 選択カテゴリでフィルタリングし、有効期限（子タスクがある場合は子の最短期限）でソートしたタスク一覧
-   * 未選択（空文字）の場合は全件を対象とする
+   * 未完了タスクのツリー展開済みフラット配列（カテゴリフィルター・深さ情報付き）
    */
-  const filteredTasks = useMemo((): Task[] => {
-    const filtered = selectedCategory
-      ? tasks.filter((t) => t.category === selectedCategory)
-      : tasks;
-    return [...filtered].sort(
-      (a, b) => getEffectiveDueDate(a).getTime() - getEffectiveDueDate(b).getTime(),
-    );
-  }, [tasks, selectedCategory]);
+  const incompleteTrees = useMemo(
+    (): TaskTreeNode[] => buildTaskTrees(tasks, selectedCategory, false),
+    [tasks, selectedCategory],
+  );
+
+  /**
+   * 完了済みタスクのツリー展開済みフラット配列（カテゴリフィルター・深さ情報付き）
+   */
+  const completedTrees = useMemo(
+    (): TaskTreeNode[] => buildTaskTrees(tasks, selectedCategory, true),
+    [tasks, selectedCategory],
+  );
 
   /**
    * タスクを削除する。削除後は一覧から該当タスクを除去する
@@ -130,12 +184,12 @@ export function useTaskList(): UseTaskListReturn {
 
   return {
     tasks,
-    filteredTasks,
+    incompleteTrees,
+    completedTrees,
     categories,
     selectedCategory,
     loading,
     error,
-    deleteError,
     toggleCompleteError,
     handleDelete,
     handleToggleComplete,

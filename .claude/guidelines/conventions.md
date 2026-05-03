@@ -163,20 +163,21 @@ model Account {
 
 ```prisma
 model Task {
-  id          Int            @id @default(autoincrement())
-  title       String
-  description String
-  due_date    DateTime
-  priority    String         @default("MEDIUM")  // HIGH / MEDIUM / LOW
-  category    String?
-  parent_id   Int?
-  created_by  String
-  created_at  DateTime       @default(now())
-  updated_at  DateTime       @updatedAt
-  assignees   TaskAssignee[]
-  creator     Account        @relation("TaskCreator", fields: [created_by], references: [username])
-  parent      Task?          @relation("TaskChildren", fields: [parent_id], references: [id])
-  children    Task[]         @relation("TaskChildren")
+  id           Int            @id @default(autoincrement())
+  title        String
+  description  String
+  due_date     DateTime
+  priority     String         @default("MEDIUM")  // HIGH / MEDIUM / LOW
+  category     String?
+  parent_id    Int?
+  created_by   String
+  created_at   DateTime       @default(now())
+  updated_at   DateTime       @updatedAt
+  is_completed Boolean        @default(false)
+  assignees    TaskAssignee[]
+  creator      Account        @relation("TaskCreator", fields: [created_by], references: [username])
+  parent       Task?          @relation("TaskChildren", fields: [parent_id], references: [id])
+  children     Task[]         @relation("TaskChildren")
 }
 
 model TaskAssignee {
@@ -192,6 +193,7 @@ model TaskAssignee {
 - priorityフィールドは`HIGH` / `MEDIUM` / `LOW`の文字列で管理する（デフォルト: `MEDIUM`）
 - categoryはオプショナル（`String?`）。カテゴリ一覧は`GET /tasks/categories`で取得する
 - parent_idによる親子タスク構造をサポートする。子タスクは`children`リレーションで取得
+- is_completedフィールドはタスクの完了状態を管理する（デフォルト: `false`）。`PATCH /tasks/:id` の `is_completed` フィールドで切り替える
 - TaskAssigneeの担当者更新はdelete+insertトランザクションで対応する
 - Taskの削除はCascade設定によりTaskAssigneeも連動削除される
 

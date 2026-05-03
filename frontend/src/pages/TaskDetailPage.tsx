@@ -1,49 +1,20 @@
-import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { fetchTask, getCurrentUsername, Task, PRIORITY_LABELS, PRIORITY_BADGE_CLASSES } from '../api/taskApi';
+import { getCurrentUsername, PRIORITY_LABELS, PRIORITY_BADGE_CLASSES } from '../api/taskApi';
+import { useTaskDetail } from '../hooks/useTaskDetail';
 import FormErrorBanner from '../components/FormErrorBanner';
-import { logger } from '../logger';
-
-const CONTEXT = 'TaskDetailPage';
 
 /**
  * タスク詳細ページ
  * 指定IDのタスク詳細・子タスク一覧を表示する
  * タスク作成者のみ編集ボタンを表示する
+ * 「完了にする」/「未完了に戻す」ボタンで完了状態をトグルできる
  */
 function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [task, setTask] = useState<Task | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { task, loading, error, toggleCompleteError, handleToggleComplete } = useTaskDetail(id);
 
   const currentUsername = getCurrentUsername();
-
-  useEffect(() => {
-    if (!id) return;
-
-    async function loadTask(): Promise<void> {
-      if (!id) return;
-      setLoading(true);
-      setError('');
-      try {
-        logger.info(CONTEXT, `タスク詳細読み込み: id=${id}`);
-        const data = await fetchTask(Number(id));
-        setTask(data);
-        logger.info(CONTEXT, `タスク詳細読み込み完了: id=${id}`);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'タスクの取得に失敗しました。';
-        logger.warn(CONTEXT, `タスク詳細読み込み失敗: id=${id} - ${message}`);
-        setError(message);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    void loadTask();
-  }, [id]);
-
   const isOwner = currentUsername !== null && task !== null && task.created_by === currentUsername;
 
   return (
@@ -59,12 +30,12 @@ function TaskDetailPage() {
         <h1 className="text-2xl font-bold text-slate-100">タスク詳細</h1>
       </div>
 
-      <FormErrorBanner message={error} />
+      <FormErrorBanner message={error || toggleCompleteError} />
 
       {loading && <p className="text-slate-400 text-sm">読み込み中...</p>}
 
       {!loading && task && (
-        <div className="bg-slate-700 border border-slate-600 rounded-xl p-6 space-y-5">
+        <div className={`bg-slate-700 border rounded-xl p-6 space-y-5 ${task.is_completed ? 'border-green-700 opacity-80' : 'border-slate-600'}`}>
           {task.parent_id !== null && (
             <div>
               <Link
@@ -76,9 +47,17 @@ function TaskDetailPage() {
             </div>
           )}
 
+          {task.is_completed && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-green-900 border border-green-700 rounded-md">
+              <span className="text-green-400 text-sm font-medium">完了済み</span>
+            </div>
+          )}
+
           <div>
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">タイトル</p>
-            <p className="text-base font-semibold text-slate-100">{task.title}</p>
+            <p className={`text-base font-semibold text-slate-100 ${task.is_completed ? 'line-through opacity-60' : ''}`}>
+              {task.title}
+            </p>
           </div>
 
           <div>
@@ -166,6 +145,11 @@ function TaskDetailPage() {
                     className="block px-3 py-2.5 bg-slate-600 hover:bg-slate-500 border border-slate-500 rounded-md transition-colors"
                   >
                     <div className="flex items-center gap-2 flex-wrap">
+                      {child.is_completed && (
+                        <span className="shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-green-900 text-green-400 border border-green-700">
+                          完了
+                        </span>
+                      )}
                       <span className={`text-sm font-medium text-slate-100 truncate ${child.is_completed ? 'line-through opacity-60' : ''}`}>
                         {child.title}
                       </span>
@@ -188,6 +172,17 @@ function TaskDetailPage() {
           )}
 
           <div className="pt-2 flex gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={() => void handleToggleComplete()}
+              className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+                task.is_completed
+                  ? 'bg-green-700 hover:bg-green-600 text-white'
+                  : 'bg-slate-600 hover:bg-slate-500 text-white'
+              }`}
+            >
+              {task.is_completed ? '未完了に戻す' : '完了にする'}
+            </button>
             {isOwner && (
               <button
                 type="button"
