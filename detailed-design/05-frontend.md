@@ -330,11 +330,14 @@ interface TaskTreeNode extends Task {
 | `task` | `Task \| null` | 取得したタスクデータ |
 | `loading` | `boolean` | データ取得中フラグ |
 | `error` | `string` | エラーメッセージ |
-| `toggleLoading` | `boolean` | 完了切り替え中フラグ |
+| `toggleCompleteError` | `string` | 完了切り替えエラーメッセージ（楽観的更新失敗時にセット） |
+| `isToggling` | `boolean` | 完了切り替えAPI呼び出し中フラグ。`true` の間は連打防止ガードとして機能する |
+
+`UseTaskDetailReturn` 型は上記 state すべてと `handleToggleComplete` を含む。
 
 | 関数 | 説明 |
 |------|------|
-| `handleToggleComplete()` | 現在の `is_completed` を反転して `toggleTaskCompletion` を呼び出す。成功後に task state を更新 |
+| `handleToggleComplete()` | 楽観的更新パターンで完了状態をトグルする。①`isToggling` を `true` に設定し連打をガード ②`previousTask` にスナップショットを退避 ③即座に `setTask` でUI更新 ④バックグラウンドで `toggleTaskCompletion()` を呼び出し ⑤成功時はサーバーレスポンスで `setTask` を上書き（`closed_by` 等を反映）⑥失敗時は `previousTask` でロールバックし `toggleCompleteError` にセット ⑦`finally` で `isToggling` を `false` に戻す |
 
 **初期化フロー**
 
