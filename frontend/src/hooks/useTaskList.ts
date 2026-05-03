@@ -35,6 +35,32 @@ interface UseTaskListReturn {
 }
 
 /**
+ * ツリー内の指定IDのタスクの is_completed を再帰的に更新する
+ */
+function updateIsCompletedInTree(tasks: Task[], id: number, is_completed: boolean): Task[] {
+  return tasks.map((t) => {
+    if (t.id === id) return { ...t, is_completed };
+    if (t.children.length > 0) {
+      return { ...t, children: updateIsCompletedInTree(t.children, id, is_completed) };
+    }
+    return t;
+  });
+}
+
+/**
+ * ツリー内の指定IDのタスクをサーバーレスポンスで置き換える（children は既存を維持）
+ */
+function replaceTaskInTree(tasks: Task[], updated: Task): Task[] {
+  return tasks.map((t) => {
+    if (t.id === updated.id) return { ...updated, children: t.children };
+    if (t.children.length > 0) {
+      return { ...t, children: replaceTaskInTree(t.children, updated) };
+    }
+    return t;
+  });
+}
+
+/**
  * タスクの有効な期限日を返すヘルパー関数
  * 子タスクを持つ親タスクは子タスクの最短 due_date を基準とする
  */
@@ -188,13 +214,13 @@ export function useTaskList(): UseTaskListReturn {
    */
   const handleToggleComplete = useCallback(async (id: number, is_completed: boolean): Promise<void> => {
     const snapshot = tasksRef.current;
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, is_completed } : t)));
+    setTasks((prev) => updateIsCompletedInTree(prev, id, is_completed));
 
     try {
       logger.info(CONTEXT, `タスク完了状態切り替え実行: id=${id}, is_completed=${String(is_completed)}`);
       const updated = await toggleTaskCompletion(id, is_completed);
-      // サーバーレスポンスで上書き（整合性担保）
-      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      // サーバーレスポンスで上書き（整合性担保・children は既存を維持）
+      setTasks((prev) => replaceTaskInTree(prev, updated));
       logger.info(CONTEXT, `タスク完了状態切り替え完了: id=${id}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'タスクの更新に失敗しました。';
