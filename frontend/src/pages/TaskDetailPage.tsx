@@ -12,7 +12,7 @@ import FormErrorBanner from '../components/FormErrorBanner';
 function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { task, loading, error, toggleCompleteError, handleToggleComplete } = useTaskDetail(id);
+  const { task, loading, error, toggleCompleteError, isToggling, handleToggleComplete } = useTaskDetail(id);
 
   return (
     <div className="max-w-xl mx-auto">
@@ -175,6 +175,7 @@ function TaskDetailPage() {
             <button
               type="button"
               onClick={() => void handleToggleComplete()}
+              disabled={isToggling}
               className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
                 task.is_completed
                   ? 'bg-green-700 hover:bg-green-600 text-white'

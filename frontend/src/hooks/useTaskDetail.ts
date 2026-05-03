@@ -10,6 +10,7 @@ interface UseTaskDetailReturn {
   loading: boolean;
   error: string;
   toggleCompleteError: string;
+  isToggling: boolean;
   handleToggleComplete: () => Promise<void>;
 }
 
@@ -20,8 +21,9 @@ interface UseTaskDetailReturn {
 export function useTaskDetail(id: string | undefined): UseTaskDetailReturn {
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [toggleCompleteError, setToggleCompleteError] = useState('');
+  const [error, setError] = useState<string>('');
+  const [toggleCompleteError, setToggleCompleteError] = useState<string>('');
+  const [isToggling, setIsToggling] = useState<boolean>(false);
 
   useEffect(() => {
     if (!id) return;
@@ -61,23 +63,38 @@ export function useTaskDetail(id: string | undefined): UseTaskDetailReturn {
 
   /**
    * タスクの完了状態をトグルする
-   * 現在の is_completed を反転して PATCH リクエストを送信し、state を更新する
+   * 楽観的更新: UI を即座に反映してから PATCH リクエストを送信する
+   * API 失敗時は更新前の状態にロールバックする
    */
   const handleToggleComplete = useCallback(async (): Promise<void> => {
-    if (!task) return;
+    if (!task || isToggling) return;
+
+    // ロールバック用に更新前の task を退避
+    const previousTask = task;
+    const newCompleted = !task.is_completed;
+
+    setIsToggling(true);
+
+    // UI を即座に反映（楽観的更新）
+    setTask({ ...task, is_completed: newCompleted });
     setToggleCompleteError('');
+
     try {
-      const newCompleted = !task.is_completed;
       logger.info(CONTEXT, `タスク完了状態切り替え: id=${task.id}, is_completed=${String(newCompleted)}`);
+      // サーバーレスポンスで上書きして closed_by などの確定値を反映
       const updated = await toggleTaskCompletion(task.id, newCompleted);
       setTask(updated);
       logger.info(CONTEXT, `タスク完了状態切り替え完了: id=${task.id}`);
     } catch (err) {
+      // API 失敗時は楽観的更新前の状態に戻す
+      setTask(previousTask);
       const message = err instanceof Error ? err.message : 'タスクの更新に失敗しました。';
       logger.warn(CONTEXT, `タスク完了状態切り替え失敗: ${message}`);
       setToggleCompleteError(message);
+    } finally {
+      setIsToggling(false);
     }
-  }, [task]);
+  }, [task, isToggling]);
 
-  return { task, loading, error, toggleCompleteError, handleToggleComplete };
+  return { task, loading, error, toggleCompleteError, isToggling, handleToggleComplete };
 }
