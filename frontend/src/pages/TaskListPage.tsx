@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTaskList, TaskTreeNode } from '../hooks/useTaskList';
 import { getCurrentUsername, Task } from '../api/taskApi';
@@ -76,6 +76,7 @@ function TaskListPage() {
     toggleCompleteError,
     togglingIds,
     handleDelete,
+    handleUpdate,
     handleToggleComplete,
     awaitToggle,
     setSelectedCategory,
@@ -102,6 +103,34 @@ function TaskListPage() {
 
   /** 詳細パネルで表示中のタスクが PATCH 処理中かどうか */
   const isDetailToggling = selectedTaskId !== null && togglingIds.has(selectedTaskId);
+
+  /** パネル幅（px）。ドラッグで変更され画面更新でリセットされる */
+  const [panelWidth, setPanelWidth] = useState(320);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent): void {
+      if (!isDraggingRef.current || !containerRef.current) return;
+      e.preventDefault();
+      const rect = containerRef.current.getBoundingClientRect();
+      setPanelWidth(Math.max(240, Math.min(700, rect.right - e.clientX)));
+    }
+    function onMouseUp(): void {
+      isDraggingRef.current = false;
+    }
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
+  function handleDividerMouseDown(e: React.MouseEvent): void {
+    e.preventDefault();
+    isDraggingRef.current = true;
+  }
 
   /**
    * 削除確認モーダルを開く
@@ -181,7 +210,6 @@ function TaskListPage() {
           node={node}
           isCollapsed={collapsedParentIds.has(node.id)}
           onToggleCollapse={() => toggleCollapse(node.id)}
-          onToggleComplete={(id, is_completed) => void handleToggleComplete(id, is_completed)}
           onSelect={() => void openDetailPanel(node.id)}
         />
       </div>
@@ -192,9 +220,9 @@ function TaskListPage() {
   const isPanelOpen = selectedTaskId !== null;
 
   return (
-    <div className={`flex gap-0 ${isPanelOpen ? 'items-start' : ''}`}>
-      {/* タスク一覧エリア（パネル表示中は幅を制約して詳細パネルとのバランスを調整） */}
-      <div className={isPanelOpen ? 'flex-1 min-w-0 max-w-2xl' : 'w-full'}>
+    <div className={`flex ${isPanelOpen ? 'items-start' : ''}`} ref={containerRef}>
+      {/* タスク一覧エリア */}
+      <div className={isPanelOpen ? 'flex-1 min-w-0' : 'w-full'}>
         <ConfirmModal
           open={deleteTargetId !== null}
           title="タスクを削除"
@@ -274,17 +302,28 @@ function TaskListPage() {
         )}
       </div>
 
-      {/* タスク詳細サイドパネル（一覧の tasks ステートを共有） */}
+      {/* リサイズ可能なディバイダー＋詳細パネル */}
       {isPanelOpen && (
-        <TaskDetailPanel
-          task={selectedTask}
-          isToggling={isDetailToggling}
-          isOwner={isDetailOwner}
-          onClose={closeDetailPanel}
-          onToggleComplete={handleToggleComplete}
-          onSelectTask={(id) => setSelectedTaskId(id)}
-          onDeleteClick={onDeleteClick}
-        />
+        <>
+          <div
+            onMouseDown={handleDividerMouseDown}
+            className="w-3 self-stretch cursor-col-resize shrink-0 flex items-stretch justify-center group"
+          >
+            <div className="w-px bg-slate-700 group-hover:bg-sky-500 transition-colors" />
+          </div>
+          <div style={{ width: panelWidth }} className="shrink-0">
+            <TaskDetailPanel
+              task={selectedTask}
+              isToggling={isDetailToggling}
+              isOwner={isDetailOwner}
+              onClose={closeDetailPanel}
+              onToggleComplete={handleToggleComplete}
+              onSelectTask={(id) => setSelectedTaskId(id)}
+              onDeleteClick={onDeleteClick}
+              onUpdate={handleUpdate}
+            />
+          </div>
+        </>
       )}
     </div>
   );

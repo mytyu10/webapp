@@ -4,7 +4,6 @@ import HomePage from './pages/HomePage';
 import RegistPage from './pages/RegistPage';
 import TaskListPage from './pages/TaskListPage';
 import TaskFormPage from './pages/TaskFormPage';
-import TaskDetailPage from './pages/TaskDetailPage';
 import PrivateRoute from './components/PrivateRoute';
 import SidebarLayout from './components/SidebarLayout';
 
@@ -22,8 +21,6 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/tasks" element={<TaskListPage />} />
             <Route path="/tasks/new" element={<TaskFormPage />} />
-            <Route path="/tasks/:id" element={<TaskDetailPage />} />
-            <Route path="/tasks/:id/edit" element={<TaskFormPage />} />
           </Route>
         </Route>
       </Routes>

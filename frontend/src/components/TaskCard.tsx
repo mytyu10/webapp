@@ -21,8 +21,6 @@ interface TaskCardProps {
   isCollapsed: boolean;
   /** 子タスク表示/非表示のトグルコールバック（depth === 0 のときのみ使用） */
   onToggleCollapse: () => void;
-  /** 完了状態切り替えコールバック */
-  onToggleComplete: (id: number, is_completed: boolean) => void;
   /** カードクリック時に詳細パネルを開くコールバック */
   onSelect: () => void;
 }
@@ -38,7 +36,6 @@ function TaskCard({
   node,
   isCollapsed,
   onToggleCollapse,
-  onToggleComplete,
   onSelect,
 }: TaskCardProps) {
   const isCompleted = Boolean(node.is_completed);
@@ -121,19 +118,6 @@ function TaskCard({
               </div>
             </div>
 
-            <div className="shrink-0">
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onToggleComplete(node.id, !isCompleted); }}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  isCompleted
-                    ? 'text-slate-300 bg-green-700 hover:bg-green-600'
-                    : 'text-slate-300 bg-slate-600 hover:bg-slate-500'
-                }`}
-              >
-                {isCompleted ? '未完了に戻す' : '完了にする'}
-              </button>
-            </div>
           </div>
         </div>
       </div>

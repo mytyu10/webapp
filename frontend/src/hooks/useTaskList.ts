@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { fetchTasks, fetchCategories, deleteTask, toggleTaskCompletion, Task } from '../api/taskApi';
+import { fetchTasks, fetchCategories, deleteTask, toggleTaskCompletion, updateTask, Task, TaskInput } from '../api/taskApi';
 import { logger } from '../logger';
 
 const CONTEXT = 'useTaskList';
@@ -31,6 +31,7 @@ interface UseTaskListReturn {
   /** 現在 PATCH 処理中のタスク ID 集合 */
   togglingIds: Set<number>;
   handleDelete: (id: number) => Promise<void>;
+  handleUpdate: (id: number, input: Partial<TaskInput>) => Promise<Task>;
   handleToggleComplete: (id: number, is_completed: boolean) => Promise<void>;
   /**
    * 指定 ID のタスクに PATCH が進行中であれば完了（成功・失敗問わず）まで待機する。
@@ -39,6 +40,19 @@ interface UseTaskListReturn {
   awaitToggle: (id: number) => Promise<void>;
   setSelectedCategory: (category: string) => void;
   reload: () => void;
+}
+
+/**
+ * ツリー内の指定IDのタスクを updated で再帰的に置き換える
+ */
+function replaceTaskInTree(tasks: Task[], updated: Task): Task[] {
+  return tasks.map((t) => {
+    if (t.id === updated.id) return updated;
+    if (t.children.length > 0) {
+      return { ...t, children: replaceTaskInTree(t.children, updated) };
+    }
+    return t;
+  });
 }
 
 /**
@@ -190,6 +204,23 @@ export function useTaskList(): UseTaskListReturn {
   );
 
   /**
+   * タスクを更新する。更新後はローカルステートの該当タスクをサーバーレスポンスで置き換える
+   */
+  const handleUpdate = useCallback(async (id: number, input: Partial<TaskInput>): Promise<Task> => {
+    try {
+      logger.info(CONTEXT, `タスク更新実行: id=${id}`);
+      const updated = await updateTask(id, input);
+      setTasks((prev) => replaceTaskInTree(prev, updated));
+      logger.info(CONTEXT, `タスク更新完了: id=${id}`);
+      return updated;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'タスクの更新に失敗しました。';
+      logger.warn(CONTEXT, `タスク更新失敗: id=${id} - ${message}`);
+      throw new Error(message);
+    }
+  }, []);
+
+  /**
    * タスクを削除する。削除後は一覧から該当タスクを除去する
    */
   const handleDelete = useCallback(async (id: number): Promise<void> => {
@@ -268,6 +299,7 @@ export function useTaskList(): UseTaskListReturn {
     toggleCompleteError,
     togglingIds,
     handleDelete,
+    handleUpdate,
     handleToggleComplete,
     awaitToggle,
     setSelectedCategory,
