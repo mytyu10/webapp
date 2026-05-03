@@ -130,10 +130,33 @@ TaskListPage
 **インデントクラス定数 `DEPTH_INDENT_CLASSES`**
 
 ```typescript
-const DEPTH_INDENT_CLASSES = ['ml-0', 'ml-6', 'ml-12', 'ml-18', 'ml-24'];
+const DEPTH_INDENT_CLASSES: Record<number, string> = {
+  0: 'pl-0',
+  1: 'pl-5',
+  2: 'pl-10',
+};
 ```
 
 depth 0 がルートタスク、depth 1 以降が子・孫タスクに対応する。
+
+**タスクカード状態別スタイル定数**
+
+| 定数 | Tailwindクラス | 適用条件 |
+|------|--------------|---------|
+| `CARD_COMPLETED_CLASSES` | `border-green-800 opacity-75` | `node.is_completed === true` |
+| `CARD_PARTIAL_CLASSES` | `border-yellow-700 bg-yellow-950` | `node.hasPartiallyCompletedChildren === true`（自身は未完了） |
+| `CARD_DEFAULT_CLASSES` | `border-slate-600` | 上記以外 |
+
+`CARD_COMPLETED_CLASSES` → `CARD_PARTIAL_CLASSES` → `CARD_DEFAULT_CLASSES` の優先順で適用する。
+
+**「一部完了」バッジ**
+
+`node.hasPartiallyCompletedChildren` が `true` の場合、タイトル行に「一部完了」バッジを表示する。
+
+```typescript
+const PARTIAL_COMPLETE_BADGE_CLASSES =
+  'shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-800 text-yellow-200';
+```
 
 ### TaskFormPage
 
@@ -223,29 +246,32 @@ TaskDetailPage
 | `selectedCategory` | `string` | 選択中カテゴリ（空文字 = 全件） |
 | `loading` | `boolean` | 読み込み中フラグ |
 | `error` | `string` | 取得エラーメッセージ |
-| `deleteError` | `string` | 削除エラーメッセージ |
-| `toggleCompleteError` | `string` | 完了切り替えエラーメッセージ |
+| `toggleCompleteError` | `string` | 完了切り替えエラーメッセージ（楽観的更新失敗時にセット） |
+
+> `deleteError` はフック外（`TaskListPage` のローカルstate）で管理する。
 
 | 関数 | 説明 |
 |------|------|
 | `handleDelete(id)` | タスクを削除しローカルstateを更新 |
-| `handleToggleComplete(id, is_completed)` | タスクの完了状態を切り替える。成功後はstateの該当タスクを更新 |
+| `handleToggleComplete(id, is_completed)` | タスクの完了状態を楽観的UI更新で切り替える。ボタン押下直後にローカルステートを更新し、APIコール成功時はサーバーレスポンスで上書き、失敗時はスナップショットにロールバックする |
 | `setSelectedCategory(category)` | カテゴリフィルターを更新する |
 | `reload()` | 一覧を再読み込みするトリガーをインクリメント |
 
 **TaskTreeNode 型**
 
 ```typescript
-interface TaskTreeNode {
-  task: Task;
+interface TaskTreeNode extends Task {
+  /** 階層の深さ（ルートタスク: 0, 子タスク: 1, ...） */
   depth: number;
-  children: TaskTreeNode[];
+  /** 自身が未完了かつ直接の子タスク（孫以下は対象外）に1件以上完了があるかどうか */
+  hasPartiallyCompletedChildren: boolean;
 }
 ```
 
 **buildTaskTrees 関数**
 
 ルートタスク（`parent_id: null`）を起点に、`children` リレーションを再帰的に展開して `TaskTreeNode[]` を構築する。
+各ノードの `hasPartiallyCompletedChildren` は、自身が未完了かつ直接の子（孫以下は対象外）に1件以上完了タスクがある場合に `true` となる。
 
 **ソートロジック（getEffectiveDueDate）**
 
