@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  ValidationPipe,
-  Res,
-} from '@nestjs/common';
+import { Body, Controller, Get, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { AccountService } from '../service/account.service';
 import { AccountDto } from '../dto/account';
@@ -28,7 +21,7 @@ export class AccountsController {
    */
   @Post('login')
   async checkAccount(
-    @Body(ValidationPipe) account: AccountDto,
+    @Body() account: AccountDto,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `ログインリクエスト: ${account.username}`);
@@ -52,7 +45,7 @@ export class AccountsController {
    */
   @Post('regist')
   async registAccount(
-    @Body(ValidationPipe) account: AccountDto,
+    @Body() account: AccountDto,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `アカウント登録リクエスト: ${account.username}`);

@@ -11,7 +11,6 @@ import {
   Req,
   Res,
   UseGuards,
-  ValidationPipe,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { TaskService } from '../service/task.service';
@@ -73,7 +72,7 @@ export class TaskController {
    */
   @Post()
   async create(
-    @Body(ValidationPipe) dto: CreateTaskDto,
+    @Body() dto: CreateTaskDto,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `タスク作成リクエスト: ${dto.title}`);
@@ -89,7 +88,7 @@ export class TaskController {
   @Patch(':id')
   async update(
     @Param('id', ParseIntPipe) id: number,
-    @Body(ValidationPipe) dto: UpdateTaskDto,
+    @Body() dto: UpdateTaskDto,
     @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
