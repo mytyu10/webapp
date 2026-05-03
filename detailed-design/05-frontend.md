@@ -108,14 +108,17 @@ RegistPage
 
 ```
 TaskListPage
+├── ConfirmModal（削除確認モーダル）
 ├── ヘッダー（タイトル + "タスクを作成"ボタン）
-├── FormErrorBanner（API/削除エラー）
+├── カテゴリフィルターボタン群（"すべて" + 各カテゴリ）
+├── FormErrorBanner（API/削除/完了切り替えエラー）
 ├── 読み込み中テキスト
 ├── タスクなしメッセージ
-└── タスクカード一覧
+└── タスクカード一覧（filteredTasks / 有効期限昇順ソート済み）
     └── 各カード
-        ├── タイトル・説明・期限・担当者
-        └── 詳細・編集・削除ボタン
+        ├── タイトル（完了時: 打ち消し線 + 薄表示）・優先度バッジ・カテゴリバッジ
+        ├── 説明文・期限・担当者
+        └── 完了切り替えボタン・詳細ボタン・編集ボタン（作成者のみ）・削除ボタン（作成者のみ）
 ```
 
 ### TaskFormPage
@@ -140,16 +143,21 @@ TaskFormPage
 
 ```
 TaskDetailPage
-├── 一覧に戻るボタン
+├── ヘッダー（"← 一覧に戻る"ボタン + "タスク詳細"タイトル）
 ├── FormErrorBanner
 ├── 読み込み中テキスト
 └── 詳細カード
+    ├── "← 親タスクへ" リンク（parent_id がある場合のみ表示）
     ├── タイトル
     ├── 説明文
+    ├── 優先度バッジ・カテゴリバッジ
     ├── 期限
     ├── 担当者（タグ表示）
+    ├── 作成者
     ├── 作成日時
-    └── 編集するボタン
+    ├── 子タスク一覧（クリッカブルリンク、完了済みは打ち消し線 + 薄表示）
+    ├── 編集するボタン（作成者のみ）
+    └── 子タスクを作成ボタン
 ```
 
 ---
@@ -192,35 +200,61 @@ TaskDetailPage
 
 | state | 型 | 説明 |
 |-------|-----|------|
-| `tasks` | `Task[]` | タスク一覧 |
+| `tasks` | `Task[]` | タスク一覧（全件） |
+| `filteredTasks` | `Task[]` | カテゴリフィルタ＋有効期限昇順ソート済みタスク一覧 |
+| `categories` | `string[]` | カテゴリ一覧 |
+| `selectedCategory` | `string` | 選択中カテゴリ（空文字 = 全件） |
 | `loading` | `boolean` | 読み込み中フラグ |
 | `error` | `string` | 取得エラーメッセージ |
+| `deleteError` | `string` | 削除エラーメッセージ |
+| `toggleCompleteError` | `string` | 完了切り替えエラーメッセージ |
 
 | 関数 | 説明 |
 |------|------|
 | `handleDelete(id)` | タスクを削除しローカルstateを更新 |
+| `handleToggleComplete(id, is_completed)` | タスクの完了状態を切り替える。成功後はstateの該当タスクを更新 |
+| `setSelectedCategory(category)` | カテゴリフィルターを更新する |
 | `reload()` | 一覧を再読み込みするトリガーをインクリメント |
+
+**ソートロジック（getEffectiveDueDate）**
+
+`filteredTasks` は `getEffectiveDueDate` 関数で計算した有効期限の昇順にソートされる。
+子タスクを持つ親タスクは、子タスクの中で最も早い `due_date` を有効期限として扱う。
 
 ### useTaskForm
 
-URLパラメータの `id` 有無で作成/編集モードを切り替える。
+`id`（編集対象タスクID）と `parentId`（子タスク作成時の親タスクID）で3モードを切り替える。
 
 | state | 型 | 説明 |
 |-------|-----|------|
-| `values` | `TaskFormValues` | フォーム入力値（title, description, due_date, assigneesText） |
+| `values` | `TaskFormValues` | フォーム入力値（title, description, due_date, assigneesText, priority, category） |
 | `errors` | `TaskFormErrors` | バリデーションエラー |
 | `apiError` | `string` | APIエラーメッセージ |
 | `loading` | `boolean` | 送信/読み込み中フラグ |
-| `isEditMode` | `boolean` | 編集モードフラグ |
+| `isEditMode` | `boolean` | 編集モードフラグ（`id` が指定された場合 `true`） |
+
+**動作モード**
+
+| モード | 条件 | 動作 |
+|--------|------|------|
+| 新規作成 | `id` も `parentId` も未指定 | 空フォームで作成し `/tasks` へ遷移 |
+| 子タスク作成 | `parentId` が指定された場合 | 親タスクの `category` を初期値に設定。作成後 `/tasks/:parentId` へ遷移 |
+| 編集 | `id` が指定された場合 | 既存タスクデータを取得してフォームに反映。更新後 `/tasks/:id` へ遷移 |
 
 **handleSubmit フロー**
 
 ```
 1. validateTaskForm(values) でバリデーション
-2. 成功: createTask or updateTask を呼び出し
-3. 完了: navigate('/tasks')
+2. 編集モード: updateTask(id, input) を呼び出し → navigate('/tasks/:id')
+3. 作成モード: getCurrentUsername() でユーザー名取得 → createTask(input) を呼び出し
+   - parentId あり: navigate('/tasks/:parentId')
+   - parentId なし: navigate('/tasks')
 4. 失敗: apiError にセット
 ```
+
+**子タスク作成時のカテゴリ引き継ぎ**
+
+`parentId` が指定された場合、マウント時に `fetchTask(parentId)` で親タスクを取得し、`parent.category` を `values.category` の初期値にセットする。
 
 ---
 
@@ -268,13 +302,44 @@ const BASE_URL = `${process.env.REACT_APP_API_SCHEME}://${process.env.REACT_APP_
 
 Authorizationヘッダー（`Bearer <token>`）を全リクエストに付与。
 
-| 関数 | メソッド | エンドポイント | 戻り値 |
-|------|---------|-------------|-------|
-| `fetchTasks()` | GET | `/tasks` | `Promise<Task[]>` |
-| `fetchTask(id)` | GET | `/tasks/:id` | `Promise<Task>` |
-| `createTask(input)` | POST | `/tasks` | `Promise<Task>` |
-| `updateTask(id, input)` | PATCH | `/tasks/:id` | `Promise<Task>` |
-| `deleteTask(id)` | DELETE | `/tasks/:id` | `Promise<void>` |
+| 関数 | メソッド | エンドポイント | 戻り値 | 説明 |
+|------|---------|-------------|-------|------|
+| `fetchTasks()` | GET | `/tasks` | `Promise<Task[]>` | ルートタスク一覧取得（期限昇順） |
+| `fetchTask(id)` | GET | `/tasks/:id` | `Promise<Task>` | 指定IDのタスク取得 |
+| `fetchCategories()` | GET | `/tasks/categories` | `Promise<string[]>` | カテゴリ一覧取得 |
+| `createTask(input)` | POST | `/tasks` | `Promise<Task>` | タスク作成 |
+| `updateTask(id, input)` | PATCH | `/tasks/:id` | `Promise<Task>` | タスク更新 |
+| `toggleTaskCompletion(id, is_completed)` | PATCH | `/tasks/:id` | `Promise<Task>` | `updateTask` のラッパー。完了状態のみ切り替え |
+| `deleteTask(id)` | DELETE | `/tasks/:id` | `Promise<void>` | タスク削除 |
+| `getCurrentUsername()` | - | - | `string \| null` | localStorage の JWT をデコードしてusernameを取得 |
+
+**Task インターフェース（フロントエンド型定義）**
+
+```typescript
+interface Task {
+  id: number;
+  title: string;
+  description: string;
+  due_date: string;
+  priority: Priority;        // HIGH / MEDIUM / LOW
+  category: string | null;
+  parent_id: number | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  is_completed: boolean;
+  assignees: string[];
+  children: Task[];
+}
+```
+
+**定数・ユーティリティ**
+
+| 定数 | 型 | 説明 |
+|------|-----|------|
+| `PRIORITY_VALUES` | `readonly ['HIGH', 'MEDIUM', 'LOW']` | 優先度の有効値 |
+| `PRIORITY_LABELS` | `Record<Priority, string>` | 優先度の日本語表示ラベル（高/中/低） |
+| `PRIORITY_BADGE_CLASSES` | `Record<Priority, string>` | 優先度バッジのTailwindクラス |
 
 ---
 
