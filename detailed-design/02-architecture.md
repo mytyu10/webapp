@@ -121,9 +121,11 @@ backend/src/
 │       ├── status.enum.ts           # HTTPステータス定数
 │       └── string.constants.ts      # 文字列定数
 ├── jwt/
-│   ├── jwt-auth.guard.ts            # JWT認証Guard（CanActivate実装）
+│   ├── jwt-auth.guard.ts            # JWT認証Guard（CanActivate実装）。検証成功時に request.user へペイロードをセット
 │   ├── jwt.payload.ts               # JWTペイロード型定義
 │   └── jwt.service.ts               # JWT生成
+├── types/
+│   └── express.d.ts                 # Express Request型拡張（request.user: JwtPayload）
 └── prisma/
     └── prisma.service.ts            # Prismaクライアントシングルトン
 ```

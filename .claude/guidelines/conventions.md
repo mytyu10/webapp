@@ -140,7 +140,8 @@ src/
 
 ### アクセス制御
 
-- タスクの編集・削除ボタンは作成者（`created_by`）とログイン中ユーザー（`getCurrentUsername()`）が一致する場合のみ表示する
+- タスクの削除ボタンは作成者（`created_by`）とログイン中ユーザー（`getCurrentUsername()`）が一致する場合のみ表示する
+- タスクの編集ボタンはログインユーザーに関わらず全ユーザーに表示する（作成者限定にしない）
 
 ---
 
@@ -174,6 +175,7 @@ model Task {
   created_at   DateTime       @default(now())
   updated_at   DateTime       @updatedAt
   is_completed Boolean        @default(false)
+  closed_by    String?
   assignees    TaskAssignee[]
   creator      Account        @relation("TaskCreator", fields: [created_by], references: [username])
   parent       Task?          @relation("TaskChildren", fields: [parent_id], references: [id])
@@ -194,6 +196,7 @@ model TaskAssignee {
 - categoryはオプショナル（`String?`）。カテゴリ一覧は`GET /tasks/categories`で取得する
 - parent_idによる親子タスク構造をサポートする。子タスクは`children`リレーションで取得
 - is_completedフィールドはタスクの完了状態を管理する（デフォルト: `false`）。`PATCH /tasks/:id` の `is_completed` フィールドで切り替える
+- closed_byフィールドはタスクをクローズ（完了）したユーザー名を記録する（デフォルト: `null`）。`is_completed` が `false→true` に変化したとき Service レイヤーでリクエストユーザー名を自動セットし、`true→false` に戻したとき `null` にクリアする。フロントエンドから直接 `closed_by` を送信する必要はない
 - SQLiteはBooleanをinteger（0/1）で保存するため、Prismaから返る値をフロントエンドで比較する際は `=== true/false` の厳密比較ではなく `Boolean(value)` に変換してから比較すること（例: `Boolean(t.is_completed) === completedFilter`）
 - TaskAssigneeの担当者更新はdelete+insertトランザクションで対応する
 - Taskの削除はCascade設定によりTaskAssigneeも連動削除される

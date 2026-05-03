@@ -39,7 +39,10 @@ HTTP 400
 | 実装 | `CanActivate` を直接実装 |
 | トークン取得 | `Authorization: Bearer <token>` ヘッダー |
 | 検証 | `jsonwebtoken.verify(token, JWT_SECRET)` |
+| 検証成功時 | デコードされた `JwtPayload`（`{ username: string }`）を `request.user` にセット |
 | エラー | 401 `{ "message": "認証が必要です" }` |
+
+Express の `Request` 型拡張（`src/types/express.d.ts`）により `request.user` は `JwtPayload | undefined` として型安全に参照できる。
 
 ---
 
@@ -212,7 +215,7 @@ Authorization: Bearer <JWT>
 
 ### PATCH /tasks/:id ※要認証
 
-タスクを更新する。
+タスクを更新する。`is_completed` の変化に応じて `closed_by` を自動制御する（リクエストボディでの指定不要）。
 
 **リクエストヘッダー**
 
@@ -244,6 +247,28 @@ Authorization: Bearer <JWT>
 | 401 | 認証エラー | `{ "message": "認証が必要です" }` |
 | 404 | タスク不存在 | `{ "message": "指定されたタスクが見つかりません" }` |
 | 500 | DBエラー | `{ "message": "タスクの更新に失敗しました" }` |
+
+**`closed_by` の自動制御（TaskService）**
+
+`is_completed` の変化に基づき、`TaskService.update()` がリクエストユーザー名（JWTペイロードの `username`）を使って自動で設定する。
+
+| `is_completed` の変化 | `closed_by` の動作 |
+|-----------------------|--------------------|
+| `false → true` | JWTの `username` をセット |
+| `true → false` | `null` にクリア |
+| 変化なし（または未指定） | 変更しない |
+
+**処理フロー**
+
+```
+1. JwtAuthGuard: JWTを検証し request.user にペイロードをセット
+2. TaskController.update(): request.user.username を TaskService.update() に渡す
+3. TaskService.update():
+   3-1. TaskRepository.findById(id) で既存タスクを取得（なければ 404）
+   3-2. is_completed の変化を判定して closed_by 値を決定
+   3-3. TaskRepository.update(id, { ...dto, closed_by }) で更新
+4. 200 レスポンス
+```
 
 ---
 
@@ -357,6 +382,7 @@ interface TaskResponseDto {
   created_at: string;        // ISO8601形式
   updated_at: string;        // ISO8601形式
   is_completed: boolean;
+  closed_by: string | null;  // タスクをクローズしたユーザー名。未完了の場合は null
   assignees: string[];       // ユーザー名リスト
   children: TaskResponseDto[]; // 子タスク一覧（再帰構造）
 }

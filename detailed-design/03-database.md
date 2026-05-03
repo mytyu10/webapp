@@ -39,6 +39,7 @@ model Task {
   created_at   DateTime       @default(now())
   updated_at   DateTime       @updatedAt
   is_completed Boolean        @default(false)
+  closed_by    String?
   assignees    TaskAssignee[]
   creator      Account        @relation("TaskCreator", fields: [created_by], references: [username])
   parent       Task?          @relation("TaskChildren", fields: [parent_id], references: [id])
@@ -79,6 +80,7 @@ model TaskAssignee {
 | `created_at` | DateTime | NOT NULL, DEFAULT now() | 作成日時 |
 | `updated_at` | DateTime | NOT NULL, @updatedAt | 更新日時 |
 | `is_completed` | Boolean | NOT NULL, DEFAULT false | 完了状態（`true`: 完了 / `false`: 未完了） |
+| `closed_by` | String | NULL 許容 | タスクをクローズ（完了）したユーザー名。未完了の場合は NULL |
 
 - `parent_id` による自己参照で親子タスク構造をサポートする（`children` リレーションで子タスク取得）
 - Task削除時に子タスクの `parent_id` は NULL になる（Cascade削除ではない）

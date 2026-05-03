@@ -223,7 +223,7 @@ TaskDetailPage
 ├── FormErrorBanner
 ├── 読み込み中テキスト
 └── 詳細カード（完了時: 緑枠 `border-green-500`）
-    ├── 完了済みバナー（完了時のみ: 緑背景 "このタスクは完了済みです"）
+    ├── 完了済みバナー（完了時のみ: 緑背景 "完了済み" + `closed_by` が存在する場合は "クローズ: {username}" を併記）
     ├── "← 親タスクへ" リンク（parent_id がある場合のみ表示）
     ├── タイトル（完了時: 打ち消し線）
     ├── 説明文
@@ -234,7 +234,7 @@ TaskDetailPage
     ├── 作成日時
     ├── 子タスク一覧（クリッカブルリンク、完了済みは打ち消し線 + 薄表示）
     ├── 完了にする / 未完了に戻すボタン（完了状態に応じて切り替え）
-    ├── 編集するボタン（作成者のみ）
+    ├── 編集するボタン（全ユーザーに表示）
     └── 子タスクを作成ボタン
 ```
 
@@ -450,6 +450,7 @@ interface Task {
   created_at: string;
   updated_at: string;
   is_completed: boolean;
+  closed_by: string | null;  // タスクをクローズしたユーザー名。未完了の場合は null
   assignees: string[];
   children: Task[];
 }
@@ -561,7 +562,9 @@ div.flex.min-h-screen
 - `depth === 0` かつ `children.length === 0`: カード内部の左端に同幅スペーサーを表示
 - `depth > 0`: タイトル行の先頭に「└」アイコンを表示
 
-**アクションボタン（カード右端）:** 完了切り替え・詳細・編集（`isOwner` のみ）・削除（`isOwner` のみ）
+**アクションボタン（カード右端）:** 完了切り替え・詳細・編集（全ユーザー）・削除（`isOwner` のみ）
+
+**`closed_by` 表示:** タスクが完了状態（`isCompleted === true`）かつ `node.closed_by` が存在する場合、期限・担当者行に "クローズ: {username}" を緑文字（`text-green-400`）で表示する。
 
 ### ActionButton
 
