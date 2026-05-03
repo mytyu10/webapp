@@ -14,11 +14,12 @@
 │      └── SidebarLayout                   │     │       ├── AccountsModule             │
 │          ├── / → HomePage(リダイレクト)  │     │       │    ├── AccountController      │
 │          ├── /tasks → TaskListPage       │     │       │    ├── AccountService         │
-│          ├── /tasks/new → TaskFormPage   │     │       │    └── AccountRepository      │
-│          ├── /tasks/:id → TaskDetailPage │     │       └── TaskModule                 │
-│          └── /tasks/:id/edit             │     │            ├── TaskController        │
+│          └── /tasks/new → TaskFormPage   │     │       │    └── AccountRepository      │
+│                                          │     │       └── TaskModule                 │
+│                                          │     │            ├── TaskController        │
 │                                          │     │            ├── TaskService           │
-│  src/                                    │     │            └── TaskRepository        │
+│  src/                                    │     │            ├── TaskQueueService      │
+│                                          │     │            └── TaskRepository        │
 │  ├── api/          API通信               │     │                                      │
 │  ├── hooks/        状態管理               │     │  共通                                │
 │  ├── validation/   バリデーション          │     │  ├── JwtAuthGuard                    │
@@ -109,7 +110,8 @@ backend/src/
 │   ├── repository/
 │   │   └── task.repository.ts      # Prismaを使ったDBアクセス（is_completed 対応）
 │   └── service/
-│       └── task.service.ts         # タスクCRUDのビジネスロジック
+│       ├── task.service.ts         # タスクCRUDのビジネスロジック
+│       └── task-queue.service.ts   # タスク更新をバッチ処理方式で実行（100msウィンドウ内のリクエストをまとめて順次処理）
 ├── common/                          # 共通ユーティリティ
 │   ├── filter/
 │   │   └── http-exception.filter.ts # グローバル例外フィルター
@@ -147,20 +149,20 @@ frontend/src/
 │   ├── SubmitButton.tsx             # 送信ボタン（ローディング対応）
 │   ├── PrivateRoute.tsx             # JWT有効期限検証（exp チェック）
 │   ├── Sidebar.tsx                  # サイドバーナビゲーション
-│   └── SidebarLayout.tsx            # サイドバー付きレイアウト
+│   ├── SidebarLayout.tsx            # サイドバー付きレイアウト
+│   └── TaskDetailPanel.tsx          # タスク詳細サイドパネル（詳細表示＋インライン編集）
 ├── hooks/                           # カスタムフック（状態管理・オーケストレーション）
 │   ├── useLoginForm.ts              # ログインフォームの状態・送信処理
 │   ├── useRegistForm.ts             # 登録フォームの状態・送信処理
-│   ├── useTaskList.ts               # タスク一覧・削除・完了切り替え・階層ツリー構築フック
-│   ├── useTaskDetail.ts             # タスク詳細取得・完了切り替えフック
-│   └── useTaskForm.ts               # タスク作成・編集フォームフック
+│   ├── useTaskList.ts               # タスク一覧・削除・完了切り替え・階層ツリー構築・インライン更新フック
+│   ├── useTaskDetail.ts             # タスク詳細取得・完了切り替えフック（現在未使用）
+│   └── useTaskForm.ts               # タスク作成フォームフック（編集モードは現在未使用）
 ├── pages/                           # ページコンポーネント（描画のみ）
 │   ├── HomePage.tsx                 # ホーム（/tasks へリダイレクト）
 │   ├── LoginPage.tsx                # ログイン画面
 │   ├── RegistPage.tsx               # アカウント登録画面
-│   ├── TaskListPage.tsx             # タスク一覧画面（階層表示・完了セクション折りたたみ）
-│   ├── TaskFormPage.tsx             # タスク作成・編集画面
-│   └── TaskDetailPage.tsx           # タスク詳細画面（完了/未完了ボタン・完了スタイル）
+│   ├── TaskListPage.tsx             # タスク一覧画面（サイドパネル・リサイズディバイダー・完了セクション折りたたみ）
+│   └── TaskFormPage.tsx             # タスク作成画面
 └── validation/                      # バリデーション（純粋関数）
     ├── loginValidation.ts           # ログインフォームバリデーション
     ├── registValidation.ts          # 登録フォームバリデーション
@@ -183,7 +185,8 @@ AppModule
 └── TaskModule
     └── provides
         ├── TaskController      ← JwtAuthGuard（@UseGuards）適用
-        ├── TaskService         ← TaskRepository, LoggerService に依存
+        ├── TaskService         ← TaskQueueService, TaskRepository, LoggerService に依存
+        ├── TaskQueueService    ← LoggerService に依存（バッチ処理ログ出力）
         ├── TaskRepository      ← PrismaService に依存
         ├── PrismaService
         └── LoggerService

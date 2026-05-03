@@ -53,7 +53,7 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/accounts/repository/` — Prisma queries
 - `src/accounts/dto/` — validation DTOs (class-validator)
 - `src/tasks/controller/` — REST endpoints (`GET /tasks`, `GET /tasks/categories`, `GET /tasks/:id`, `POST /tasks`, `PATCH /tasks/:id`, `DELETE /tasks/:id`) — JwtAuthGuard適用済み
-- `src/tasks/service/` — タスクのビジネスロジック
+- `src/tasks/service/` — タスクのビジネスロジック（`task.service.ts`）・バッチ更新処理（`task-queue.service.ts`: 100msウィンドウ内のリクエストをバッファリングして順次処理）
 - `src/tasks/repository/` — Prisma CRUD・カテゴリ取得（is_completed・closed_by フィールド対応）
 - `src/tasks/dto/task.dto.ts` — CreateTaskDto / UpdateTaskDto（is_completed含む） / TaskResponseDto（is_completed・closed_by含む） / Priority型
 - `src/jwt/jwt.service.ts` — JWT creation (1h expiry, secret from `JWT_SECRET` env)
