@@ -3,7 +3,10 @@ import {
   NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { TaskRepository, TaskWithRelations } from '../repository/task.repository';
+import {
+  TaskRepository,
+  TaskWithRelations,
+} from '../repository/task.repository';
 import {
   CreateTaskDto,
   UpdateTaskDto,
@@ -170,7 +173,9 @@ export class TaskService {
       return await this.taskRepository.findAllCategories();
     } catch (error) {
       this.logger.error(CONTEXT, `カテゴリ一覧取得失敗: ${String(error)}`);
-      throw new InternalServerErrorException(MESSAGE.TASK.CATEGORIES_FETCH_FAILED);
+      throw new InternalServerErrorException(
+        MESSAGE.TASK.CATEGORIES_FETCH_FAILED,
+      );
     }
   }
 

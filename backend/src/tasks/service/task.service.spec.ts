@@ -189,18 +189,18 @@ describe('TaskService', () => {
     it('存在しないIDの場合はNotFoundExceptionをスローする', async () => {
       mockTaskRepository.findById.mockResolvedValue(null);
 
-      await expect(service.update(999, { title: '更新' }, 'testuser')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.update(999, { title: '更新' }, 'testuser'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('DBエラー時はInternalServerErrorExceptionをスローする', async () => {
       mockTaskRepository.findById.mockResolvedValue(mockTask);
       mockTaskRepository.update.mockRejectedValue(new Error('DB error'));
 
-      await expect(service.update(1, { title: '更新' }, 'testuser')).rejects.toThrow(
-        InternalServerErrorException,
-      );
+      await expect(
+        service.update(1, { title: '更新' }, 'testuser'),
+      ).rejects.toThrow(InternalServerErrorException);
     });
 
     it('is_completed: true を渡すと Repository の update が is_completed: true で呼ばれる', async () => {
@@ -218,7 +218,11 @@ describe('TaskService', () => {
 
     it('is_completed: false を渡すと Repository の update が is_completed: false で呼ばれる', async () => {
       mockTaskRepository.findById.mockResolvedValue(mockTask);
-      const uncompletedTask = { ...mockTask, is_completed: false, assignees: [] };
+      const uncompletedTask = {
+        ...mockTask,
+        is_completed: false,
+        assignees: [],
+      };
       mockTaskRepository.update.mockResolvedValue(uncompletedTask);
 
       await service.update(1, { is_completed: false }, 'testuser');
@@ -234,7 +238,11 @@ describe('TaskService', () => {
       const updatedTask = { ...mockTask, title: 'タイトル変更', assignees: [] };
       mockTaskRepository.update.mockResolvedValue(updatedTask);
 
-      const result = await service.update(1, { title: 'タイトル変更' }, 'testuser');
+      const result = await service.update(
+        1,
+        { title: 'タイトル変更' },
+        'testuser',
+      );
 
       expect(result.title).toBe('タイトル変更');
       expect(mockTaskRepository.update).toHaveBeenCalledWith(
@@ -247,9 +255,18 @@ describe('TaskService', () => {
 
     it('is_completed が false → true に変化したとき、closed_by に requestUsername がセットされる', async () => {
       // 既存タスクは is_completed: false
-      const incompleteTask = { ...mockTask, is_completed: false, assignees: [] };
+      const incompleteTask = {
+        ...mockTask,
+        is_completed: false,
+        assignees: [],
+      };
       mockTaskRepository.findById.mockResolvedValue(incompleteTask);
-      const completedTask = { ...mockTask, is_completed: true, closed_by: 'closer', assignees: [] };
+      const completedTask = {
+        ...mockTask,
+        is_completed: true,
+        closed_by: 'closer',
+        assignees: [],
+      };
       mockTaskRepository.update.mockResolvedValue(completedTask);
 
       await service.update(1, { is_completed: true }, 'closer');
@@ -262,9 +279,19 @@ describe('TaskService', () => {
 
     it('is_completed が true → false に変化したとき、closed_by が null にクリアされる', async () => {
       // 既存タスクは is_completed: true
-      const completedTask = { ...mockTask, is_completed: true, closed_by: 'closer', assignees: [] };
+      const completedTask = {
+        ...mockTask,
+        is_completed: true,
+        closed_by: 'closer',
+        assignees: [],
+      };
       mockTaskRepository.findById.mockResolvedValue(completedTask);
-      const revertedTask = { ...mockTask, is_completed: false, closed_by: null, assignees: [] };
+      const revertedTask = {
+        ...mockTask,
+        is_completed: false,
+        closed_by: null,
+        assignees: [],
+      };
       mockTaskRepository.update.mockResolvedValue(revertedTask);
 
       await service.update(1, { is_completed: false }, 'closer');
@@ -277,25 +304,40 @@ describe('TaskService', () => {
 
     it('is_completed が false → false で変化なしのとき、closed_by が Repository に渡されない', async () => {
       // 既存タスクは is_completed: false、dtoも false
-      const incompleteTask = { ...mockTask, is_completed: false, assignees: [] };
+      const incompleteTask = {
+        ...mockTask,
+        is_completed: false,
+        assignees: [],
+      };
       mockTaskRepository.findById.mockResolvedValue(incompleteTask);
       mockTaskRepository.update.mockResolvedValue(incompleteTask);
 
       await service.update(1, { is_completed: false }, 'testuser');
 
-      const calledWith = mockTaskRepository.update.mock.calls[0][1] as Record<string, unknown>;
+      const calledWith = mockTaskRepository.update.mock.calls[0][1] as Record<
+        string,
+        unknown
+      >;
       expect('closed_by' in calledWith).toBe(false);
     });
 
     it('is_completed が true → true で変化なしのとき、closed_by が Repository に渡されない', async () => {
       // 既存タスクは is_completed: true、dtoも true
-      const completedTask = { ...mockTask, is_completed: true, closed_by: 'closer', assignees: [] };
+      const completedTask = {
+        ...mockTask,
+        is_completed: true,
+        closed_by: 'closer',
+        assignees: [],
+      };
       mockTaskRepository.findById.mockResolvedValue(completedTask);
       mockTaskRepository.update.mockResolvedValue(completedTask);
 
       await service.update(1, { is_completed: true }, 'closer');
 
-      const calledWith = mockTaskRepository.update.mock.calls[0][1] as Record<string, unknown>;
+      const calledWith = mockTaskRepository.update.mock.calls[0][1] as Record<
+        string,
+        unknown
+      >;
       expect('closed_by' in calledWith).toBe(false);
     });
   });

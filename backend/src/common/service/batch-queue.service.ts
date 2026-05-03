@@ -37,7 +37,10 @@ export class BatchQueueService {
         resolve: resolve as (value: unknown) => void,
         reject,
       });
-      this.logger.log(CONTEXT, `バッチ追加 (バッファ: ${this.buffer.length}件)`);
+      this.logger.log(
+        CONTEXT,
+        `バッチ追加 (バッファ: ${this.buffer.length}件)`,
+      );
       if (!this.flushing) {
         this.scheduleFlush();
       }

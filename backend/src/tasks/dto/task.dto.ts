@@ -43,7 +43,9 @@ export class CreateTaskDto {
   assignees?: string[];
 
   /** 優先度（HIGH/MEDIUM/LOW） */
-  @IsIn(PRIORITY_VALUES, { message: '優先度はHIGH・MEDIUM・LOWのいずれかを指定してください' })
+  @IsIn(PRIORITY_VALUES, {
+    message: '優先度はHIGH・MEDIUM・LOWのいずれかを指定してください',
+  })
   @IsOptional()
   priority?: Priority;
 
@@ -94,7 +96,9 @@ export class UpdateTaskDto {
   assignees?: string[];
 
   /** 優先度（HIGH/MEDIUM/LOW） */
-  @IsIn(PRIORITY_VALUES, { message: '優先度はHIGH・MEDIUM・LOWのいずれかを指定してください' })
+  @IsIn(PRIORITY_VALUES, {
+    message: '優先度はHIGH・MEDIUM・LOWのいずれかを指定してください',
+  })
   @IsOptional()
   priority?: Priority;
 

@@ -149,8 +149,6 @@ export class TaskRepository {
       distinct: ['category'],
       orderBy: { category: 'asc' },
     });
-    return tasks
-      .map((t) => t.category)
-      .filter((c): c is string => c !== null);
+    return tasks.map((t) => t.category).filter((c): c is string => c !== null);
   }
 }
