@@ -78,15 +78,16 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/components/Sidebar.tsx` — サイドバーコンポーネント（タスク管理リンク・ログアウト）
 - `src/components/SidebarLayout.tsx` — サイドバー付きレイアウト（Outlet使用）
 - `src/pages/LoginPage.tsx` — login form, posts to backend `/accounts/login`, stores JWT in `localStorage`
-- `src/pages/TaskListPage.tsx` — タスク一覧・階層表示・カテゴリフィルター・削除確認モーダル・完了セクション折りたたみ。削除は作成者のみ表示・編集は全ユーザー表示。「詳細」ボタン押下時に完了 PATCH が進行中であれば `awaitToggle` で完了を待機してから遷移する
+- `src/pages/TaskListPage.tsx` — タスク一覧・階層表示・カテゴリフィルター・削除確認モーダル・完了セクション折りたたみ。削除は作成者のみ表示・編集は全ユーザー表示。「詳細」ボタン押下時に `awaitToggle` で完了 PATCH の完了を待機してから右側のサイドパネル（`TaskDetailPanel`）を開く（ページ遷移なし・URL変更なし）。パネル表示中は flex 左右分割（左: 一覧、右: 詳細パネル）
 - `src/pages/TaskFormPage.tsx` — タスク作成・編集・子タスク作成（URLクエリ`parent_id`で切り替え）
-- `src/pages/TaskDetailPage.tsx` — タスク詳細・完了/未完了ボタン・完了スタイル（緑枠・バナー・取り消し線）・`closed_by`表示・子タスク一覧・子タスク作成ボタン。編集ボタンは全ユーザーに表示
+- `src/pages/TaskDetailPage.tsx` — タスク詳細・完了/未完了ボタン・完了スタイル（緑枠・バナー・取り消し線）・`closed_by`表示・子タスク一覧・子タスク作成ボタン。編集ボタンは全ユーザーに表示。直リンク（`/tasks/:id`）対応のため引き続き存在する
 - `src/api/taskApi.ts` — タスクAPI通信（`fetchTasks`, `fetchTask`, `fetchCategories`, `createTask`, `updateTask`, `toggleTaskCompletion`, `deleteTask`, `getCurrentUsername`）
 - `src/hooks/useTaskList.ts` — タスク一覧・削除・カテゴリフィルタリング・階層ツリー構築（incompleteTrees/completedTrees）フック。`togglingIds`（PATCH処理中のタスクID集合）と `awaitToggle`（PATCH完了を外から待てる関数）を提供する
 - `src/hooks/useTaskDetail.ts` — タスク詳細取得・完了切り替えフック
 - `src/hooks/useTaskForm.ts` — タスクフォーム（作成/編集/子タスク作成モード対応）フック
 - `src/validation/taskValidation.ts` — タスクフォームバリデーション（priority/category含む）
 - `src/components/ConfirmModal.tsx` — 削除確認モーダル
+- `src/components/TaskDetailPanel.tsx` — タスク詳細サイドパネル。`taskId: number | null` / `onClose` / `onSelectTask` を受け取り、`useTaskDetail` で詳細を取得して表示する。子タスク・親タスクのリンクは `onSelectTask` 経由でパネル内切り替え（ページ遷移なし）
 - `src/components/TextAreaField.tsx` — textareaラッパー共通コンポーネント
 - `src/components/DateTimeField.tsx` — datetime-local入力ラッパー共通コンポーネント
 - `src/components/SelectField.tsx` — selectラッパー共通コンポーネント

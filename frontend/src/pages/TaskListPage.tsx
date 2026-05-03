@@ -8,6 +8,7 @@ import TaskCard from '../components/TaskCard';
 import ActionButton from '../components/ActionButton';
 import CategoryFilterBar from '../components/CategoryFilterBar';
 import SectionToggleButton from '../components/SectionToggleButton';
+import TaskDetailPanel from '../components/TaskDetailPanel';
 
 /** depthに対応するTailwind paddingLeftクラス */
 const DEPTH_INDENT_CLASSES: Record<number, string> = {
@@ -41,11 +42,12 @@ function isNodeHidden(
 
 /**
  * タスク一覧ページ
- * タスクの一覧表示・カテゴリフィルタリング・削除・作成・編集・詳細遷移を提供する
+ * タスクの一覧表示・カテゴリフィルタリング・削除・作成・編集・詳細表示を提供する
  * 削除ボタンはタスク作成者のみ表示する。編集ボタンは全ユーザーに表示する
  * 未完了タスクと完了済みタスクをセクションで分けて表示する（完了済みは折りたたみ可）
  * 親子タスクは階層インデントで表示する
  * 子タスクを持つ親タスクはトグルボタンで子タスクの表示/非表示を切り替えられる
+ * 「詳細」ボタン押下時は右側のサイドパネルにタスク詳細を表示する（ページ遷移なし）
  */
 function TaskListPage() {
   const navigate = useNavigate();
@@ -57,7 +59,6 @@ function TaskListPage() {
     loading,
     error,
     toggleCompleteError,
-    togglingIds,
     handleDelete,
     handleToggleComplete,
     awaitToggle,
@@ -70,6 +71,9 @@ function TaskListPage() {
 
   /** 折りたたまれている親タスク ID のセット（セット内にあれば折りたたみ状態） */
   const [collapsedParentIds, setCollapsedParentIds] = useState<Set<number>>(new Set());
+
+  /** 詳細サイドパネルに表示中のタスクID。null のとき非表示 */
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
 
   const currentUsername = getCurrentUsername();
 
@@ -88,6 +92,10 @@ function TaskListPage() {
     setDeleteError('');
     try {
       await handleDelete(deleteTargetId);
+      // 削除したタスクがパネルに表示中ならパネルを閉じる
+      if (selectedTaskId === deleteTargetId) {
+        setSelectedTaskId(null);
+      }
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'タスクの削除に失敗しました。');
     } finally {
@@ -118,6 +126,24 @@ function TaskListPage() {
   }
 
   /**
+   * 詳細サイドパネルを開く。
+   * PATCH 進行中なら完了を待ってからパネルを表示する。
+   * ref ベースの awaitToggle は常に最新状態を参照するため
+   * React state（togglingIds）の更新遅延に依存せずここで直接呼ぶ
+   */
+  async function openDetailPanel(id: number): Promise<void> {
+    await awaitToggle(id);
+    setSelectedTaskId(id);
+  }
+
+  /**
+   * 詳細サイドパネルを閉じる
+   */
+  function closeDetailPanel(): void {
+    setSelectedTaskId(null);
+  }
+
+  /**
    * タスクカードを1件分レンダリングする
    * インデントクラスで階層を表現し、カード内部の表示は TaskCard コンポーネントに委譲する
    */
@@ -132,13 +158,7 @@ function TaskListPage() {
           isCollapsed={collapsedParentIds.has(node.id)}
           onToggleCollapse={() => toggleCollapse(node.id)}
           onToggleComplete={(id, is_completed) => void handleToggleComplete(id, is_completed)}
-          onNavigateDetail={async (id) => {
-            // 完了切り替え PATCH が進行中の場合は完了を待ってから詳細画面へ遷移する
-            if (togglingIds.has(id)) {
-              await awaitToggle(id);
-            }
-            navigate(`/tasks/${id}`);
-          }}
+          onNavigateDetail={(id) => void openDetailPanel(id)}
           onNavigateEdit={(id) => navigate(`/tasks/${id}/edit`)}
           onDeleteClick={onDeleteClick}
           isOwner={isOwner}
@@ -148,85 +168,98 @@ function TaskListPage() {
   }
 
   const hasAnyTask = incompleteTrees.length > 0 || completedTrees.length > 0;
+  const isPanelOpen = selectedTaskId !== null;
 
   return (
-    <div>
-      <ConfirmModal
-        open={deleteTargetId !== null}
-        title="タスクを削除"
-        message="このタスクを削除してもよろしいですか？この操作は取り消せません。"
-        confirmLabel="削除する"
-        cancelLabel="キャンセル"
-        onConfirm={() => void onConfirmDelete()}
-        onCancel={onCancelDelete}
-      />
-
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-100">タスク管理</h1>
-        <ActionButton label="タスクを作成" onClick={() => navigate('/tasks/new')} />
-      </div>
-
-      {categories.length > 0 && (
-        <CategoryFilterBar
-          categories={categories}
-          selectedCategory={selectedCategory}
-          onSelect={setSelectedCategory}
+    <div className={`flex gap-0 ${isPanelOpen ? 'items-start' : ''}`}>
+      {/* タスク一覧エリア */}
+      <div className={isPanelOpen ? 'flex-1 min-w-0' : 'w-full'}>
+        <ConfirmModal
+          open={deleteTargetId !== null}
+          title="タスクを削除"
+          message="このタスクを削除してもよろしいですか？この操作は取り消せません。"
+          confirmLabel="削除する"
+          cancelLabel="キャンセル"
+          onConfirm={() => void onConfirmDelete()}
+          onCancel={onCancelDelete}
         />
-      )}
 
-      <FormErrorBanner message={error || deleteError || toggleCompleteError} />
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-slate-100">タスク管理</h1>
+          <ActionButton label="タスクを作成" onClick={() => navigate('/tasks/new')} />
+        </div>
 
-      {loading && (
-        <p className="text-slate-400 text-sm">読み込み中...</p>
-      )}
+        {categories.length > 0 && (
+          <CategoryFilterBar
+            categories={categories}
+            selectedCategory={selectedCategory}
+            onSelect={setSelectedCategory}
+          />
+        )}
 
-      {!loading && !hasAnyTask && !error && (
-        <p className="text-slate-400 text-sm">タスクがありません。</p>
-      )}
+        <FormErrorBanner message={error || deleteError || toggleCompleteError} />
 
-      {!loading && hasAnyTask && (
-        <div className="space-y-6">
-          {/* 未完了セクション */}
-          {incompleteTrees.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">
-                未完了 ({incompleteTrees.filter((n) => n.depth === 0).length}件)
-              </p>
-              <div className="space-y-2">
-                {incompleteTrees
-                  .filter((node) => !isNodeHidden(node, incompleteTrees, collapsedParentIds))
-                  .map((node) => (
-                    <div key={node.id}>{renderTaskCard(node)}</div>
-                  ))}
-              </div>
-            </div>
-          )}
+        {loading && (
+          <p className="text-slate-400 text-sm">読み込み中...</p>
+        )}
 
-          {incompleteTrees.length === 0 && !error && (
-            <p className="text-slate-400 text-sm">未完了のタスクはありません。</p>
-          )}
+        {!loading && !hasAnyTask && !error && (
+          <p className="text-slate-400 text-sm">タスクがありません。</p>
+        )}
 
-          {/* 完了済みセクション（折りたたみ） */}
-          {completedTrees.length > 0 && (
-            <div>
-              <SectionToggleButton
-                label="完了済み"
-                count={completedTrees.filter((n) => n.depth === 0).length}
-                isOpen={isCompletedSectionOpen}
-                onClick={() => setIsCompletedSectionOpen((prev) => !prev)}
-              />
-              {isCompletedSectionOpen && (
+        {!loading && hasAnyTask && (
+          <div className="space-y-6">
+            {/* 未完了セクション */}
+            {incompleteTrees.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">
+                  未完了 ({incompleteTrees.filter((n) => n.depth === 0).length}件)
+                </p>
                 <div className="space-y-2">
-                  {completedTrees
-                    .filter((node) => !isNodeHidden(node, completedTrees, collapsedParentIds))
+                  {incompleteTrees
+                    .filter((node) => !isNodeHidden(node, incompleteTrees, collapsedParentIds))
                     .map((node) => (
                       <div key={node.id}>{renderTaskCard(node)}</div>
                     ))}
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+
+            {incompleteTrees.length === 0 && !error && (
+              <p className="text-slate-400 text-sm">未完了のタスクはありません。</p>
+            )}
+
+            {/* 完了済みセクション（折りたたみ） */}
+            {completedTrees.length > 0 && (
+              <div>
+                <SectionToggleButton
+                  label="完了済み"
+                  count={completedTrees.filter((n) => n.depth === 0).length}
+                  isOpen={isCompletedSectionOpen}
+                  onClick={() => setIsCompletedSectionOpen((prev) => !prev)}
+                />
+                {isCompletedSectionOpen && (
+                  <div className="space-y-2">
+                    {completedTrees
+                      .filter((node) => !isNodeHidden(node, completedTrees, collapsedParentIds))
+                      .map((node) => (
+                        <div key={node.id}>{renderTaskCard(node)}</div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* タスク詳細サイドパネル */}
+      {isPanelOpen && (
+        <TaskDetailPanel
+          taskId={selectedTaskId}
+          onClose={closeDetailPanel}
+          onSelectTask={(id) => setSelectedTaskId(id)}
+        />
       )}
     </div>
   );
