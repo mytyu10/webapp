@@ -4,15 +4,40 @@ const { REACT_APP_API_SCHEME, REACT_APP_API_HOST, REACT_APP_API_PORT } = process
 const API_BASE = `${REACT_APP_API_SCHEME}://${REACT_APP_API_HOST}:${REACT_APP_API_PORT}`;
 const CONTEXT = 'taskApi';
 
+/** 優先度の有効値 */
+export const PRIORITY_VALUES = ['HIGH', 'MEDIUM', 'LOW'] as const;
+
+/** 優先度型 */
+export type Priority = (typeof PRIORITY_VALUES)[number];
+
+/** 優先度の日本語表示ラベル */
+export const PRIORITY_LABELS: Record<Priority, string> = {
+  HIGH: '高',
+  MEDIUM: '中',
+  LOW: '低',
+};
+
+/** 優先度バッジのTailwindクラス */
+export const PRIORITY_BADGE_CLASSES: Record<Priority, string> = {
+  HIGH: 'bg-red-800 text-red-200',
+  MEDIUM: 'bg-yellow-800 text-yellow-200',
+  LOW: 'bg-slate-600 text-slate-300',
+};
+
 /** タスクレスポンス型 */
 export interface Task {
   id: number;
   title: string;
   description: string;
   due_date: string;
+  priority: Priority;
+  category: string | null;
+  parent_id: number | null;
+  created_by: string;
   created_at: string;
   updated_at: string;
   assignees: string[];
+  children: Task[];
 }
 
 /** タスク作成・更新リクエスト型 */
@@ -21,6 +46,15 @@ export interface TaskInput {
   description: string;
   due_date: string;
   assignees: string[];
+  priority?: Priority;
+  category?: string;
+  parent_id?: number;
+  created_by?: string;
+}
+
+/** JWTペイロードの型（usernameフィールドのみ使用） */
+interface JwtPayloadDecoded {
+  username?: string;
 }
 
 /**
@@ -32,6 +66,27 @@ function authHeaders(): HeadersInit {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
   };
+}
+
+/**
+ * localStorageのJWTをデコードしてusernameを取得する
+ * デコード失敗時はnullを返す
+ */
+export function getCurrentUsername(): string | null {
+  const token = localStorage.getItem('token');
+  if (!token) return null;
+
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payloadJson = atob(payloadBase64);
+    const payload = JSON.parse(payloadJson) as JwtPayloadDecoded;
+    return payload.username ?? null;
+  } catch {
+    logger.warn(CONTEXT, 'JWTのデコードに失敗しました');
+    return null;
+  }
 }
 
 /**
@@ -76,6 +131,28 @@ export async function fetchTask(id: number): Promise<Task> {
 
   logger.info(CONTEXT, `タスク取得成功: id=${id}`);
   return (await response.json()) as Task;
+}
+
+/**
+ * カテゴリ一覧を取得する
+ */
+export async function fetchCategories(): Promise<string[]> {
+  logger.info(CONTEXT, 'カテゴリ一覧取得リクエスト送信');
+
+  const response = await fetch(`${API_BASE}/tasks/categories`, {
+    method: 'GET',
+    headers: authHeaders(),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = (data as { message?: string }).message || 'カテゴリの取得に失敗しました。';
+    logger.warn(CONTEXT, `カテゴリ一覧取得失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, 'カテゴリ一覧取得成功');
+  return (await response.json()) as string[];
 }
 
 /**

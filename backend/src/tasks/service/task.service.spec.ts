@@ -14,9 +14,14 @@ const mockTask = {
   title: 'テストタスク',
   description: 'テスト説明',
   due_date: new Date('2026-12-31T23:59:59.000Z'),
+  priority: 'MEDIUM',
+  category: null,
+  parent_id: null,
+  created_by: 'testuser',
   created_at: new Date('2026-01-01T00:00:00.000Z'),
   updated_at: new Date('2026-01-01T00:00:00.000Z'),
   assignees: [{ task_id: 1, username: 'testuser' }],
+  children: [],
 };
 
 const mockTaskRepository = {
@@ -25,6 +30,7 @@ const mockTaskRepository = {
   create: jest.fn(),
   update: jest.fn(),
   delete: jest.fn(),
+  findAllCategories: jest.fn(),
 };
 
 const mockLoggerService = {
@@ -99,6 +105,7 @@ describe('TaskService', () => {
         description: 'テスト説明',
         due_date: '2026-12-31T23:59:59.000Z',
         assignees: ['testuser'],
+        created_by: 'testuser',
       };
 
       const result = await service.create(dto);
@@ -108,6 +115,10 @@ describe('TaskService', () => {
         title: dto.title,
         description: dto.description,
         due_date: new Date(dto.due_date),
+        priority: 'MEDIUM',
+        category: null,
+        parent_id: null,
+        created_by: dto.created_by,
         assignees: ['testuser'],
       });
     });
@@ -120,6 +131,7 @@ describe('TaskService', () => {
         description: 'テスト説明',
         due_date: '2026-12-31T23:59:59.000Z',
         assignees: [],
+        created_by: 'testuser',
       };
 
       await expect(service.create(dto)).rejects.toThrow(

@@ -3,12 +3,21 @@ import {
   NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { TaskRepository } from '../repository/task.repository';
-import { CreateTaskDto, UpdateTaskDto, TaskResponseDto } from '../dto/task.dto';
+import { TaskRepository, TaskWithRelations } from '../repository/task.repository';
+import {
+  CreateTaskDto,
+  UpdateTaskDto,
+  TaskResponseDto,
+  Priority,
+  PRIORITY_VALUES,
+} from '../dto/task.dto';
 import { MESSAGE } from 'src/common/type/message';
 import { LoggerService } from 'src/common/service/logger.service';
 
 const CONTEXT = 'TaskService';
+
+/** デフォルト優先度 */
+const DEFAULT_PRIORITY: Priority = 'MEDIUM';
 
 @Injectable()
 export class TaskService {
@@ -45,10 +54,15 @@ export class TaskService {
   async create(dto: CreateTaskDto): Promise<TaskResponseDto> {
     this.logger.log(CONTEXT, `タスク作成開始: ${dto.title}`);
     try {
+      const priority = this.normalizePriority(dto.priority);
       const task = await this.taskRepository.create({
         title: dto.title,
         description: dto.description,
         due_date: new Date(dto.due_date),
+        priority,
+        category: dto.category ?? null,
+        parent_id: dto.parent_id ?? null,
+        created_by: dto.created_by,
         assignees: dto.assignees ?? [],
       });
       this.logger.log(CONTEXT, `タスク作成完了: id=${task.id}`);
@@ -76,6 +90,9 @@ export class TaskService {
         title: dto.title,
         description: dto.description,
         due_date: dto.due_date ? new Date(dto.due_date) : undefined,
+        priority: dto.priority,
+        category: dto.category,
+        parent_id: dto.parent_id,
         assignees: dto.assignees,
       });
       this.logger.log(CONTEXT, `タスク更新完了: id=${id}`);
@@ -108,19 +125,58 @@ export class TaskService {
   }
 
   /**
-   * TaskWithAssignees を TaskResponseDto に変換する
+   * 使用中のカテゴリ一覧を取得する
    */
-  private toResponseDto(
-    task: Awaited<ReturnType<TaskRepository['findById']>> & object,
-  ): TaskResponseDto {
+  async findAllCategories(): Promise<string[]> {
+    this.logger.log(CONTEXT, 'カテゴリ一覧取得開始');
+    try {
+      return await this.taskRepository.findAllCategories();
+    } catch (error) {
+      this.logger.error(CONTEXT, `カテゴリ一覧取得失敗: ${String(error)}`);
+      throw new InternalServerErrorException(MESSAGE.TASK.CATEGORIES_FETCH_FAILED);
+    }
+  }
+
+  /**
+   * 優先度文字列をPriority型に正規化する。無効な値はデフォルト値を返す
+   */
+  private normalizePriority(priority?: Priority): Priority {
+    if (priority && PRIORITY_VALUES.includes(priority)) {
+      return priority;
+    }
+    return DEFAULT_PRIORITY;
+  }
+
+  /**
+   * TaskWithRelations を TaskResponseDto に変換する
+   */
+  private toResponseDto(task: TaskWithRelations): TaskResponseDto {
     return {
       id: task.id,
       title: task.title,
       description: task.description,
       due_date: task.due_date.toISOString(),
+      priority: this.normalizePriority(task.priority as Priority),
+      category: task.category,
+      parent_id: task.parent_id,
+      created_by: task.created_by,
       created_at: task.created_at.toISOString(),
       updated_at: task.updated_at.toISOString(),
       assignees: task.assignees.map((a) => a.username),
+      children: task.children.map((child) => ({
+        id: child.id,
+        title: child.title,
+        description: child.description,
+        due_date: child.due_date.toISOString(),
+        priority: this.normalizePriority(child.priority as Priority),
+        category: child.category,
+        parent_id: child.parent_id,
+        created_by: child.created_by,
+        created_at: child.created_at.toISOString(),
+        updated_at: child.updated_at.toISOString(),
+        assignees: child.assignees.map((a) => a.username),
+        children: [],
+      })),
     };
   }
 }

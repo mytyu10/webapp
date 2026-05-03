@@ -22,5 +22,6 @@ export const MESSAGE = {
     CREATE_FAILED: 'タスクの作成に失敗しました',
     UPDATE_FAILED: 'タスクの更新に失敗しました',
     DELETE_FAILED: 'タスクの削除に失敗しました',
+    CATEGORIES_FETCH_FAILED: 'カテゴリ一覧の取得に失敗しました',
   },
 };

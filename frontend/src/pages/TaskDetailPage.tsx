@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchTask, Task } from '../api/taskApi';
+import { fetchTask, getCurrentUsername, Task, PRIORITY_LABELS, PRIORITY_BADGE_CLASSES } from '../api/taskApi';
 import FormErrorBanner from '../components/FormErrorBanner';
 import { logger } from '../logger';
 
@@ -8,7 +8,8 @@ const CONTEXT = 'TaskDetailPage';
 
 /**
  * タスク詳細ページ
- * 指定IDのタスク詳細を表示する
+ * 指定IDのタスク詳細・子タスク一覧を表示する
+ * タスク作成者のみ編集ボタンを表示する
  */
 function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +17,8 @@ function TaskDetailPage() {
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const currentUsername = getCurrentUsername();
 
   useEffect(() => {
     if (!id) return;
@@ -40,6 +43,8 @@ function TaskDetailPage() {
 
     void loadTask();
   }, [id]);
+
+  const isOwner = currentUsername !== null && task !== null && task.created_by === currentUsername;
 
   return (
     <div className="max-w-xl mx-auto">
@@ -68,6 +73,26 @@ function TaskDetailPage() {
           <div>
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">説明文</p>
             <p className="text-sm text-slate-200 whitespace-pre-wrap">{task.description}</p>
+          </div>
+
+          <div className="flex gap-4 flex-wrap">
+            <div>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">優先度</p>
+              <span
+                className={`inline-block px-2.5 py-1 text-xs font-medium rounded-full ${PRIORITY_BADGE_CLASSES[task.priority]}`}
+              >
+                {PRIORITY_LABELS[task.priority]}
+              </span>
+            </div>
+
+            {task.category && (
+              <div>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">カテゴリ</p>
+                <span className="inline-block px-2.5 py-1 text-xs font-medium rounded-full bg-slate-600 text-slate-300">
+                  {task.category}
+                </span>
+              </div>
+            )}
           </div>
 
           <div>
@@ -102,6 +127,11 @@ function TaskDetailPage() {
           </div>
 
           <div>
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">作成者</p>
+            <p className="text-sm text-slate-200">{task.created_by}</p>
+          </div>
+
+          <div>
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">作成日時</p>
             <p className="text-sm text-slate-400">
               {new Date(task.created_at).toLocaleString('ja-JP', {
@@ -114,13 +144,53 @@ function TaskDetailPage() {
             </p>
           </div>
 
-          <div className="pt-2 flex gap-3">
+          {task.children.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">子タスク</p>
+              <div className="space-y-2">
+                {task.children.map((child) => (
+                  <button
+                    key={child.id}
+                    type="button"
+                    onClick={() => navigate(`/tasks/${child.id}`)}
+                    className="w-full text-left px-3 py-2.5 bg-slate-600 hover:bg-slate-500 border border-slate-500 rounded-md transition-colors"
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-slate-100 truncate">{child.title}</span>
+                      <span
+                        className={`shrink-0 px-2 py-0.5 text-xs font-medium rounded-full ${PRIORITY_BADGE_CLASSES[child.priority]}`}
+                      >
+                        {PRIORITY_LABELS[child.priority]}
+                      </span>
+                      {child.category && (
+                        <span className="shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-slate-500 text-slate-300">
+                          {child.category}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-xs text-slate-400 line-clamp-1">{child.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="pt-2 flex gap-3 flex-wrap">
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() => navigate(`/tasks/${task.id}/edit`)}
+                className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold rounded-md transition-colors"
+              >
+                編集する
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => navigate(`/tasks/${task.id}/edit`)}
-              className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold rounded-md transition-colors"
+              onClick={() => navigate(`/tasks/new?parent_id=${task.id}`)}
+              className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white text-sm font-semibold rounded-md transition-colors"
             >
-              編集する
+              子タスクを作成
             </button>
           </div>
         </div>

@@ -34,6 +34,16 @@ export class TaskController {
   ) {}
 
   /**
+   * カテゴリ一覧取得エンドポイント（`/tasks/:id` より先に定義して衝突を防ぐ）
+   */
+  @Get('categories')
+  async getCategories(@Res() response: Response): Promise<Response> {
+    this.logger.log(CONTEXT, 'カテゴリ一覧取得リクエスト');
+    const categories = await this.taskService.findAllCategories();
+    return response.status(HttpStatus.OK).json(categories);
+  }
+
+  /**
    * タスク一覧取得エンドポイント
    */
   @Get()

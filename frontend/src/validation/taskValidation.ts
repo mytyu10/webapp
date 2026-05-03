@@ -1,9 +1,13 @@
+import { Priority, PRIORITY_VALUES } from '../api/taskApi';
+
 /** タスクフォームのエラー型 */
 export interface TaskFormErrors {
   title?: string;
   description?: string;
   due_date?: string;
   assignees?: string;
+  priority?: string;
+  category?: string;
 }
 
 /** タスクフォームの入力値型 */
@@ -12,6 +16,8 @@ export interface TaskFormValues {
   description: string;
   due_date: string;
   assigneesText: string;
+  priority: Priority;
+  category: string;
 }
 
 /** タイトルの最大文字数 */
@@ -22,6 +28,9 @@ const DESCRIPTION_MAX_LENGTH = 1000;
 
 /** 担当者の最大人数 */
 const ASSIGNEES_MAX_COUNT = 50;
+
+/** カテゴリの最大文字数 */
+const CATEGORY_MAX_LENGTH = 100;
 
 /**
  * タスクフォームのバリデーションを行う純粋関数
@@ -59,6 +68,14 @@ export function validateTaskForm(values: TaskFormValues): TaskFormErrors {
     if (assignees.length > ASSIGNEES_MAX_COUNT) {
       errors.assignees = `担当者は${ASSIGNEES_MAX_COUNT}人以内で設定してください`;
     }
+  }
+
+  if (!PRIORITY_VALUES.includes(values.priority)) {
+    errors.priority = '優先度はHIGH・MEDIUM・LOWのいずれかを選択してください';
+  }
+
+  if (values.category.length > CATEGORY_MAX_LENGTH) {
+    errors.category = `カテゴリは${CATEGORY_MAX_LENGTH}文字以内で入力してください`;
   }
 
   return errors;
