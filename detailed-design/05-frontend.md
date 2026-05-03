@@ -107,6 +107,7 @@ RegistPage
 **責務**: タスク一覧の表示・削除確認・ナビゲーション。ロジックは `useTaskList` に委譲。
 
 タスクは親子の階層構造で表示し、未完了セクション・完了済みセクションに分けて表示する。
+ルートタスク（depth === 0）かつ子タスクを持つ場合、左端のトグルボタンで子タスク一覧の表示/非表示を切り替えられる。
 
 ```
 TaskListPage
@@ -116,13 +117,16 @@ TaskListPage
 ├── FormErrorBanner（API/削除/完了切り替えエラー）
 ├── 読み込み中テキスト
 ├── タスクなしメッセージ
-├── 未完了タスクセクション（incompleteTrees）
+├── 未完了タスクセクション（incompleteTrees を isNodeHidden でフィルター済み）
 │   └── 階層ツリー表示（DEPTH_INDENT_CLASSES による depth ごとのインデント）
-│       └── 各タスクカード
-│           ├── タイトル（完了時: 打ち消し線 + 薄表示）・優先度バッジ・カテゴリバッジ
-│           ├── 説明文・期限・担当者
-│           └── 完了切り替えボタン・詳細ボタン・編集ボタン（作成者のみ）・削除ボタン（作成者のみ）
-└── 完了済みタスクセクション（completedTrees）
+│       └── 各タスクカード（renderTaskCard）
+│           ├── [depth === 0 かつ children あり] トグルボタン（展開時 rotate-90） + カード
+│           ├── [depth === 0 かつ children なし] 同幅スペーサー + カード
+│           ├── [depth > 0] インデント・「└」アイコン付きカード（既存構造を維持）
+│           │   ├── タイトル（完了時: 打ち消し線 + 薄表示）・優先度バッジ・カテゴリバッジ
+│           │   ├── 説明文・期限・担当者
+│           │   └── 完了切り替えボタン・詳細ボタン・編集ボタン（作成者のみ）・削除ボタン（作成者のみ）
+└── 完了済みタスクセクション（completedTrees を isNodeHidden でフィルター済み）
     ├── 折りたたみトグル（"完了済みタスク (N件)"）
     └── 折りたたみ展開時: 階層ツリー表示（同上）
 ```
@@ -138,6 +142,15 @@ const DEPTH_INDENT_CLASSES: Record<number, string> = {
 ```
 
 depth 0 がルートタスク、depth 1 以降が子・孫タスクに対応する。
+`DEPTH_INDENT_CLASSES` に存在しない depth には `DEPTH_INDENT_FALLBACK_CLASS`（`'pl-14'`）を使用する。
+
+**子タスクトグル関連定数**
+
+| 定数 | 値 | 説明 |
+|------|-----|------|
+| `TOGGLE_BUTTON_WIDTH_CLASS` | `'w-6'` | トグルボタン・スペーサーの幅クラス |
+| `MAX_TREE_DEPTH` | `10` | ツリーノードの最大階層深さ（再帰打ち切り用） |
+| `DEPTH_INDENT_FALLBACK_CLASS` | `'pl-14'` | `DEPTH_INDENT_CLASSES` に存在しない depth のフォールバック |
 
 **タスクカード状態別スタイル定数**
 
@@ -157,6 +170,35 @@ depth 0 がルートタスク、depth 1 以降が子・孫タスクに対応す�
 const PARTIAL_COMPLETE_BADGE_CLASSES =
   'shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-800 text-yellow-200';
 ```
+
+**`isNodeHidden` 関数（コンポーネント外の純粋関数）**
+
+```typescript
+function isNodeHidden(
+  node: TaskTreeNode,
+  allNodes: TaskTreeNode[],
+  collapsed: Set<number>,
+  recursionDepth: number = 0,
+): boolean
+```
+
+指定ノードが折りたたみ状態により非表示となるかを判定する。
+
+- `node.depth === 0` または `recursionDepth >= MAX_TREE_DEPTH` の場合は `false`（常に表示）
+- `node.parent_id` が `collapsed` セットに含まれる場合は `true`（直接の親が折りたたまれている）
+- それ以外の場合、祖先ノードを再帰的にたどって判定する（循環防止のため `recursionDepth` をインクリメント）
+
+**ローカルステート**
+
+| ステート | 型 | 初期値 | 説明 |
+|---------|-----|--------|------|
+| `collapsedParentIds` | `Set<number>` | `new Set()` | 折りたたみ中の親タスク ID セット（空 = 全展開） |
+
+**ローカル関数**
+
+| 関数 | 説明 |
+|------|------|
+| `toggleCollapse(parentId: number)` | 指定 ID を `collapsedParentIds` に追加/削除して子タスクの表示/非表示を切り替える |
 
 ### TaskFormPage
 
