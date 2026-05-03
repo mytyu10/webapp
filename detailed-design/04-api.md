@@ -135,7 +135,7 @@ HTTP 400
 
 ### GET /tasks ※要認証
 
-タスク一覧を取得する。
+タスク一覧を取得する。子タスク（`parent_id` が NULL でないタスク）は一覧に含まれない。
 
 **リクエストヘッダー**
 
@@ -147,8 +147,10 @@ Authorization: Bearer <JWT>
 
 | ステータス | 条件 | レスポンスボディ |
 |-----------|------|----------------|
-| 200 | 取得成功 | `TaskResponseDto[]` |
+| 200 | 取得成功 | `TaskResponseDto[]`（`parent_id: null` のタスクのみ、`due_date` 昇順） |
 | 401 | 認証エラー | `{ "message": "認証が必要です" }` |
+
+各タスクの `children` フィールドに子タスク一覧が含まれる（担当者情報込み）。
 
 ---
 
@@ -189,7 +191,11 @@ Authorization: Bearer <JWT>
   "title": "string",        // 必須、最大200文字
   "description": "string",  // 必須、最大1000文字
   "due_date": "string",     // 必須、ISO8601形式
-  "assignees": ["string"]   // 任意、ユーザー名リスト（最大50人）
+  "assignees": ["string"],  // 任意、ユーザー名リスト（最大50人）
+  "priority": "string",     // 任意、HIGH/MEDIUM/LOW（デフォルト: MEDIUM）
+  "category": "string",     // 任意、最大100文字
+  "parent_id": 0,           // 任意、親タスクID（子タスク作成時に指定）
+  "created_by": "string"    // 必須、作成者ユーザー名
 }
 ```
 
@@ -221,7 +227,11 @@ Authorization: Bearer <JWT>
   "title": "string",
   "description": "string",
   "due_date": "string",
-  "assignees": ["string"]
+  "assignees": ["string"],
+  "priority": "string",     // HIGH/MEDIUM/LOW
+  "category": "string",
+  "parent_id": 0,
+  "is_completed": false     // 完了状態の切り替えに使用
 }
 ```
 
@@ -299,13 +309,38 @@ class CreateTaskDto {
   @IsString({ each: true })
   @ArrayMaxSize(50)
   @IsOptional()
-  assignees: string[];
+  assignees?: string[];
+
+  @IsIn(['HIGH', 'MEDIUM', 'LOW'])
+  @IsOptional()
+  priority?: Priority;
+
+  @IsString()
+  @MaxLength(100)
+  @IsOptional()
+  category?: string;
+
+  @IsInt()
+  @IsPositive()
+  @IsOptional()
+  parent_id?: number;
+
+  @IsString()
+  @IsNotEmpty()
+  created_by: string;
 }
 ```
 
 ### UpdateTaskDto
 
-`CreateTaskDto` の全フィールドが `@IsOptional()` になったDTO。
+`CreateTaskDto` の全フィールドが `@IsOptional()` になったDTOに、以下を追加:
+
+```typescript
+/** 完了状態（true: 完了 / false: 未完了） */
+@IsBoolean()
+@IsOptional()
+is_completed?: boolean;
+```
 
 ### TaskResponseDto
 
@@ -314,10 +349,16 @@ interface TaskResponseDto {
   id: number;
   title: string;
   description: string;
-  due_date: string;     // ISO8601形式
-  created_at: string;   // ISO8601形式
-  updated_at: string;   // ISO8601形式
-  assignees: string[];  // ユーザー名リスト
+  due_date: string;          // ISO8601形式
+  priority: Priority;        // HIGH / MEDIUM / LOW
+  category: string | null;
+  parent_id: number | null;
+  created_by: string;
+  created_at: string;        // ISO8601形式
+  updated_at: string;        // ISO8601形式
+  is_completed: boolean;
+  assignees: string[];       // ユーザー名リスト
+  children: TaskResponseDto[]; // 子タスク一覧（再帰構造）
 }
 ```
 

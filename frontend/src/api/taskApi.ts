@@ -36,6 +36,7 @@ export interface Task {
   created_by: string;
   created_at: string;
   updated_at: string;
+  is_completed: boolean;
   assignees: string[];
   children: Task[];
 }
@@ -50,6 +51,7 @@ export interface TaskInput {
   category?: string;
   parent_id?: number;
   created_by?: string;
+  is_completed?: boolean;
 }
 
 /** JWTペイロードの型（usernameフィールドのみ使用） */
@@ -175,7 +177,7 @@ export async function createTask(input: TaskInput): Promise<Task> {
   }
 
   logger.info(CONTEXT, 'タスク作成成功');
-  const data = await response.json() as { task: Task };
+  const data = await response.json() as { message: string; task: Task };
   return data.task;
 }
 
@@ -199,8 +201,17 @@ export async function updateTask(id: number, input: Partial<TaskInput>): Promise
   }
 
   logger.info(CONTEXT, `タスク更新成功: id=${id}`);
-  const data = await response.json() as { task: Task };
+  const data = await response.json() as { message: string; task: Task };
   return data.task;
+}
+
+/**
+ * タスクの完了状態を切り替える
+ * updateTaskのラッパー関数
+ */
+export async function toggleTaskCompletion(id: number, is_completed: boolean): Promise<Task> {
+  logger.info(CONTEXT, `タスク完了状態切り替え: id=${id}, is_completed=${String(is_completed)}`);
+  return updateTask(id, { is_completed });
 }
 
 /**

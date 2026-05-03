@@ -54,8 +54,8 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/accounts/dto/` — validation DTOs (class-validator)
 - `src/tasks/controller/` — REST endpoints (`GET /tasks`, `GET /tasks/categories`, `GET /tasks/:id`, `POST /tasks`, `PATCH /tasks/:id`, `DELETE /tasks/:id`) — JwtAuthGuard適用済み
 - `src/tasks/service/` — タスクのビジネスロジック
-- `src/tasks/repository/` — Prisma CRUD・カテゴリ取得
-- `src/tasks/dto/task.dto.ts` — CreateTaskDto / UpdateTaskDto / TaskResponseDto / Priority型
+- `src/tasks/repository/` — Prisma CRUD・カテゴリ取得（is_completed フィールド対応）
+- `src/tasks/dto/task.dto.ts` — CreateTaskDto / UpdateTaskDto（is_completed含む） / TaskResponseDto（is_completed含む） / Priority型
 - `src/jwt/jwt.service.ts` — JWT creation (1h expiry, secret from `JWT_SECRET` env)
 - `src/jwt/jwt-auth.guard.ts` — JwtAuthGuard（Bearerトークン検証）
 - `src/prisma/prisma.service.ts` — Prisma client singleton
@@ -77,11 +77,12 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/components/Sidebar.tsx` — サイドバーコンポーネント（タスク管理リンク・ログアウト）
 - `src/components/SidebarLayout.tsx` — サイドバー付きレイアウト（Outlet使用）
 - `src/pages/LoginPage.tsx` — login form, posts to backend `/accounts/login`, stores JWT in `localStorage`
-- `src/pages/TaskListPage.tsx` — タスク一覧・カテゴリフィルター・削除確認モーダル。作成者のみ編集/削除表示
+- `src/pages/TaskListPage.tsx` — タスク一覧・階層表示・カテゴリフィルター・削除確認モーダル・完了セクション折りたたみ。作成者のみ編集/削除表示
 - `src/pages/TaskFormPage.tsx` — タスク作成・編集・子タスク作成（URLクエリ`parent_id`で切り替え）
-- `src/pages/TaskDetailPage.tsx` — タスク詳細・子タスク一覧・子タスク作成ボタン。作成者のみ編集ボタン表示
-- `src/api/taskApi.ts` — タスクAPI通信（`fetchTasks`, `fetchTask`, `fetchCategories`, `createTask`, `updateTask`, `deleteTask`, `getCurrentUsername`）
-- `src/hooks/useTaskList.ts` — タスク一覧・削除・カテゴリフィルタリングフック
+- `src/pages/TaskDetailPage.tsx` — タスク詳細・完了/未完了ボタン・完了スタイル（緑枠・バナー・取り消し線）・子タスク一覧・子タスク作成ボタン。作成者のみ編集ボタン表示
+- `src/api/taskApi.ts` — タスクAPI通信（`fetchTasks`, `fetchTask`, `fetchCategories`, `createTask`, `updateTask`, `toggleTaskCompletion`, `deleteTask`, `getCurrentUsername`）
+- `src/hooks/useTaskList.ts` — タスク一覧・削除・カテゴリフィルタリング・階層ツリー構築（incompleteTrees/completedTrees）フック
+- `src/hooks/useTaskDetail.ts` — タスク詳細取得・完了切り替えフック
 - `src/hooks/useTaskForm.ts` — タスクフォーム（作成/編集/子タスク作成モード対応）フック
 - `src/validation/taskValidation.ts` — タスクフォームバリデーション（priority/category含む）
 - `src/components/ConfirmModal.tsx` — 削除確認モーダル
@@ -109,20 +110,21 @@ model Account {
 }
 
 model Task {
-  id          Int            @id @default(autoincrement())
-  title       String
-  description String
-  due_date    DateTime
-  priority    String         @default("MEDIUM")  // HIGH / MEDIUM / LOW
-  category    String?
-  parent_id   Int?
-  created_by  String
-  created_at  DateTime       @default(now())
-  updated_at  DateTime       @updatedAt
-  assignees   TaskAssignee[]
-  creator     Account        @relation("TaskCreator", fields: [created_by], references: [username])
-  parent      Task?          @relation("TaskChildren", fields: [parent_id], references: [id])
-  children    Task[]         @relation("TaskChildren")
+  id           Int            @id @default(autoincrement())
+  title        String
+  description  String
+  due_date     DateTime
+  priority     String         @default("MEDIUM")  // HIGH / MEDIUM / LOW
+  category     String?
+  parent_id    Int?
+  created_by   String
+  created_at   DateTime       @default(now())
+  updated_at   DateTime       @updatedAt
+  is_completed Boolean        @default(false)
+  assignees    TaskAssignee[]
+  creator      Account        @relation("TaskCreator", fields: [created_by], references: [username])
+  parent       Task?          @relation("TaskChildren", fields: [parent_id], references: [id])
+  children     Task[]         @relation("TaskChildren")
 }
 
 model TaskAssignee {

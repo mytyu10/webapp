@@ -20,6 +20,7 @@ const mockTask = {
   created_by: 'testuser',
   created_at: new Date('2026-01-01T00:00:00.000Z'),
   updated_at: new Date('2026-01-01T00:00:00.000Z'),
+  is_completed: false,
   assignees: [{ task_id: 1, username: 'testuser' }],
   children: [],
 };
@@ -74,6 +75,24 @@ describe('TaskService', () => {
 
       expect(result).toHaveLength(0);
     });
+
+    it('findAll の戻り値に is_completed が含まれる', async () => {
+      mockTaskRepository.findAll.mockResolvedValue([mockTask]);
+
+      const result = await service.findAll();
+
+      expect(result[0]).toHaveProperty('is_completed');
+      expect(result[0].is_completed).toBe(false);
+    });
+
+    it('is_completed が true のタスクを返す場合、戻り値の is_completed が true になる', async () => {
+      const completedTask = { ...mockTask, is_completed: true };
+      mockTaskRepository.findAll.mockResolvedValue([completedTask]);
+
+      const result = await service.findAll();
+
+      expect(result[0].is_completed).toBe(true);
+    });
   });
 
   describe('findById', () => {
@@ -93,6 +112,15 @@ describe('TaskService', () => {
       await expect(service.findById(999)).rejects.toThrow(
         MESSAGE.TASK.NOT_FOUND,
       );
+    });
+
+    it('findById の戻り値に is_completed が含まれる', async () => {
+      mockTaskRepository.findById.mockResolvedValue(mockTask);
+
+      const result = await service.findById(1);
+
+      expect(result).toHaveProperty('is_completed');
+      expect(result.is_completed).toBe(false);
     });
   });
 
@@ -166,6 +194,46 @@ describe('TaskService', () => {
 
       await expect(service.update(1, { title: '更新' })).rejects.toThrow(
         InternalServerErrorException,
+      );
+    });
+
+    it('is_completed: true を渡すと Repository の update が is_completed: true で呼ばれる', async () => {
+      mockTaskRepository.findById.mockResolvedValue(mockTask);
+      const completedTask = { ...mockTask, is_completed: true, assignees: [] };
+      mockTaskRepository.update.mockResolvedValue(completedTask);
+
+      await service.update(1, { is_completed: true });
+
+      expect(mockTaskRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ is_completed: true }),
+      );
+    });
+
+    it('is_completed: false を渡すと Repository の update が is_completed: false で呼ばれる', async () => {
+      mockTaskRepository.findById.mockResolvedValue(mockTask);
+      const uncompletedTask = { ...mockTask, is_completed: false, assignees: [] };
+      mockTaskRepository.update.mockResolvedValue(uncompletedTask);
+
+      await service.update(1, { is_completed: false });
+
+      expect(mockTaskRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ is_completed: false }),
+      );
+    });
+
+    it('is_completed を渡さない場合も正常に更新が実行される', async () => {
+      mockTaskRepository.findById.mockResolvedValue(mockTask);
+      const updatedTask = { ...mockTask, title: 'タイトル変更', assignees: [] };
+      mockTaskRepository.update.mockResolvedValue(updatedTask);
+
+      const result = await service.update(1, { title: 'タイトル変更' });
+
+      expect(result.title).toBe('タイトル変更');
+      expect(mockTaskRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ title: 'タイトル変更' }),
       );
     });
   });

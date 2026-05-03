@@ -106,17 +106,96 @@ RegistPage
 
 **責務**: タスク一覧の表示・削除確認・ナビゲーション。ロジックは `useTaskList` に委譲。
 
+タスクは親子の階層構造で表示し、未完了セクション・完了済みセクションに分けて表示する。
+ルートタスク（depth === 0）かつ子タスクを持つ場合、左端のトグルボタンで子タスク一覧の表示/非表示を切り替えられる。
+
 ```
 TaskListPage
-├── ヘッダー（タイトル + "タスクを作成"ボタン）
-├── FormErrorBanner（API/削除エラー）
+├── ConfirmModal（削除確認モーダル）
+├── ヘッダー（タイトル + ActionButton "タスクを作成"）
+├── CategoryFilterBar（"すべて" + 各カテゴリのピルボタン）
+├── FormErrorBanner（API/削除/完了切り替えエラー）
 ├── 読み込み中テキスト
 ├── タスクなしメッセージ
-└── タスクカード一覧
-    └── 各カード
-        ├── タイトル・説明・期限・担当者
-        └── 詳細・編集・削除ボタン
+├── 未完了タスクセクション（incompleteTrees を isNodeHidden でフィルター済み）
+│   └── 階層ツリー表示（DEPTH_INDENT_CLASSES による depth ごとのインデント）
+│       └── 各タスクカード（renderTaskCard → TaskCard）
+│           ├── [depth === 0 かつ children あり] カード内左端にトグルボタン（展開時 rotate-90）
+│           ├── [depth === 0 かつ children なし] カード内左端に同幅スペーサー
+│           └── [depth > 0] インデント・「└」アイコン付き（既存構造を維持）
+└── 完了済みタスクセクション（completedTrees を isNodeHidden でフィルター済み）
+    ├── SectionToggleButton（"完了済み (N件)"、折りたたみ可）
+    └── 折りたたみ展開時: 階層ツリー表示（同上）
 ```
+
+**インデントクラス定数 `DEPTH_INDENT_CLASSES`**
+
+```typescript
+const DEPTH_INDENT_CLASSES: Record<number, string> = {
+  0: 'pl-0',
+  1: 'pl-5',
+  2: 'pl-10',
+};
+```
+
+depth 0 がルートタスク、depth 1 以降が子・孫タスクに対応する。
+`DEPTH_INDENT_CLASSES` に存在しない depth には `DEPTH_INDENT_FALLBACK_CLASS`（`'pl-14'`）を使用する。
+
+**子タスクトグル関連定数**
+
+| 定数 | 値 | 定義場所 | 説明 |
+|------|-----|---------|------|
+| `TOGGLE_BUTTON_WIDTH_CLASS` | `'w-6'` | `TaskCard.tsx` | トグルボタン・スペーサーの幅クラス |
+| `MAX_TREE_DEPTH` | `10` | `TaskListPage.tsx` | ツリーノードの最大階層深さ（再帰打ち切り用） |
+| `DEPTH_INDENT_FALLBACK_CLASS` | `'pl-14'` | `TaskListPage.tsx` | `DEPTH_INDENT_CLASSES` に存在しない depth のフォールバック |
+
+**タスクカード状態別スタイル定数**（`TaskCard.tsx` に定義）
+
+| 定数 | Tailwindクラス | 適用条件 |
+|------|--------------|---------|
+| `CARD_COMPLETED_CLASSES` | `border-green-800 opacity-75` | `node.is_completed === true` |
+| `CARD_PARTIAL_CLASSES` | `border-yellow-700 bg-yellow-950` | `node.hasPartiallyCompletedChildren === true`（自身は未完了） |
+| `CARD_DEFAULT_CLASSES` | `border-slate-600` | 上記以外 |
+
+`CARD_COMPLETED_CLASSES` → `CARD_PARTIAL_CLASSES` → `CARD_DEFAULT_CLASSES` の優先順で適用する。
+
+**「一部完了」バッジ**（`TaskCard.tsx` に定義）
+
+`node.hasPartiallyCompletedChildren` が `true` の場合、タイトル行に「一部完了」バッジを表示する。
+
+```typescript
+const PARTIAL_COMPLETE_BADGE_CLASSES =
+  'shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-800 text-yellow-200';
+```
+
+**`isNodeHidden` 関数（コンポーネント外の純粋関数）**
+
+```typescript
+function isNodeHidden(
+  node: TaskTreeNode,
+  allNodes: TaskTreeNode[],
+  collapsed: Set<number>,
+  recursionDepth: number = 0,
+): boolean
+```
+
+指定ノードが折りたたみ状態により非表示となるかを判定する。
+
+- `node.depth === 0` または `recursionDepth >= MAX_TREE_DEPTH` の場合は `false`（常に表示）
+- `node.parent_id` が `collapsed` セットに含まれる場合は `true`（直接の親が折りたたまれている）
+- それ以外の場合、祖先ノードを再帰的にたどって判定する（循環防止のため `recursionDepth` をインクリメント）
+
+**ローカルステート**
+
+| ステート | 型 | 初期値 | 説明 |
+|---------|-----|--------|------|
+| `collapsedParentIds` | `Set<number>` | `new Set()` | 折りたたみ中の親タスク ID セット（空 = 全展開） |
+
+**ローカル関数**
+
+| 関数 | 説明 |
+|------|------|
+| `toggleCollapse(parentId: number)` | 指定 ID を `collapsedParentIds` に追加/削除して子タスクの表示/非表示を切り替える |
 
 ### TaskFormPage
 
@@ -136,20 +215,27 @@ TaskFormPage
 
 ### TaskDetailPage
 
-**責務**: タスク詳細の表示。データ取得ロジックをコンポーネント内useEffectで管理。
+**責務**: タスク詳細の表示・完了状態の切り替え。ロジックは `useTaskDetail` に委譲。
 
 ```
 TaskDetailPage
-├── 一覧に戻るボタン
+├── ヘッダー（"← 一覧に戻る"ボタン + "タスク詳細"タイトル）
 ├── FormErrorBanner
 ├── 読み込み中テキスト
-└── 詳細カード
-    ├── タイトル
+└── 詳細カード（完了時: 緑枠 `border-green-500`）
+    ├── 完了済みバナー（完了時のみ: 緑背景 "このタスクは完了済みです"）
+    ├── "← 親タスクへ" リンク（parent_id がある場合のみ表示）
+    ├── タイトル（完了時: 打ち消し線）
     ├── 説明文
+    ├── 優先度バッジ・カテゴリバッジ
     ├── 期限
     ├── 担当者（タグ表示）
+    ├── 作成者
     ├── 作成日時
-    └── 編集するボタン
+    ├── 子タスク一覧（クリッカブルリンク、完了済みは打ち消し線 + 薄表示）
+    ├── 完了にする / 未完了に戻すボタン（完了状態に応じて切り替え）
+    ├── 編集するボタン（作成者のみ）
+    └── 子タスクを作成ボタン
 ```
 
 ---
@@ -192,35 +278,105 @@ TaskDetailPage
 
 | state | 型 | 説明 |
 |-------|-----|------|
-| `tasks` | `Task[]` | タスク一覧 |
+| `tasks` | `Task[]` | タスク一覧（全件） |
+| `incompleteTrees` | `TaskTreeNode[]` | 未完了タスクの階層ツリー（カテゴリフィルター済み） |
+| `completedTrees` | `TaskTreeNode[]` | 完了済みタスクの階層ツリー（カテゴリフィルター済み） |
+| `categories` | `string[]` | カテゴリ一覧 |
+| `selectedCategory` | `string` | 選択中カテゴリ（空文字 = 全件） |
 | `loading` | `boolean` | 読み込み中フラグ |
 | `error` | `string` | 取得エラーメッセージ |
+| `toggleCompleteError` | `string` | 完了切り替えエラーメッセージ（楽観的更新失敗時にセット） |
+
+> `deleteError` はフック外（`TaskListPage` のローカルstate）で管理する。
 
 | 関数 | 説明 |
 |------|------|
 | `handleDelete(id)` | タスクを削除しローカルstateを更新 |
+| `handleToggleComplete(id, is_completed)` | タスクの完了状態を楽観的UI更新で切り替える。ボタン押下直後にローカルステートを更新し、APIコール成功時はサーバーレスポンスで上書き、失敗時はスナップショットにロールバックする |
+| `setSelectedCategory(category)` | カテゴリフィルターを更新する |
 | `reload()` | 一覧を再読み込みするトリガーをインクリメント |
 
-### useTaskForm
+**TaskTreeNode 型**
 
-URLパラメータの `id` 有無で作成/編集モードを切り替える。
+```typescript
+interface TaskTreeNode extends Task {
+  /** 階層の深さ（ルートタスク: 0, 子タスク: 1, ...） */
+  depth: number;
+  /** 自身が未完了かつ直接の子タスク（孫以下は対象外）に1件以上完了があるかどうか */
+  hasPartiallyCompletedChildren: boolean;
+}
+```
+
+**buildTaskTrees 関数**
+
+ルートタスク（`parent_id: null`）を起点に、`children` リレーションを再帰的に展開して `TaskTreeNode[]` を構築する。
+各ノードの `hasPartiallyCompletedChildren` は、自身が未完了かつ直接の子（孫以下は対象外）に1件以上完了タスクがある場合に `true` となる。
+
+**ソートロジック（getEffectiveDueDate）**
+
+`incompleteTrees` / `completedTrees` の並び順は `getEffectiveDueDate` 関数で計算した有効期限の昇順。
+子タスクを持つ親タスクは、子タスクの中で最も早い `due_date` を有効期限として扱う。
+
+**フィルタリングロジック**
+
+`selectedCategory` が指定されている場合、自タスクまたはいずれかの子孫タスクがそのカテゴリを持つツリーのみを表示する。
+
+### useTaskDetail
+
+タスク詳細ページのデータ取得・完了状態切り替えを管理するフック。
 
 | state | 型 | 説明 |
 |-------|-----|------|
-| `values` | `TaskFormValues` | フォーム入力値（title, description, due_date, assigneesText） |
+| `task` | `Task \| null` | 取得したタスクデータ |
+| `loading` | `boolean` | データ取得中フラグ |
+| `error` | `string` | エラーメッセージ |
+| `toggleLoading` | `boolean` | 完了切り替え中フラグ |
+
+| 関数 | 説明 |
+|------|------|
+| `handleToggleComplete()` | 現在の `is_completed` を反転して `toggleTaskCompletion` を呼び出す。成功後に task state を更新 |
+
+**初期化フロー**
+
+```
+1. useEffect: fetchTask(id) でタスク取得 → task に格納
+2. エラー時: error にメッセージをセット
+```
+
+### useTaskForm
+
+`id`（編集対象タスクID）と `parentId`（子タスク作成時の親タスクID）で3モードを切り替える。
+
+| state | 型 | 説明 |
+|-------|-----|------|
+| `values` | `TaskFormValues` | フォーム入力値（title, description, due_date, assigneesText, priority, category） |
 | `errors` | `TaskFormErrors` | バリデーションエラー |
 | `apiError` | `string` | APIエラーメッセージ |
 | `loading` | `boolean` | 送信/読み込み中フラグ |
-| `isEditMode` | `boolean` | 編集モードフラグ |
+| `isEditMode` | `boolean` | 編集モードフラグ（`id` が指定された場合 `true`） |
+
+**動作モード**
+
+| モード | 条件 | 動作 |
+|--------|------|------|
+| 新規作成 | `id` も `parentId` も未指定 | 空フォームで作成し `/tasks` へ遷移 |
+| 子タスク作成 | `parentId` が指定された場合 | 親タスクの `category` を初期値に設定。作成後 `/tasks/:parentId` へ遷移 |
+| 編集 | `id` が指定された場合 | 既存タスクデータを取得してフォームに反映。更新後 `/tasks/:id` へ遷移 |
 
 **handleSubmit フロー**
 
 ```
 1. validateTaskForm(values) でバリデーション
-2. 成功: createTask or updateTask を呼び出し
-3. 完了: navigate('/tasks')
+2. 編集モード: updateTask(id, input) を呼び出し → navigate('/tasks/:id')
+3. 作成モード: getCurrentUsername() でユーザー名取得 → createTask(input) を呼び出し
+   - parentId あり: navigate('/tasks/:parentId')
+   - parentId なし: navigate('/tasks')
 4. 失敗: apiError にセット
 ```
+
+**子タスク作成時のカテゴリ引き継ぎ**
+
+`parentId` が指定された場合、マウント時に `fetchTask(parentId)` で親タスクを取得し、`parent.category` を `values.category` の初期値にセットする。
 
 ---
 
@@ -268,13 +424,44 @@ const BASE_URL = `${process.env.REACT_APP_API_SCHEME}://${process.env.REACT_APP_
 
 Authorizationヘッダー（`Bearer <token>`）を全リクエストに付与。
 
-| 関数 | メソッド | エンドポイント | 戻り値 |
-|------|---------|-------------|-------|
-| `fetchTasks()` | GET | `/tasks` | `Promise<Task[]>` |
-| `fetchTask(id)` | GET | `/tasks/:id` | `Promise<Task>` |
-| `createTask(input)` | POST | `/tasks` | `Promise<Task>` |
-| `updateTask(id, input)` | PATCH | `/tasks/:id` | `Promise<Task>` |
-| `deleteTask(id)` | DELETE | `/tasks/:id` | `Promise<void>` |
+| 関数 | メソッド | エンドポイント | 戻り値 | 説明 |
+|------|---------|-------------|-------|------|
+| `fetchTasks()` | GET | `/tasks` | `Promise<Task[]>` | ルートタスク一覧取得（期限昇順）。`children` リレーション込み |
+| `fetchTask(id)` | GET | `/tasks/:id` | `Promise<Task>` | 指定IDのタスク取得 |
+| `fetchCategories()` | GET | `/tasks/categories` | `Promise<string[]>` | カテゴリ一覧取得 |
+| `createTask(input)` | POST | `/tasks` | `Promise<Task>` | タスク作成 |
+| `updateTask(id, input)` | PATCH | `/tasks/:id` | `Promise<Task>` | タスク更新 |
+| `toggleTaskCompletion(id, is_completed)` | PATCH | `/tasks/:id` | `Promise<Task>` | `updateTask` のラッパー。完了状態のみ切り替え |
+| `deleteTask(id)` | DELETE | `/tasks/:id` | `Promise<void>` | タスク削除 |
+| `getCurrentUsername()` | - | - | `string \| null` | localStorage の JWT をデコードしてusernameを取得 |
+
+**Task インターフェース（フロントエンド型定義）**
+
+```typescript
+interface Task {
+  id: number;
+  title: string;
+  description: string;
+  due_date: string;
+  priority: Priority;        // HIGH / MEDIUM / LOW
+  category: string | null;
+  parent_id: number | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  is_completed: boolean;
+  assignees: string[];
+  children: Task[];
+}
+```
+
+**定数・ユーティリティ**
+
+| 定数 | 型 | 説明 |
+|------|-----|------|
+| `PRIORITY_VALUES` | `readonly ['HIGH', 'MEDIUM', 'LOW']` | 優先度の有効値 |
+| `PRIORITY_LABELS` | `Record<Priority, string>` | 優先度の日本語表示ラベル（高/中/低） |
+| `PRIORITY_BADGE_CLASSES` | `Record<Priority, string>` | 優先度バッジのTailwindクラス |
 
 ---
 
@@ -353,3 +540,59 @@ div.flex.min-h-screen
 └── main.flex-1
     └── <Outlet />
 ```
+
+### TaskCard
+
+タスク1件の表示と操作ボタンを提供するコンポーネント。`TaskListPage` から切り出し。
+
+| props | 型 | 必須 | 説明 |
+|-------|-----|------|------|
+| `node` | `TaskTreeNode` | ✅ | 表示対象のタスクツリーノード |
+| `isCollapsed` | `boolean` | ✅ | 子タスクが折りたたまれているか（depth=0 のみ使用） |
+| `onToggleCollapse` | `() => void` | ✅ | 子タスク表示/非表示の切り替えコールバック |
+| `onToggleComplete` | `(id: number, is_completed: boolean) => void` | ✅ | 完了状態切り替えコールバック |
+| `onNavigateDetail` | `(id: number) => void` | ✅ | 詳細ページへの遷移コールバック |
+| `onNavigateEdit` | `(id: number) => void` | ✅ | 編集ページへの遷移コールバック |
+| `onDeleteClick` | `(id: number) => void` | ✅ | 削除確認ダイアログを開くコールバック |
+| `isOwner` | `boolean` | ✅ | 現在のユーザーがタスクの作成者かどうか |
+
+**depth 別レンダリング:**
+- `depth === 0` かつ `children.length > 0`: カード内部の左端にトグルボタン（＞）を表示。展開中は `rotate-90`
+- `depth === 0` かつ `children.length === 0`: カード内部の左端に同幅スペーサーを表示
+- `depth > 0`: タイトル行の先頭に「└」アイコンを表示
+
+**アクションボタン（カード右端）:** 完了切り替え・詳細・編集（`isOwner` のみ）・削除（`isOwner` のみ）
+
+### ActionButton
+
+ナビゲーション・アクション用の汎用ボタンコンポーネント。スカイブルー塗りつぶしスタイル。
+
+| props | 型 | 必須 | 説明 |
+|-------|-----|------|------|
+| `label` | `string` | ✅ | ボタンに表示するラベル |
+| `onClick` | `() => void` | ✅ | クリック時のコールバック |
+
+### CategoryFilterBar
+
+カテゴリフィルターバーコンポーネント。「すべて」ボタンと各カテゴリのピルボタンを横並びで表示。
+
+| props | 型 | 必須 | 説明 |
+|-------|-----|------|------|
+| `categories` | `string[]` | ✅ | カテゴリ名の一覧 |
+| `selectedCategory` | `string` | ✅ | 現在選択中のカテゴリ（空文字は「すべて」） |
+| `onSelect` | `(category: string) => void` | ✅ | カテゴリ選択時のコールバック |
+
+選択中: `bg-sky-600 text-white`、非選択: `bg-slate-600 text-slate-300 hover:bg-slate-500`
+
+### SectionToggleButton
+
+セクション折りたたみボタンコンポーネント。
+
+| props | 型 | 必須 | 説明 |
+|-------|-----|------|------|
+| `label` | `string` | ✅ | セクション名（例: "完了済み"） |
+| `count` | `number` | ✅ | 表示する件数 |
+| `isOpen` | `boolean` | ✅ | セクションが展開中かどうか |
+| `onClick` | `() => void` | ✅ | クリック時のコールバック |
+
+展開中は `▾`、折りたたみ中は `▸` を表示。ラベルと件数を "ラベル (N件)" の形式で表示。

@@ -1,25 +1,112 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { fetchTasks, fetchCategories, deleteTask, Task } from '../api/taskApi';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { fetchTasks, fetchCategories, deleteTask, toggleTaskCompletion, Task } from '../api/taskApi';
 import { logger } from '../logger';
 
 const CONTEXT = 'useTaskList';
 
-/** useTaskListフックの戻り値型 */
+/** ツリー構造を持つタスク型（インデントレベルを付与） */
+export interface TaskTreeNode extends Task {
+  /** 階層の深さ（ルートタスク: 0, 子タスク: 1, ...） */
+  depth: number;
+  /** 自身が未完了かつ直接の子タスク（孫以下は対象外）に1件以上完了があるかどうか */
+  hasPartiallyCompletedChildren: boolean;
+}
+
+/**
+ * useTaskList フックの戻り値型
+ * タスク一覧・削除・完了切り替え・カテゴリフィルタリング・ツリー構築に必要な
+ * ステートとハンドラーをまとめて提供する
+ */
 interface UseTaskListReturn {
   tasks: Task[];
-  filteredTasks: Task[];
+  /** 未完了タスクのツリー展開済みフラット配列（階層順・depth付き） */
+  incompleteTrees: TaskTreeNode[];
+  /** 完了済みタスクのツリー展開済みフラット配列（階層順・depth付き） */
+  completedTrees: TaskTreeNode[];
   categories: string[];
   selectedCategory: string;
   loading: boolean;
   error: string;
+  toggleCompleteError: string;
   handleDelete: (id: number) => Promise<void>;
+  handleToggleComplete: (id: number, is_completed: boolean) => Promise<void>;
   setSelectedCategory: (category: string) => void;
   reload: () => void;
 }
 
 /**
+ * ツリー内の指定IDのタスクの is_completed を再帰的に更新する
+ */
+function updateIsCompletedInTree(tasks: Task[], id: number, is_completed: boolean): Task[] {
+  return tasks.map((t) => {
+    if (t.id === id) return { ...t, is_completed };
+    if (t.children.length > 0) {
+      return { ...t, children: updateIsCompletedInTree(t.children, id, is_completed) };
+    }
+    return t;
+  });
+}
+
+
+/**
+ * タスクの有効な期限日を返すヘルパー関数
+ * 子タスクを持つ親タスクは子タスクの最短 due_date を基準とする
+ */
+function getEffectiveDueDate(task: Task): Date {
+  if (!task.children || task.children.length === 0) return new Date(task.due_date);
+  const childDates = task.children.map((c) => new Date(c.due_date).getTime());
+  return new Date(Math.min(...childDates));
+}
+
+/**
+ * タスク一覧をツリー構造（depth付きフラット配列）に展開する
+ * 親タスク → 子タスクの順に DFS で並べる
+ * カテゴリフィルターが指定されている場合、タスク自身またはいずれかの子孫がフィルター対象なら含める
+ */
+function buildTaskTrees(
+  tasks: Task[],
+  selectedCategory: string,
+  completedFilter: boolean,
+): TaskTreeNode[] {
+  /**
+   * タスク（子孫を含む）がカテゴリフィルターに一致するか再帰チェック
+   */
+  function matchesCategory(task: Task): boolean {
+    if (!selectedCategory) return true;
+    if (task.category === selectedCategory) return true;
+    return task.children.some((child) => matchesCategory(child));
+  }
+
+  /**
+   * タスクを再帰的にフラット配列へ展開する
+   */
+  function flatten(task: Task, depth: number): TaskTreeNode[] {
+    const hasPartiallyCompletedChildren =
+      !Boolean(task.is_completed) &&
+      task.children.some((child) => Boolean(child.is_completed));
+    const node: TaskTreeNode = { ...task, depth, hasPartiallyCompletedChildren };
+    // 子タスクは完了状態に関わらずすべて親と同じセクションに表示する
+    const childNodes = task.children.flatMap((child) => flatten(child, depth + 1));
+    return [node, ...childNodes];
+  }
+
+  // ルートタスク（parent_idなし）のうち完了状態が一致し、フィルターに合致するものを抽出
+  const rootTasks = tasks.filter(
+    (t) => t.parent_id === null && Boolean(t.is_completed) === completedFilter && matchesCategory(t),
+  );
+
+  // due_date でソートしてツリー展開
+  const sorted = [...rootTasks].sort(
+    (a, b) => getEffectiveDueDate(a).getTime() - getEffectiveDueDate(b).getTime(),
+  );
+
+  return sorted.flatMap((task) => flatten(task, 0));
+}
+
+/**
  * タスク一覧・削除・カテゴリフィルタリングカスタムフック
- * タスクの取得・削除・カテゴリフィルタリング処理を管理する
+ * タスクの取得・削除・完了状態切り替え・カテゴリフィルタリング処理を管理する
+ * 完了/未完了セクションをツリー構造（depth付きフラット配列）として返す
  */
 export function useTaskList(): UseTaskListReturn {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -27,7 +114,14 @@ export function useTaskList(): UseTaskListReturn {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [toggleCompleteError, setToggleCompleteError] = useState('');
   const [reloadTrigger, setReloadTrigger] = useState(0);
+  // 並走する複数トグル操作でのロールバック競合を防ぐため ref で最新ステートを保持する
+  const tasksRef = useRef<Task[]>(tasks);
+
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
 
   /**
    * タスク一覧を再読み込みするトリガーをインクリメントする
@@ -69,13 +163,20 @@ export function useTaskList(): UseTaskListReturn {
   }, [reloadTrigger]);
 
   /**
-   * 選択カテゴリでフィルタリングしたタスク一覧
-   * 未選択（空文字）の場合は全件返す
+   * 未完了タスクのツリー展開済みフラット配列（カテゴリフィルター・深さ情報付き）
    */
-  const filteredTasks = useMemo((): Task[] => {
-    if (!selectedCategory) return tasks;
-    return tasks.filter((t) => t.category === selectedCategory);
-  }, [tasks, selectedCategory]);
+  const incompleteTrees = useMemo(
+    (): TaskTreeNode[] => buildTaskTrees(tasks, selectedCategory, false),
+    [tasks, selectedCategory],
+  );
+
+  /**
+   * 完了済みタスクのツリー展開済みフラット配列（カテゴリフィルター・深さ情報付き）
+   */
+  const completedTrees = useMemo(
+    (): TaskTreeNode[] => buildTaskTrees(tasks, selectedCategory, true),
+    [tasks, selectedCategory],
+  );
 
   /**
    * タスクを削除する。削除後は一覧から該当タスクを除去する
@@ -93,14 +194,38 @@ export function useTaskList(): UseTaskListReturn {
     }
   }, []);
 
+  /**
+   * タスクの完了状態を切り替える。
+   * 楽観的UI更新: ボタン押下直後にローカルステートを更新し、
+   * APIコール成功時はサーバーレスポンスで上書き、失敗時はスナップショットにロールバックする
+   */
+  const handleToggleComplete = useCallback(async (id: number, is_completed: boolean): Promise<void> => {
+    const snapshot = tasksRef.current;
+    setTasks((prev) => updateIsCompletedInTree(prev, id, is_completed));
+
+    try {
+      logger.info(CONTEXT, `タスク完了状態切り替え実行: id=${id}, is_completed=${String(is_completed)}`);
+      await toggleTaskCompletion(id, is_completed);
+      logger.info(CONTEXT, `タスク完了状態切り替え完了: id=${id}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'タスクの更新に失敗しました。';
+      logger.warn(CONTEXT, `タスク完了状態切り替え失敗: id=${id} - ${message}`);
+      setTasks(snapshot);
+      setToggleCompleteError(message);
+    }
+  }, []);
+
   return {
     tasks,
-    filteredTasks,
+    incompleteTrees,
+    completedTrees,
     categories,
     selectedCategory,
     loading,
     error,
+    toggleCompleteError,
     handleDelete,
+    handleToggleComplete,
     setSelectedCategory,
     reload,
   };

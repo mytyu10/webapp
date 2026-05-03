@@ -107,7 +107,7 @@ backend/src/
 │   ├── module/
 │   │   └── task.module.ts          # モジュール定義・DI設定
 │   ├── repository/
-│   │   └── task.repository.ts      # Prismaを使ったDBアクセス
+│   │   └── task.repository.ts      # Prismaを使ったDBアクセス（is_completed 対応）
 │   └── service/
 │       └── task.service.ts         # タスクCRUDのビジネスロジック
 ├── common/                          # 共通ユーティリティ
@@ -137,7 +137,7 @@ frontend/src/
 ├── logger.ts                        # コンソールロガー
 ├── api/
 │   ├── accountApi.ts                # バックエンドHTTP通信（ログイン・登録）
-│   └── taskApi.ts                   # バックエンドHTTP通信（タスクCRUD、Bearer認証）
+│   └── taskApi.ts                   # バックエンドHTTP通信（タスクCRUD・完了切り替え、Bearer認証）
 ├── components/                      # 共通UIコンポーネント
 │   ├── FormCard.tsx                 # フォーム外枠カード
 │   ├── FormField.tsx                # ラベル＋入力欄＋エラー表示
@@ -149,15 +149,16 @@ frontend/src/
 ├── hooks/                           # カスタムフック（状態管理・オーケストレーション）
 │   ├── useLoginForm.ts              # ログインフォームの状態・送信処理
 │   ├── useRegistForm.ts             # 登録フォームの状態・送信処理
-│   ├── useTaskList.ts               # タスク一覧・削除フック
+│   ├── useTaskList.ts               # タスク一覧・削除・完了切り替え・階層ツリー構築フック
+│   ├── useTaskDetail.ts             # タスク詳細取得・完了切り替えフック
 │   └── useTaskForm.ts               # タスク作成・編集フォームフック
 ├── pages/                           # ページコンポーネント（描画のみ）
 │   ├── HomePage.tsx                 # ホーム（/tasks へリダイレクト）
 │   ├── LoginPage.tsx                # ログイン画面
 │   ├── RegistPage.tsx               # アカウント登録画面
-│   ├── TaskListPage.tsx             # タスク一覧画面
+│   ├── TaskListPage.tsx             # タスク一覧画面（階層表示・完了セクション折りたたみ）
 │   ├── TaskFormPage.tsx             # タスク作成・編集画面
-│   └── TaskDetailPage.tsx           # タスク詳細画面
+│   └── TaskDetailPage.tsx           # タスク詳細画面（完了/未完了ボタン・完了スタイル）
 └── validation/                      # バリデーション（純粋関数）
     ├── loginValidation.ts           # ログインフォームバリデーション
     ├── registValidation.ts          # 登録フォームバリデーション

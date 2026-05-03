@@ -9,6 +9,7 @@ import {
   IsIn,
   IsInt,
   IsPositive,
+  IsBoolean,
 } from 'class-validator';
 
 /** 優先度の有効値 */
@@ -108,6 +109,11 @@ export class UpdateTaskDto {
   @IsPositive({ message: '親タスクIDは正の整数で指定してください' })
   @IsOptional()
   parent_id?: number;
+
+  /** 完了状態（true: 完了 / false: 未完了） */
+  @IsBoolean({ message: '完了状態はtrue/falseで指定してください' })
+  @IsOptional()
+  is_completed?: boolean;
 }
 
 /** タスクレスポンスDTO */
@@ -122,6 +128,7 @@ export interface TaskResponseDto {
   created_by: string;
   created_at: string;
   updated_at: string;
+  is_completed: boolean;
   assignees: string[];
   children: TaskResponseDto[];
 }
