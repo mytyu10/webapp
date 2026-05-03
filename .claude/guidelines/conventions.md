@@ -56,6 +56,7 @@ src/<feature>/
 - DBアクセスは必ずRepositoryレイヤーで行う
 - モデルは`backend/prisma/schema.prisma`に定義する
 - マイグレーションは`npx prisma migrate dev`で実施
+- **スキーマ変更後は必ず`npx prisma migrate dev --name <migration_name>`を実行してマイグレーションファイルを作成・適用すること**。`prisma generate`だけでは不十分でDBに反映されない
 - `PrismaService`のシャットダウン処理は`OnModuleDestroy`を実装し`onModuleDestroy()`で`$disconnect()`を呼ぶ（Prisma 7で廃止された`$on('beforeExit')`は使用しない）
 - [2026-05-03] Prisma 7では`schema.prisma`の`datasource`ブロックに`url`を書かない。接続URLは`prisma.config.ts`の`datasource.url`で管理する
 
