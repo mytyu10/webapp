@@ -13,6 +13,7 @@ import {
 } from '../dto/task.dto';
 import { MESSAGE } from 'src/common/type/message';
 import { LoggerService } from 'src/common/service/logger.service';
+import { TaskQueueService } from './task-queue.service';
 
 const CONTEXT = 'TaskService';
 
@@ -24,6 +25,7 @@ export class TaskService {
   constructor(
     private readonly taskRepository: TaskRepository,
     private readonly logger: LoggerService,
+    private readonly taskQueueService: TaskQueueService,
   ) {}
 
   /**
@@ -74,16 +76,30 @@ export class TaskService {
   }
 
   /**
-   * タスクを更新する。存在しない場合は404例外をスローする
-   * is_completed が true に変化したとき closed_by にリクエストユーザー名をセット、
-   * false に戻したとき closed_by を null にクリアする
+   * タスク更新をキューに追加する。キューが実際に処理を完了した後に結果を返す
    */
   async update(
     id: number,
     dto: UpdateTaskDto,
     requestUsername: string,
   ): Promise<TaskResponseDto> {
-    this.logger.log(CONTEXT, `タスク更新開始: id=${id}`);
+    this.logger.log(CONTEXT, `タスク更新キュー追加: id=${id}`);
+    return this.taskQueueService.enqueue(() =>
+      this.executeUpdate(id, dto, requestUsername),
+    );
+  }
+
+  /**
+   * タスクを実際に更新する（キュー内から呼び出される）。
+   * is_completed が true に変化したとき closed_by にリクエストユーザー名をセット、
+   * false に戻したとき closed_by を null にクリアする
+   */
+  private async executeUpdate(
+    id: number,
+    dto: UpdateTaskDto,
+    requestUsername: string,
+  ): Promise<TaskResponseDto> {
+    this.logger.log(CONTEXT, `タスク更新実行: id=${id}`);
 
     const existing = await this.taskRepository.findById(id);
     if (!existing) {

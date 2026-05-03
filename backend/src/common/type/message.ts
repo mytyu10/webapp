@@ -18,6 +18,7 @@ export const MESSAGE = {
   TASK: {
     CREATE_SUCCESS: 'タスクを作成しました',
     UPDATE_SUCCESS: 'タスクを更新しました',
+    QUEUE_UPDATE_SUCCESS: 'タスクをキューで処理し更新しました',
     DELETE_SUCCESS: 'タスクを削除しました',
     NOT_FOUND: '指定されたタスクが見つかりません',
     CREATE_FAILED: 'タスクの作成に失敗しました',

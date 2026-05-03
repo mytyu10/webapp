@@ -101,7 +101,7 @@ export class TaskController {
     const task = await this.taskService.update(id, dto, requestUser.username);
     return response
       .status(HttpStatus.OK)
-      .json({ message: MESSAGE.TASK.UPDATE_SUCCESS, task });
+      .json({ message: MESSAGE.TASK.QUEUE_UPDATE_SUCCESS, task });
   }
 
   /**
