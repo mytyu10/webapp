@@ -85,7 +85,8 @@ function TaskListPage() {
     const isOwner = currentUsername !== null && node.created_by === currentUsername;
     const indentClass = DEPTH_INDENT_CLASSES[node.depth] ?? 'pl-14';
 
-    const cardStateClass = node.is_completed
+    const isCompleted = Boolean(node.is_completed);
+    const cardStateClass = isCompleted
       ? CARD_COMPLETED_CLASSES
       : node.hasPartiallyCompletedChildren
         ? CARD_PARTIAL_CLASSES
@@ -102,7 +103,7 @@ function TaskListPage() {
                 {node.depth > 0 && (
                   <span className="shrink-0 text-xs text-slate-500">└</span>
                 )}
-                <h2 className={`text-base font-semibold text-slate-100 truncate ${node.is_completed ? 'line-through opacity-60' : ''}`}>
+                <h2 className={`text-base font-semibold text-slate-100 truncate ${isCompleted ? 'line-through opacity-60' : ''}`}>
                   {node.title}
                 </h2>
                 <span
@@ -142,14 +143,14 @@ function TaskListPage() {
             <div className="flex gap-2 shrink-0 flex-wrap justify-end">
               <button
                 type="button"
-                onClick={() => void handleToggleComplete(node.id, !node.is_completed)}
+                onClick={() => void handleToggleComplete(node.id, !isCompleted)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  node.is_completed
+                  isCompleted
                     ? 'text-slate-300 bg-green-700 hover:bg-green-600'
                     : 'text-slate-300 bg-slate-600 hover:bg-slate-500'
                 }`}
               >
-                {node.is_completed ? '未完了に戻す' : '完了にする'}
+                {isCompleted ? '未完了に戻す' : '完了にする'}
               </button>
               <button
                 type="button"

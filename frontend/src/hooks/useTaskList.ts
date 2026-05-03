@@ -47,18 +47,6 @@ function updateIsCompletedInTree(tasks: Task[], id: number, is_completed: boolea
   });
 }
 
-/**
- * ツリー内の指定IDのタスクをサーバーレスポンスで置き換える（children は既存を維持）
- */
-function replaceTaskInTree(tasks: Task[], updated: Task): Task[] {
-  return tasks.map((t) => {
-    if (t.id === updated.id) return { ...updated, children: t.children };
-    if (t.children.length > 0) {
-      return { ...t, children: replaceTaskInTree(t.children, updated) };
-    }
-    return t;
-  });
-}
 
 /**
  * タスクの有効な期限日を返すヘルパー関数
@@ -97,9 +85,8 @@ function buildTaskTrees(
       !Boolean(task.is_completed) &&
       task.children.some((child) => Boolean(child.is_completed));
     const node: TaskTreeNode = { ...task, depth, hasPartiallyCompletedChildren };
-    const childNodes = task.children
-      .filter((child) => Boolean(child.is_completed) === completedFilter)
-      .flatMap((child) => flatten(child, depth + 1));
+    // 子タスクは完了状態に関わらずすべて親と同じセクションに表示する
+    const childNodes = task.children.flatMap((child) => flatten(child, depth + 1));
     return [node, ...childNodes];
   }
 
@@ -218,9 +205,7 @@ export function useTaskList(): UseTaskListReturn {
 
     try {
       logger.info(CONTEXT, `タスク完了状態切り替え実行: id=${id}, is_completed=${String(is_completed)}`);
-      const updated = await toggleTaskCompletion(id, is_completed);
-      // サーバーレスポンスで上書き（整合性担保・children は既存を維持）
-      setTasks((prev) => replaceTaskInTree(prev, updated));
+      await toggleTaskCompletion(id, is_completed);
       logger.info(CONTEXT, `タスク完了状態切り替え完了: id=${id}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'タスクの更新に失敗しました。';
