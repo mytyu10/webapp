@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { LoggerService } from 'src/common/service/logger.service';
 
-const CONTEXT = 'TaskQueueService';
+const CONTEXT = 'BatchQueueService';
 
 /** バッチウィンドウのミリ秒数 */
 const BATCH_WINDOW_MS = 100;
@@ -13,12 +13,12 @@ interface BatchJob {
 }
 
 /**
- * タスク更新バッチサービス
- * BATCH_WINDOW_MS 内に追加された更新リクエストを一括でバッファリングし、
+ * 汎用バッチキューサービス
+ * BATCH_WINDOW_MS 内に追加された処理リクエストを一括でバッファリングし、
  * タイマー起動後にまとめて順次処理することで、連打時の過剰なDB書き込みを防ぐ。
  */
 @Injectable()
-export class TaskQueueService {
+export class BatchQueueService {
   constructor(private readonly logger: LoggerService) {}
 
   private readonly buffer: BatchJob[] = [];

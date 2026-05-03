@@ -6,7 +6,7 @@ import {
 import { TaskService } from './task.service';
 import { TaskRepository } from '../repository/task.repository';
 import { LoggerService } from 'src/common/service/logger.service';
-import { TaskQueueService } from './task-queue.service';
+import { BatchQueueService } from 'src/common/service/batch-queue.service';
 import { MESSAGE } from 'src/common/type/message';
 
 /** モック用タスクデータ */
@@ -52,7 +52,7 @@ describe('TaskService', () => {
         { provide: TaskRepository, useValue: mockTaskRepository },
         { provide: LoggerService, useValue: mockLoggerService },
         {
-          provide: TaskQueueService,
+          provide: BatchQueueService,
           useValue: { enqueue: jest.fn().mockImplementation((fn) => fn()) },
         },
       ],

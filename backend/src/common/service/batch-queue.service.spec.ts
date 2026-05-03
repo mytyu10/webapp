@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { TaskQueueService } from './task-queue.service';
+import { BatchQueueService } from './batch-queue.service';
 import { LoggerService } from 'src/common/service/logger.service';
 
 const mockLoggerService = {
@@ -8,19 +8,19 @@ const mockLoggerService = {
   error: jest.fn(),
 };
 
-describe('TaskQueueService', () => {
-  let service: TaskQueueService;
+describe('BatchQueueService', () => {
+  let service: BatchQueueService;
 
   beforeEach(async () => {
     jest.useFakeTimers();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        TaskQueueService,
+        BatchQueueService,
         { provide: LoggerService, useValue: mockLoggerService },
       ],
     }).compile();
 
-    service = module.get<TaskQueueService>(TaskQueueService);
+    service = module.get<BatchQueueService>(BatchQueueService);
     jest.clearAllMocks();
   });
 

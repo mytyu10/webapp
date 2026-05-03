@@ -13,7 +13,7 @@ import {
 } from '../dto/task.dto';
 import { MESSAGE } from 'src/common/type/message';
 import { LoggerService } from 'src/common/service/logger.service';
-import { TaskQueueService } from './task-queue.service';
+import { BatchQueueService } from 'src/common/service/batch-queue.service';
 
 const CONTEXT = 'TaskService';
 
@@ -25,7 +25,7 @@ export class TaskService {
   constructor(
     private readonly taskRepository: TaskRepository,
     private readonly logger: LoggerService,
-    private readonly taskQueueService: TaskQueueService,
+    private readonly taskQueueService: BatchQueueService,
   ) {}
 
   /**
