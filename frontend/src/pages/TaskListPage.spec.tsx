@@ -62,6 +62,7 @@ function makeNode(overrides: Partial<TaskTreeNode>): TaskTreeNode {
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     is_completed: false,
+    closed_by: null,
     assignees: [],
     children: [],
     depth: 0,
@@ -84,6 +85,7 @@ function makeTask(overrides: Partial<taskApi.Task>): taskApi.Task {
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     is_completed: false,
+    closed_by: null,
     assignees: [],
     children: [],
     ...overrides,
@@ -427,7 +429,7 @@ describe('TaskListPage', () => {
       });
     });
 
-    it('他者が作成者の場合は編集・削除ボタンが表示されない', async () => {
+    it('他者が作成者の場合は編集ボタンは表示されるが削除ボタンは表示されない', async () => {
       (taskApi.getCurrentUsername as jest.Mock).mockReturnValue('viewer');
       const task = makeTask({ id: 1, title: '他者のタスク', created_by: 'owner' });
       (taskApi.fetchTasks as jest.Mock).mockResolvedValue([task]);
@@ -438,7 +440,9 @@ describe('TaskListPage', () => {
         expect(screen.getByText('他者のタスク')).toBeInTheDocument();
       });
 
-      expect(screen.queryByRole('button', { name: '編集' })).not.toBeInTheDocument();
+      // 編集ボタンはログインユーザーに関わらず常時表示する
+      expect(screen.getByRole('button', { name: '編集' })).toBeInTheDocument();
+      // 削除ボタンは作成者のみ表示する
       expect(screen.queryByRole('button', { name: '削除' })).not.toBeInTheDocument();
     });
   });

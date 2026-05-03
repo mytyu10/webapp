@@ -37,6 +37,8 @@ export interface Task {
   created_at: string;
   updated_at: string;
   is_completed: boolean;
+  /** 完了にした（クローズした）ユーザー名。未完了時は null */
+  closed_by: string | null;
   assignees: string[];
   children: Task[];
 }

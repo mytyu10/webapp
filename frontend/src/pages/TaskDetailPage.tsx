@@ -1,21 +1,18 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { getCurrentUsername, PRIORITY_LABELS, PRIORITY_BADGE_CLASSES } from '../api/taskApi';
+import { PRIORITY_LABELS, PRIORITY_BADGE_CLASSES } from '../api/taskApi';
 import { useTaskDetail } from '../hooks/useTaskDetail';
 import FormErrorBanner from '../components/FormErrorBanner';
 
 /**
  * タスク詳細ページ
  * 指定IDのタスク詳細・子タスク一覧を表示する
- * タスク作成者のみ編集ボタンを表示する
  * 「完了にする」/「未完了に戻す」ボタンで完了状態をトグルできる
+ * 編集ボタンはログインユーザーに関わらず常時表示する
  */
 function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { task, loading, error, toggleCompleteError, handleToggleComplete } = useTaskDetail(id);
-
-  const currentUsername = getCurrentUsername();
-  const isOwner = currentUsername !== null && task !== null && task.created_by === currentUsername;
 
   return (
     <div className="max-w-xl mx-auto">
@@ -50,6 +47,9 @@ function TaskDetailPage() {
           {task.is_completed && (
             <div className="flex items-center gap-2 px-3 py-2 bg-green-900 border border-green-700 rounded-md">
               <span className="text-green-400 text-sm font-medium">完了済み</span>
+              {task.closed_by && (
+                <span className="text-green-300 text-sm">クローズ: {task.closed_by}</span>
+              )}
             </div>
           )}
 
@@ -183,15 +183,13 @@ function TaskDetailPage() {
             >
               {task.is_completed ? '未完了に戻す' : '完了にする'}
             </button>
-            {isOwner && (
-              <button
-                type="button"
-                onClick={() => navigate(`/tasks/${task.id}/edit`)}
-                className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold rounded-md transition-colors"
-              >
-                編集する
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => navigate(`/tasks/${task.id}/edit`)}
+              className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold rounded-md transition-colors"
+            >
+              編集する
+            </button>
             <button
               type="button"
               onClick={() => navigate(`/tasks/new?parent_id=${task.id}`)}

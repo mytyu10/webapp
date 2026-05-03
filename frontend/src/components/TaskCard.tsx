@@ -123,6 +123,9 @@ function TaskCard({
                 {node.assignees.length > 0 && (
                   <span>担当者: {node.assignees.join(', ')}</span>
                 )}
+                {isCompleted && node.closed_by && (
+                  <span className="text-green-400">クローズ: {node.closed_by}</span>
+                )}
               </div>
             </div>
 
@@ -145,23 +148,21 @@ function TaskCard({
               >
                 詳細
               </button>
+              <button
+                type="button"
+                onClick={() => onNavigateEdit(node.id)}
+                className="px-3 py-1.5 text-xs font-medium text-slate-300 bg-slate-600 hover:bg-slate-500 rounded-md transition-colors"
+              >
+                編集
+              </button>
               {isOwner && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => onNavigateEdit(node.id)}
-                    className="px-3 py-1.5 text-xs font-medium text-slate-300 bg-slate-600 hover:bg-slate-500 rounded-md transition-colors"
-                  >
-                    編集
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteClick(node.id)}
-                    className="px-3 py-1.5 text-xs font-medium text-white bg-red-700 hover:bg-red-600 rounded-md transition-colors"
-                  >
-                    削除
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={() => onDeleteClick(node.id)}
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-red-700 hover:bg-red-600 rounded-md transition-colors"
+                >
+                  削除
+                </button>
               )}
             </div>
           </div>
