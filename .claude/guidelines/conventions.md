@@ -215,3 +215,29 @@ model TaskAssignee {
 
 - テーブル名: PascalCase（Prismaモデル名に準拠）
 - カラム名: snake_case
+
+---
+
+## LINE連携・通知機能規約
+
+### LINE OAuth フロー
+
+- LINE Login の認可エンドポイントへのリダイレクトは `GET /accounts/line/login` で行う（JwtAuthGuard適用）
+- コールバックエンドポイント `GET /accounts/line/callback` は JwtAuthGuard 適用済み。LINE から届くリクエストに Bearer トークンが必要
+- LINE OAuth のコールバック URL（`LINE_CALLBACK_URL`）はバックエンド側に固定（`http://localhost:8000/accounts/line/callback`）。本番環境では適切な URL に変更すること
+- フロントエンドのリダイレクト先は `FRONTEND_URL` 環境変数から構築する（ハードコード禁止）
+- LINE コールバックページ（`/line-callback`）は PrivateRoute 外に配置する（LINE OAuth からの直接リダイレクトのため JWT が localStorage にない状態でアクセスされる）
+
+### TaskNotification（通知モデル）
+
+- [2026-05-04] `TaskNotification` の `notify_at` は ISO8601 文字列として受け取り、Service レイヤーで `new Date()` に変換してから Repository に渡す
+- 通知の送信済みフラグ（`is_sent`）は LINE Messaging API への送信成功後にのみ `true` に更新する。送信失敗時は `false` のままにして次回 Cron で再試行できるようにする
+- LINE 未連携の担当者（`line_user_id` が null）はスキップしてログを出力する（エラーとして扱わない）
+
+### AppModule のモジュール設計
+
+- [2026-05-04] `AppModule` の providers に `TaskNotificationRepository`・`PrismaService`・`LoggerService` を直接登録しない。`TaskModule`（`TaskNotificationRepository` をエクスポート）と `CommonModule`（`LoggerService` をエクスポート）を imports に追加して DI で受け取ること（重複登録禁止）
+
+### TaskDetailPanel の設計方針
+
+- [2026-05-04] `TaskDetailPanel` は独自 API 呼び出しを行わない。通知削除も `onDeleteNotification: (taskId: number, notificationId: number) => Promise<void>` コールバック prop を通じて親（TaskListPage）に委譲する。`deleteNotification` を TaskDetailPanel 内で直接 import・呼び出しをしない

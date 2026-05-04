@@ -4,9 +4,9 @@
 
 | ドキュメント | 内容 |
 |------------|------|
-| [01-overview.md](01-overview.md) | アプリ概要・技術スタック |
-| [02-architecture.md](02-architecture.md) | システムアーキテクチャ |
-| [03-database.md](03-database.md) | データベース設計 |
-| [04-api.md](04-api.md) | API設計 |
-| [05-frontend.md](05-frontend.md) | フロントエンド設計 |
-| [06-auth-flow.md](06-auth-flow.md) | 認証フロー |
+| [01-overview.md](01-overview.md) | アプリ概要・技術スタック・実装済み機能一覧 |
+| [02-architecture.md](02-architecture.md) | システムアーキテクチャ・ディレクトリ構成・DI構成 |
+| [03-database.md](03-database.md) | データベース設計・スキーマ・Prismaリポジトリ |
+| [04-api.md](04-api.md) | REST API エンドポイント詳細・DTO定義・JWT仕様 |
+| [05-frontend.md](05-frontend.md) | ルーティング・ページ・カスタムフック・共通コンポーネント |
+| [06-auth-flow.md](06-auth-flow.md) | 認証フロー・LINE OAuthフロー・LINE通知フロー |
