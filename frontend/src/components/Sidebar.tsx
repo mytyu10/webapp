@@ -27,12 +27,12 @@ function Sidebar() {
   }
 
   return (
-    <aside className="w-60 min-h-screen bg-slate-900 border-r border-slate-700 flex flex-col">
-      <div className="px-6 py-5 border-b border-slate-700">
-        <h2 className="text-lg font-bold text-slate-100">WebApp</h2>
+    <aside className="w-full sm:w-60 sm:min-h-screen bg-slate-900 border-b sm:border-b-0 sm:border-r border-slate-700 flex flex-row sm:flex-col">
+      <div className="px-4 sm:px-6 py-3 sm:py-5 border-r sm:border-r-0 sm:border-b border-slate-700 flex items-center shrink-0">
+        <h2 className="text-base sm:text-lg font-bold text-slate-100">WebApp</h2>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex flex-row sm:flex-col flex-1 px-2 sm:px-3 py-2 sm:py-4 gap-1 sm:gap-0 sm:space-y-1">
         {NAV_LINKS.map((link) => (
           <NavLink
             key={link.to}
@@ -50,11 +50,11 @@ function Sidebar() {
         ))}
       </nav>
 
-      <div className="px-3 py-4 border-t border-slate-700">
+      <div className="px-2 sm:px-3 py-2 sm:py-4 sm:border-t border-slate-700 flex items-center shrink-0">
         <button
           type="button"
           onClick={handleLogout}
-          className="w-full flex items-center px-3 py-2 rounded-md text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+          className="flex items-center px-3 py-2 rounded-md text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
         >
           ログアウト
         </button>

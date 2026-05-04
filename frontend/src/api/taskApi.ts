@@ -1,7 +1,9 @@
 import { logger } from '../logger';
 
 const { REACT_APP_API_SCHEME, REACT_APP_API_HOST, REACT_APP_API_PORT } = process.env;
-const API_BASE = `${REACT_APP_API_SCHEME}://${REACT_APP_API_HOST}:${REACT_APP_API_PORT}`;
+const API_BASE = REACT_APP_API_HOST
+  ? `${REACT_APP_API_SCHEME}://${REACT_APP_API_HOST}:${REACT_APP_API_PORT}`
+  : '';
 const CONTEXT = 'taskApi';
 
 /** 優先度の有効値 */
