@@ -102,6 +102,8 @@ src/<feature>/
 - Tailwind CSSのユーティリティクラスのみ使用する
 - CSSモジュール・インラインスタイル・外部CSSファイルは禁止
 - レスポンシブ対応はTailwindのブレークポイント（sm, md, lg）を使用する
+- [2026-05-03] カレンダー画面の文字色は白基調（`text-slate-100` / `text-slate-200` 相当）にすること
+- [2026-05-03] FullCalendarのテーマ上書きは`src/index.css`の`.calendar-wrapper`スコープ内でCSS変数を使って行う（`--fc-today-bg-color`等）。今日の日付ハイライトは紺ベースのUIで視認しやすい色（sky系の薄いオーバーレイ等）にし、黄色デフォルトを使わないこと
 
 ### ディレクトリ構成
 

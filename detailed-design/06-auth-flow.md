@@ -51,7 +51,7 @@
 [localStorage] setItem('token', token)
     │
     ▼
-[React Router] navigate('/') → HomePage へ遷移
+[React Router] navigate('/') → HomePage へ遷移（/tasks にリダイレクト）
 ```
 
 ---
@@ -104,13 +104,25 @@
 
 ---
 
-## ログアウトフロー（未実装）
+## ログアウトフロー
 
 | 項目 | 状態 |
 |------|------|
 | バックエンド `GET /accounts/logout` | 空実装 |
-| フロントエンド ログアウトUI | 未実装 |
-| localStorage からのトークン削除 | 未実装 |
+| フロントエンド ログアウトUI | ✅ 実装済み（Sidebar のログアウトボタン） |
+| localStorage からのトークン削除 | ✅ 実装済み（`localStorage.removeItem('token')` → `/login` へ遷移） |
+
+**フロントエンドのログアウト処理（Sidebar）:**
+
+```
+[ユーザー] "ログアウト" ボタンをクリック
+    │
+    ▼
+[Sidebar] handleLogout()
+    │
+    ├─ localStorage.removeItem('token')
+    └─ navigate('/login')
+```
 
 ---
 
@@ -120,7 +132,20 @@
 |------|------|
 | 保存場所 | `localStorage`（キー: `token`） |
 | 有効期限 | 1時間 |
-| 使用状況 | 現状 localStorage に保存するのみ。APIリクエストへの付与は未実装 |
+| APIリクエストへの付与 | `taskApi.ts` / `eventApi.ts` の全リクエストに `Authorization: Bearer <token>` ヘッダーを付与 |
+
+## PrivateRoute のJWT検証
+
+```
+PrivateRoute
+├── localStorage.getItem('token') を取得
+├── token が null → <Navigate to="/login" replace />
+├── JWTをBase64デコードしてペイロードのexpを取得
+│     （atob を使い、Base64URL デコード後 JSON.parse）
+├── exp が未存在 → <Navigate to="/login" replace />
+├── Date.now() / 1000 >= exp（期限切れ）→ <Navigate to="/login" replace />
+└── 有効 → <Outlet />
+```
 
 ## セキュリティ上の注意点
 
@@ -128,5 +153,5 @@
 |------|------|-------|
 | パスワードハッシュ | SHA-256（ソルトなし） | レインボーテーブル攻撃に脆弱。bcrypt推奨 |
 | トークン保存場所 | localStorage | XSS攻撃でトークンが窃取される可能性。httpOnly Cookie推奨 |
-| ログアウト | 未実装 | トークンの無効化ができない |
-| 認証済みルートの保護 | 未実装 | `/` に未認証でもアクセス可能 |
+| バックエンドログアウト | 未実装（空実装） | トークンの無効化ができない |
+| 認証済みルートの保護 | PrivateRoute で JWT exp 検証 | ✅ 有効期限チェックあり |

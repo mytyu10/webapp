@@ -1,3 +1,42 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* FullCalendar dark theme overrides (scoped to .calendar-wrapper) */
+.calendar-wrapper {
+  --fc-today-bg-color: rgba(56, 189, 248, 0.15);
+  --fc-border-color: rgb(51, 65, 85);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: rgb(30, 41, 59);
+  --fc-list-event-hover-bg-color: rgb(51, 65, 85);
+}
+
+.calendar-wrapper .fc-col-header-cell-cushion,
+.calendar-wrapper .fc-daygrid-day-number,
+.calendar-wrapper .fc-timegrid-slot-label-cushion,
+.calendar-wrapper .fc-toolbar-title,
+.calendar-wrapper .fc-daygrid-day-top,
+.calendar-wrapper th {
+  color: rgb(226, 232, 240);
+}
+
+.calendar-wrapper .fc-button {
+  background-color: rgb(51, 65, 85) !important;
+  border-color: rgb(71, 85, 105) !important;
+  color: rgb(226, 232, 240) !important;
+}
+
+.calendar-wrapper .fc-button:hover {
+  background-color: rgb(71, 85, 105) !important;
+}
+
+.calendar-wrapper .fc-button-active {
+  background-color: rgb(3, 105, 161) !important;
+  border-color: rgb(14, 116, 144) !important;
+}
+
+.calendar-wrapper .fc-timegrid-slot-label,
+.calendar-wrapper .fc-list-event-time,
+.calendar-wrapper .fc-event-title {
+  color: rgb(226, 232, 240);
+}

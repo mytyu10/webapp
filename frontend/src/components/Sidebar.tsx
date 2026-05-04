@@ -6,6 +6,7 @@ const CONTEXT = 'Sidebar';
 /** ナビゲーションリンクの定義 */
 const NAV_LINKS = [
   { to: '/tasks', label: 'タスク管理' },
+  { to: '/calendar', label: 'カレンダー' },
 ] as const;
 
 /**

@@ -296,6 +296,133 @@ Authorization: Bearer <JWT>
 
 ---
 
+### GET /events ※要認証
+
+カレンダー予定一覧を取得する。
+
+**リクエストヘッダー**
+
+```
+Authorization: Bearer <JWT>
+```
+
+**レスポンス**
+
+| ステータス | 条件 | レスポンスボディ |
+|-----------|------|----------------|
+| 200 | 取得成功 | `EventResponseDto[]`（`start_at` 昇順） |
+| 401 | 認証エラー | `{ "message": "認証が必要です" }` |
+
+---
+
+### GET /events/:id ※要認証
+
+指定IDのカレンダー予定詳細を取得する。
+
+**リクエストヘッダー**
+
+```
+Authorization: Bearer <JWT>
+```
+
+**レスポンス**
+
+| ステータス | 条件 | レスポンスボディ |
+|-----------|------|----------------|
+| 200 | 取得成功 | `EventResponseDto` |
+| 401 | 認証エラー | `{ "message": "認証が必要です" }` |
+| 404 | 予定不存在 | `{ "message": "指定された予定が見つかりません" }` |
+
+---
+
+### POST /events ※要認証
+
+カレンダー予定を新規作成する。`created_by` はJWT認証済みユーザー名をサーバー側で自動セットする（リクエストボディ不要）。
+
+**リクエストヘッダー**
+
+```
+Authorization: Bearer <JWT>
+```
+
+**リクエストボディ**
+
+```json
+{
+  "title": "string",        // 必須、最大200文字
+  "description": "string",  // 任意、最大1000文字（省略時は空文字）
+  "start_at": "string",     // 必須、ISO8601形式
+  "end_at": "string"        // 必須、ISO8601形式
+}
+```
+
+**レスポンス**
+
+| ステータス | 条件 | レスポンスボディ |
+|-----------|------|----------------|
+| 201 | 作成成功 | `{ "message": "予定を作成しました", "event": EventResponseDto }` |
+| 400 | バリデーションエラー | `{ "message": "入力値が不正です" }` |
+| 401 | 認証エラー | `{ "message": "認証が必要です" }` |
+| 500 | DBエラー | `{ "message": "予定の作成に失敗しました" }` |
+
+---
+
+### PATCH /events/:id ※要認証
+
+カレンダー予定を更新する。**作成者のみ操作可能**。
+
+**リクエストヘッダー**
+
+```
+Authorization: Bearer <JWT>
+```
+
+**リクエストボディ（全フィールド任意）**
+
+```json
+{
+  "title": "string",
+  "description": "string",
+  "start_at": "string",     // ISO8601形式
+  "end_at": "string"        // ISO8601形式
+}
+```
+
+**レスポンス**
+
+| ステータス | 条件 | レスポンスボディ |
+|-----------|------|----------------|
+| 200 | 更新成功 | `{ "message": "予定を更新しました", "event": EventResponseDto }` |
+| 400 | バリデーションエラー | `{ "message": "入力値が不正です" }` |
+| 401 | 認証エラー | `{ "message": "認証が必要です" }` |
+| 403 | 作成者以外が操作 | `{ "message": "この予定を操作する権限がありません" }` |
+| 404 | 予定不存在 | `{ "message": "指定された予定が見つかりません" }` |
+| 500 | DBエラー | `{ "message": "予定の更新に失敗しました" }` |
+
+---
+
+### DELETE /events/:id ※要認証
+
+カレンダー予定を削除する。**作成者のみ操作可能**。
+
+**リクエストヘッダー**
+
+```
+Authorization: Bearer <JWT>
+```
+
+**レスポンス**
+
+| ステータス | 条件 | レスポンスボディ |
+|-----------|------|----------------|
+| 200 | 削除成功 | `{ "message": "予定を削除しました" }` |
+| 401 | 認証エラー | `{ "message": "認証が必要です" }` |
+| 403 | 作成者以外が操作 | `{ "message": "この予定を操作する権限がありません" }` |
+| 404 | 予定不存在 | `{ "message": "指定された予定が見つかりません" }` |
+| 500 | DBエラー | `{ "message": "予定の削除に失敗しました" }` |
+
+---
+
 ## DTO定義
 
 ### AccountDto
@@ -388,6 +515,47 @@ interface TaskResponseDto {
   closed_by: string | null;  // タスクをクローズしたユーザー名。未完了の場合は null
   assignees: string[];       // ユーザー名リスト
   children: TaskResponseDto[]; // 子タスク一覧（再帰構造）
+}
+```
+
+### CreateEventDto
+
+```typescript
+class CreateEventDto {
+  @IsString()
+  @IsNotEmpty({ message: 'タイトルを入力してください' })
+  @MaxLength(200, { message: 'タイトルは200文字以内で入力してください' })
+  title: string;
+
+  @IsString()
+  @MaxLength(1000, { message: '説明文は1000文字以内で入力してください' })
+  @IsOptional()
+  description?: string;
+
+  @IsDateString({}, { message: '正しい日時形式で入力してください' })
+  start_at: string;
+
+  @IsDateString({}, { message: '正しい日時形式で入力してください' })
+  end_at: string;
+}
+```
+
+### UpdateEventDto
+
+`CreateEventDto` の全フィールドが `@IsOptional()` になったDTO。
+
+### EventResponseDto
+
+```typescript
+interface EventResponseDto {
+  id: number;
+  title: string;
+  description: string;      // 未指定時は空文字
+  start_at: string;         // ISO8601形式
+  end_at: string;           // ISO8601形式
+  created_by: string;       // 作成者ユーザー名（JWTから自動セット）
+  created_at: string;       // ISO8601形式
+  updated_at: string;       // ISO8601形式
 }
 ```
 

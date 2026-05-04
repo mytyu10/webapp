@@ -16,6 +16,7 @@
         <Route path="/"          element={<HomePage />}     />
         <Route path="/tasks"     element={<TaskListPage />} />
         <Route path="/tasks/new" element={<TaskFormPage />} />
+        <Route path="/calendar"  element={<CalendarPage />} />
       </Route>
     </Route>
   </Routes>
@@ -29,6 +30,9 @@
 | `/regist` | `RegistPage` | 不要 | 実装済み |
 | `/tasks` | `TaskListPage` | 要認証 | 実装済み |
 | `/tasks/new` | `TaskFormPage`（作成モード・子タスク作成モード） | 要認証 | 実装済み |
+| `/calendar` | `CalendarPage` | 要認証 | 実装済み |
+
+> **廃止済みルート**: `/tasks/:id`（タスク詳細）、`/tasks/:id/edit`（タスク編集）はサイドパネル統合により削除された。
 
 ---
 
@@ -63,8 +67,15 @@ SidebarLayout
 | 要素 | 内容 |
 |------|------|
 | ヘッダー | "WebApp" テキスト |
-| ナビゲーション | タスク管理（/tasks） |
+| ナビゲーション | タスク管理（/tasks）・カレンダー（/calendar） |
 | フッター | ログアウトボタン（localStorage削除 → /login） |
+
+```typescript
+const NAV_LINKS = [
+  { to: '/tasks', label: 'タスク管理' },
+  { to: '/calendar', label: 'カレンダー' },
+] as const;
+```
 
 ---
 
@@ -243,7 +254,80 @@ TaskFormPage
     └── キャンセル / SubmitButton（"作成する" or "更新する"）
 ```
 
-### TaskDetailPage
+### CalendarPage
+
+**責務**: カレンダーの表示・予定の作成・編集・削除。ロジックは `useCalendar` に委譲。
+
+FullCalendar（dayGridPlugin / timeGridPlugin / interactionPlugin）を使用して月/週/日ビューを切り替える。
+日表示（timeGridDay）のみタスクをグレーブロックとして表示し、マウスオーバーで `TaskTooltip` を表示する。
+カレンダーの日付・時間帯をクリックすると新規作成モード（`EventModal`）が開く。
+カレンダーのイベントをクリックすると編集モード（`EventModal`）が開く。タスクイベントは `isTaskEvent` 型ガードで判定しクリックしても編集モーダルを開かない。
+
+```
+CalendarPage
+├── ヘッダー（タイトル "カレンダー" + CalendarViewToggle）
+├── FormErrorBanner（エラー表示）
+├── 読み込み中: テキスト表示
+└── 読み込み完了:
+    ├── .calendar-wrapper（FullCalendarダークテーマCSS変数スコープ）
+    │   └── FullCalendar
+    │       ├── plugins: dayGridPlugin, timeGridPlugin, interactionPlugin
+    │       ├── locale: "ja"
+    │       ├── headerToolbar: { left: 'prev,next today', center: 'title', right: '' }
+    │       ├── selectable: true（日付・時間帯クリックで select イベント発火）
+    │       ├── events: calendarEvents（予定 + 日表示時のみタスク）
+    │       ├── select → handleDateSelect（新規作成モーダルを開く）
+    │       ├── eventClick → handleEventClick（編集モーダルを開く・タスクは無視）
+    │       ├── eventMouseEnter → handleEventMouseEnter（タスクツールチップ表示）
+    │       └── eventMouseLeave → handleEventMouseLeave（ツールチップ非表示）
+    ├── EventModal（open/event/initialStart/currentUsername/onSave/onDelete/onClose）
+    └── TaskTooltip（tooltip.visible 時のみ・マウス座標に追従）
+```
+
+**ローカルステート**
+
+| ステート | 型 | 初期値 | 説明 |
+|---------|-----|--------|------|
+| `modalOpen` | `boolean` | `false` | EventModal 表示フラグ |
+| `selectedEvent` | `CalendarEvent \| null` | `null` | 編集対象の予定（null: 新規作成） |
+| `initialStart` | `string \| undefined` | `undefined` | 新規作成時の初期開始日時 |
+| `modalError` | `string` | `''` | モーダルエラーメッセージ |
+| `tooltip` | `TooltipState` | 全フィールド初期値 | ツールチップ表示状態・位置・内容 |
+
+**型定義（CalendarPage 内）**
+
+```typescript
+interface TooltipState {
+  visible: boolean;
+  x: number;
+  y: number;
+  title: string;
+  description: string;
+  priority: Priority;
+  category: string | null;
+  is_completed: boolean;
+  created_by: string;
+}
+
+interface TaskEventProps {
+  type: 'task';
+  description: string;
+  priority: Priority;
+  category: string | null;
+  is_completed: boolean;
+  created_by: string;
+}
+```
+
+**`isTaskEvent` 型ガード関数**
+
+```typescript
+function isTaskEvent(extendedProps: Record<string, unknown>): extendedProps is TaskEventProps {
+  return extendedProps['type'] === 'task';
+}
+```
+
+**TaskDetailPage（廃止済み）**
 
 > **削除済み**: このページコンポーネントおよびルート（`/tasks/:id`、`/tasks/:id/edit`）は削除された。タスク詳細・編集の機能は `TaskListPage` の右サイドパネル（`TaskDetailPanel`）に統合された。
 
@@ -352,33 +436,6 @@ interface TaskTreeNode extends Task {
 
 `selectedCategory` が指定されている場合、自タスクまたはいずれかの子孫タスクがそのカテゴリを持つツリーのみを表示する。
 
-### useTaskDetail
-
-> **現在未使用**: `TaskDetailPage` の削除に伴い呼び出し元がなくなった。ファイルは存在するが実質的に未使用状態。
-
-タスク詳細ページのデータ取得・完了状態切り替えを管理するフック。
-
-| state | 型 | 説明 |
-|-------|-----|------|
-| `task` | `Task \| null` | 取得したタスクデータ |
-| `loading` | `boolean` | データ取得中フラグ |
-| `error` | `string` | エラーメッセージ |
-| `toggleCompleteError` | `string` | 完了切り替えエラーメッセージ（楽観的更新失敗時にセット） |
-| `isToggling` | `boolean` | 完了切り替えAPI呼び出し中フラグ。`true` の間は連打防止ガードとして機能する |
-
-`UseTaskDetailReturn` 型は上記 state すべてと `handleToggleComplete` を含む。
-
-| 関数 | 説明 |
-|------|------|
-| `handleToggleComplete()` | 楽観的更新パターンで完了状態をトグルする。①`isToggling` を `true` に設定し連打をガード ②`previousTask` にスナップショットを退避 ③即座に `setTask` でUI更新 ④バックグラウンドで `toggleTaskCompletion()` を呼び出し ⑤成功時はサーバーレスポンスで `setTask` を上書き（`closed_by` 等を反映）⑥失敗時は `previousTask` でロールバックし `toggleCompleteError` にセット ⑦`finally` で `isToggling` を `false` に戻す |
-
-**初期化フロー**
-
-```
-1. useEffect: fetchTask(id) でタスク取得 → task に格納
-2. エラー時: error にメッセージをセット
-```
-
 ### useTaskForm
 
 > **編集モードは現在未使用**: `/tasks/:id/edit` ルート削除により `isEditMode === true` のパスは実行されない。作成・子タスク作成モードは引き続き有効。なお、子タスク作成後の遷移先 `/tasks/:parentId` はすでに削除されたルートのため、子タスク作成後のナビゲーションは Dead code となっている。
@@ -401,20 +458,50 @@ interface TaskTreeNode extends Task {
 | 子タスク作成 | `parentId` が指定された場合 | 親タスクの `category` を初期値に設定。作成後 `/tasks/:parentId` へ遷移 |
 | 編集 | `id` が指定された場合 | 既存タスクデータを取得してフォームに反映。更新後 `/tasks/:id` へ遷移 |
 
-**handleSubmit フロー**
+### useCalendar
+
+カレンダー予定・タスク表示・ビュー切り替えを管理するカスタムフック。
+
+| state | 型 | 説明 |
+|-------|-----|------|
+| `events` | `CalendarEvent[]` | 予定一覧 |
+| `tasks` | `Task[]` | タスク一覧（日表示時にカレンダーに表示するために保持） |
+| `currentView` | `CalendarView` | 現在のビュー（初期値: `'dayGridMonth'`） |
+| `loading` | `boolean` | 読み込み中フラグ |
+| `error` | `string` | エラーメッセージ |
+
+**CalendarView 型**
+
+```typescript
+type CalendarView = 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay';
+```
+
+**UseCalendarReturn に含まれるフィールド**
+
+`events`、`calendarEvents`（FullCalendarへ渡すEventInput配列）、`currentView`、`loading`、`error`、`currentUsername`、`setCurrentView`、`handleCreateEvent`、`handleUpdateEvent`、`handleDeleteEvent`、`reload`
+
+**calendarEvents の構築（useMemo）**
 
 ```
-1. validateTaskForm(values) でバリデーション
-2. 編集モード: updateTask(id, input) を呼び出し → navigate('/tasks/:id')
-3. 作成モード: getCurrentUsername() でユーザー名取得 → createTask(input) を呼び出し
-   - parentId あり: navigate('/tasks/:parentId')
-   - parentId なし: navigate('/tasks')
-4. 失敗: apiError にセット
+- CalendarEvent → EventInput: id は "event-{id}" プレフィックス。背景色: #0369a1（sky系）
+- 日表示（timeGridDay）の場合のみタスクを追加
+  - Task → EventInput: id は "task-{id}" プレフィックス。背景色: #334155（グレー）
+  - start = due_date、end = due_date + 1時間（タイムグリッドで視認できる高さを確保）
+  - extendedProps に type: 'task'・taskId・description・priority・category・is_completed・created_by を格納
 ```
 
-**子タスク作成時のカテゴリ引き継ぎ**
+**CRUD操作**
 
-`parentId` が指定された場合、マウント時に `fetchTask(parentId)` で親タスクを取得し、`parent.category` を `values.category` の初期値にセットする。
+| 関数 | 説明 |
+|------|------|
+| `handleCreateEvent(input)` | 予定を作成してローカルステートに追加する |
+| `handleUpdateEvent(id, input)` | 予定を更新してローカルステートの該当予定をサーバーレスポンスで置き換える |
+| `handleDeleteEvent(id)` | 予定を削除してローカルステートから除去する |
+| `reload()` | `reloadTrigger` をインクリメントして予定・タスクを再読み込みする |
+
+**データ読み込み（useEffect）**
+
+`reloadTrigger` を依存配列に持つ。`Promise.all([fetchEvents(), fetchTasks()])` で予定とタスクを並列取得する。
 
 ---
 
@@ -440,6 +527,20 @@ interface TaskTreeNode extends Task {
 | due_date | 空文字 | 「期限を入力してください」 |
 | due_date | 不正な日時形式 | 「正しい日時形式で入力してください」 |
 | assignees | 51人以上 | 「担当者は50人以内で設定してください」 |
+
+### eventValidation
+
+`EventFormValues` 型 / `EventValidationErrors` 型を定義。
+
+| フィールド | 条件 | エラーメッセージ |
+|-----------|------|----------------|
+| title | 空文字 | 「タイトルを入力してください」 |
+| title | 201文字以上 | 「タイトルは200文字以内で入力してください」 |
+| start_at | 空文字 | 「開始日時を入力してください」 |
+| end_at | 空文字 | 「終了日時を入力してください」 |
+| end_at | start_at 以前の値 | 「終了日時は開始日時より後に設定してください」 |
+
+`isEventFormValid(errors)` でエラーオブジェクトが空かどうかを検証する。
 
 ---
 
@@ -502,6 +603,45 @@ interface Task {
 | `PRIORITY_LABELS` | `Record<Priority, string>` | 優先度の日本語表示ラベル（高/中/低） |
 | `PRIORITY_BADGE_CLASSES` | `Record<Priority, string>` | 優先度バッジのTailwindクラス |
 
+### eventApi.ts
+
+Authorizationヘッダー（`Bearer <token>`）を全リクエストに付与。
+
+**CalendarEvent インターフェース**
+
+```typescript
+interface CalendarEvent {
+  id: number;
+  title: string;
+  description: string;
+  start_at: string;         // ISO8601形式
+  end_at: string;           // ISO8601形式
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+```
+
+**EventInput インターフェース**
+
+```typescript
+interface EventInput {
+  title: string;
+  description?: string;
+  start_at: string;         // ISO8601形式
+  end_at: string;           // ISO8601形式
+}
+```
+
+> `created_by` はサーバー側でJWT認証済みユーザー名を自動セットするため、クライアントから送信しない。
+
+| 関数 | メソッド | エンドポイント | 戻り値 | 説明 |
+|------|---------|-------------|-------|------|
+| `fetchEvents()` | GET | `/events` | `Promise<CalendarEvent[]>` | 予定一覧取得（start_at 昇順） |
+| `createEvent(input)` | POST | `/events` | `Promise<CalendarEvent>` | 予定作成 |
+| `updateEvent(id, input)` | PATCH | `/events/:id` | `Promise<CalendarEvent>` | 予定更新 |
+| `deleteEvent(id)` | DELETE | `/events/:id` | `Promise<void>` | 予定削除 |
+
 ---
 
 ## 共通コンポーネント
@@ -554,6 +694,27 @@ APIエラーメッセージを赤背景バナーで表示。
 | `loadingLabel` | `string` | ❌ | `'処理中...'` | ローディング中ラベル |
 | `loading` | `boolean` | ❌ | `false` | ローディングフラグ |
 
+### CancelButton
+
+キャンセルボタン。
+
+| props | 型 | 必須 | 説明 |
+|-------|-----|------|------|
+| `onClick` | `() => void` | ✅ | クリック時のコールバック |
+| `disabled` | `boolean` | ❌ | 非活性フラグ |
+| `className` | `string` | ❌ | スタイル上書き用 |
+
+### DeleteButton
+
+削除ボタン。削除操作の確認トリガーに使用する。
+
+| props | 型 | 必須 | デフォルト | 説明 |
+|-------|-----|------|---------|------|
+| `label` | `string` | ❌ | `'削除'` | ボタンラベル |
+| `onClick` | `() => void` | ✅ | - | クリック時のコールバック |
+| `disabled` | `boolean` | ❌ | - | 非活性フラグ |
+| `className` | `string` | ❌ | - | スタイル上書き用（省略時はデフォルトの赤系スタイル） |
+
 ### PrivateRoute
 
 JWT有効期限検証コンポーネント。
@@ -569,6 +730,7 @@ JWT有効期限検証コンポーネント。
 |------|------|
 | ブランド名 | "WebApp" |
 | NavLink | タスク管理（アクティブ時 `bg-sky-700`） |
+| NavLink | カレンダー（アクティブ時 `bg-sky-700`） |
 | ログアウトボタン | `localStorage.removeItem('token')` → `/login` |
 
 ### SidebarLayout
@@ -615,66 +777,71 @@ div.flex.min-h-screen
 | `onDeleteClick` | `(id: number) => void` | ✅ | 削除確認モーダルを開くコールバック |
 | `onUpdate` | `(id: number, input: Partial<TaskInput>) => Promise<Task>` | ✅ | タスク更新コールバック（useTaskList と共有） |
 
-**ローカルステート**
+### CalendarViewToggle
 
-| ステート | 型 | 説明 |
-|---------|-----|------|
-| `isEditing` | `boolean` | 編集モードフラグ |
-| `editValues` | `TaskFormValues` | 編集フォーム入力値 |
-| `editErrors` | `TaskFormErrors` | 編集フォームバリデーションエラー |
-| `saveError` | `string` | 保存APIエラーメッセージ |
-| `isSaving` | `boolean` | 保存処理中フラグ |
+カレンダーのビュー切り替えボタングループコンポーネント。月・週・日の3種類を切り替える。
 
-`task?.id` が変わると `useEffect` で `isEditing` / `editErrors` / `saveError` をリセット。
-
-**コンポーネント構造（詳細表示モード）:**
-
-```
-TaskDetailPanel（w-full bg-slate-800 border-l）
-├── ヘッダー（sticky top-0）: "タスク詳細" または "タスク編集" + ×ボタン
-└── コンテンツ（p-5 flex-1）
-    └── 詳細カード（bg-slate-700 border rounded-xl）
-        ├── 親タスクへのリンク（parent_id がある場合）
-        ├── [詳細表示モード]
-        │   ├── 完了済みバナー（is_completed 時: closed_by 含む）
-        │   ├── タイトル・説明文・優先度・カテゴリ・期限・担当者・作成者・作成日時
-        │   ├── 子タスク一覧（各行クリックで onSelectTask 経由切り替え）
-        │   └── アクションボタン
-        │       ├── 完了にする / 未完了に戻す（isToggling 時は "処理中..." + disabled）
-        │       ├── 編集する（isToggling 時は disabled）
-        │       ├── 子タスクを作成（/tasks/new?parent_id=X へ遷移）
-        │       └── 削除する（isOwner のみ表示、isToggling 時は disabled）
-        └── [編集フォームモード]
-            ├── タイトル（text input）
-            ├── 説明文（textarea, resize-none, rows=4）
-            ├── 期限（datetime-local input）
-            ├── 優先度（select）
-            ├── カテゴリ（text input, 任意）
-            ├── 担当者（text input, カンマ区切り）
-            ├── エラーメッセージ
-            └── 保存する / キャンセルボタン
-```
-
-**ヘルパー関数（モジュールレベル）:**
+| props | 型 | 必須 | 説明 |
+|-------|-----|------|------|
+| `currentView` | `CalendarView` | ✅ | 現在のビュー |
+| `onChange` | `(view: CalendarView) => void` | ✅ | ビュー切り替えコールバック |
 
 ```typescript
-function toDatetimeLocal(iso: string): string
+const VIEW_BUTTONS: { view: CalendarView; label: string }[] = [
+  { view: 'dayGridMonth', label: '月' },
+  { view: 'timeGridWeek', label: '週' },
+  { view: 'timeGridDay', label: '日' },
+];
 ```
 
-ISO文字列を datetime-local input 用のローカル時刻文字列（`YYYY-MM-DDTHH:MM`）に変換する。
+選択中: `bg-sky-700 text-white`、非選択: `text-slate-300 bg-slate-700 hover:bg-slate-600`
 
-**バリデーション:** `validateTaskForm(editValues)` を保存前に実行。エラーがあれば各フィールド直下に表示。
+### EventModal
 
-**保存フロー:**
+予定の作成・編集モーダルコンポーネント。`event` が null の場合は新規作成モード、指定されている場合は編集モード。
 
-```
-1. validateTaskForm でバリデーション
-2. onUpdate(task.id, { title, description, due_date: ISO変換, assignees, priority, category }) を呼び出し
-3. 成功: isEditing = false（詳細表示に戻る）
-4. 失敗: saveError にセット
-```
+| props | 型 | 必須 | 説明 |
+|-------|-----|------|------|
+| `open` | `boolean` | ✅ | モーダルの表示状態 |
+| `event` | `CalendarEvent \| null` | ✅ | 編集時は既存予定、新規作成時は null |
+| `initialStart` | `string \| undefined` | ❌ | 新規作成時の初期開始日時（datetime-local形式） |
+| `currentUsername` | `string \| null` | ✅ | ログイン中ユーザー名（作成者チェックに使用） |
+| `onSave` | `(input: EventInput) => Promise<void>` | ✅ | 保存ボタン押下時のコールバック |
+| `onDelete` | `(id: number) => Promise<void>` | ✅ | 削除ボタン押下時のコールバック |
+| `onClose` | `() => void` | ✅ | モーダルを閉じるコールバック |
 
-**幅:** `w-full`（親の `<div style={{ width: panelWidth }}>` が幅を制御）
+**編集モードのアクセス制御**: `event.created_by === currentUsername` が `true` の場合のみ保存・削除ボタンを表示。作成者以外は読み取り専用。
+
+**モーダルが開くたびにフォームを初期化する（useEffect）:**
+- 新規作成時: `initialStart` をベースに開始日時・終了日時（+1時間）を初期値にセット
+- 編集時: 既存の `event` データをフォームに反映（ISO文字列 → datetime-local 形式変換）
+
+**フォーム構成:**
+- `FormField`: タイトル
+- `TextAreaField`: 説明
+- `DateTimeField`: 開始日時
+- `DateTimeField`: 終了日時
+- `DeleteButton`（編集モード・作成者のみ）
+- `CancelButton` / `SubmitButton`
+
+**削除フロー**: `DeleteButton` 押下 → `ConfirmModal` 表示 → 確認後 `onDelete` 呼び出し → モーダルを閉じる
+
+### TaskTooltip
+
+カレンダー日表示でタスクをマウスオーバーした際に詳細情報を表示するツールチップコンポーネント。
+
+| props | 型 | 必須 | 説明 |
+|-------|-----|------|------|
+| `title` | `string` | ✅ | タスクタイトル |
+| `description` | `string` | ✅ | タスク説明文 |
+| `priority` | `Priority` | ✅ | 優先度 |
+| `category` | `string \| null` | ✅ | カテゴリ |
+| `is_completed` | `boolean` | ✅ | 完了フラグ |
+| `created_by` | `string` | ✅ | 作成者 |
+| `x` | `number` | ✅ | 表示X座標（px） |
+| `y` | `number` | ✅ | 表示Y座標（px） |
+
+`pointer-events-none` でマウスイベントを透過。`fixed z-50` で最前面に表示。マウス座標の右下（+12px）にオフセットして表示する。
 
 ---
 
@@ -711,3 +878,20 @@ ISO文字列を datetime-local input 用のローカル時刻文字列（`YYYY-M
 | `onClick` | `() => void` | ✅ | クリック時のコールバック |
 
 展開中は `▾`、折りたたみ中は `▸` を表示。ラベルと件数を "ラベル (N件)" の形式で表示。
+
+---
+
+## FullCalendar テーマ設定（index.css）
+
+```css
+.calendar-wrapper {
+  /* CSS変数でFullCalendarのダークテーマを上書き */
+  --fc-border-color: #334155;           /* スレート系ボーダー */
+  --fc-today-bg-color: rgba(14, 165, 233, 0.12); /* sky-500 の薄いオーバーレイ（今日ハイライト） */
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: #1e293b;
+  /* 他のCSS変数... */
+}
+```
+
+`--fc-today-bg-color` に紺ベースUIで視認しやすい sky 系の薄いオーバーレイを使用する（黄色デフォルトは使用しない）。

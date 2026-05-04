@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage';
 import RegistPage from './pages/RegistPage';
 import TaskListPage from './pages/TaskListPage';
 import TaskFormPage from './pages/TaskFormPage';
+import CalendarPage from './pages/CalendarPage';
 import PrivateRoute from './components/PrivateRoute';
 import SidebarLayout from './components/SidebarLayout';
 
@@ -21,6 +22,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/tasks" element={<TaskListPage />} />
             <Route path="/tasks/new" element={<TaskFormPage />} />
+            <Route path="/calendar" element={<CalendarPage />} />
           </Route>
         </Route>
       </Routes>

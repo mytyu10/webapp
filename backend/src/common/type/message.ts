@@ -26,4 +26,14 @@ export const MESSAGE = {
     DELETE_FAILED: 'タスクの削除に失敗しました',
     CATEGORIES_FETCH_FAILED: 'カテゴリ一覧の取得に失敗しました',
   },
+  EVENT: {
+    CREATE_SUCCESS: '予定を作成しました',
+    UPDATE_SUCCESS: '予定を更新しました',
+    DELETE_SUCCESS: '予定を削除しました',
+    NOT_FOUND: '指定された予定が見つかりません',
+    CREATE_FAILED: '予定の作成に失敗しました',
+    UPDATE_FAILED: '予定の更新に失敗しました',
+    DELETE_FAILED: '予定の削除に失敗しました',
+    FORBIDDEN: 'この予定を操作する権限がありません',
+  },
 };

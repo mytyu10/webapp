@@ -73,7 +73,7 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 
 ### Frontend (React + CRA)
 
-- `src/App.tsx` — router: `/` → `HomePage`（タスク一覧へリダイレクト）, `/login` → `LoginPage`, `/tasks` → `TaskListPage`, `/tasks/new` → `TaskFormPage`, `/tasks/:id` → `TaskDetailPage`, `/tasks/:id/edit` → `TaskFormPage`
+- `src/App.tsx` — router: `/` → `HomePage`（タスク一覧へリダイレクト）, `/login` → `LoginPage`, `/tasks` → `TaskListPage`, `/tasks/new` → `TaskFormPage`, `/calendar` → `CalendarPage`（`/tasks/:id` と `/tasks/:id/edit` はサイドパネル統合により廃止済み）
 - `src/components/PrivateRoute.tsx` — JWT存在チェック + exp有効期限検証。無効時は`/login`へリダイレクト
 - `src/components/Sidebar.tsx` — サイドバーコンポーネント（タスク管理リンク・ログアウト）
 - `src/components/SidebarLayout.tsx` — サイドバー付きレイアウト（Outlet使用）

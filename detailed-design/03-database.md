@@ -25,6 +25,7 @@ model Account {
   hashed_password String
   task_assignees  TaskAssignee[]
   created_tasks   Task[]         @relation("TaskCreator")
+  created_events  Event[]        @relation("EventCreator")
 }
 
 model Task {
@@ -53,6 +54,18 @@ model TaskAssignee {
   account  Account @relation(fields: [username], references: [username], onDelete: Cascade)
 
   @@id([task_id, username])
+}
+
+model Event {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String   @default("")
+  start_at    DateTime
+  end_at      DateTime
+  created_by  String
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  creator     Account  @relation("EventCreator", fields: [created_by], references: [username])
 }
 ```
 
@@ -96,6 +109,22 @@ model TaskAssignee {
 - Task削除時はCascade削除（担当者レコードも削除）
 - Account削除時はCascade削除
 
+### Event テーブル
+
+| カラム名 | 型 | 制約 | 説明 |
+|---------|-----|------|------|
+| `id` | Int | PRIMARY KEY, AUTOINCREMENT | 予定ID |
+| `title` | String | NOT NULL | 予定タイトル（最大200文字） |
+| `description` | String | NOT NULL, DEFAULT "" | 予定説明文（最大1000文字） |
+| `start_at` | DateTime | NOT NULL | 開始日時 |
+| `end_at` | DateTime | NOT NULL | 終了日時 |
+| `created_by` | String | NOT NULL, FK → Account.username | 作成者ユーザー名 |
+| `created_at` | DateTime | NOT NULL, DEFAULT now() | 作成日時 |
+| `updated_at` | DateTime | NOT NULL, @updatedAt | 更新日時 |
+
+- `created_by` による作成者記録。編集・削除は作成者のみ可能（Serviceレイヤーで検証）
+- Account削除に対するCascadeは未設定（作成者アカウント削除時は予定が残る）
+
 ## Prisma操作一覧
 
 ### AccountRepository
@@ -115,6 +144,16 @@ model TaskAssignee {
 | `update(id, data)` | `$transaction` → `deleteMany` + `update` | 担当者を削除してから再登録するトランザクション更新（`is_completed` を含む全フィールドが部分更新可能） |
 | `delete(id)` | `delete({ where: { id } })` | タスクを削除（担当者はCascadeで自動削除） |
 | `findAllCategories()` | `findMany({ where: { category: { not: null } }, distinct: ['category'], orderBy: { category: 'asc' } })` | 全タスクから設定済みカテゴリを重複なしで取得（昇順） |
+
+### EventRepository
+
+| メソッド | Prisma操作 | 説明 |
+|---------|-----------|------|
+| `findAll()` | `findMany({ orderBy: { start_at: 'asc' } })` | 全予定を開始日時昇順で取得 |
+| `findById(id)` | `findUnique({ where: { id } })` | 指定IDの予定を取得（存在しない場合は null） |
+| `create(data)` | `create({ data })` | 予定を作成（`Prisma.EventUncheckedCreateInput` を使用） |
+| `update(id, data)` | `update({ where: { id }, data })` | 指定IDの予定を部分更新（undefined フィールドはスプレッドで除外） |
+| `delete(id)` | `delete({ where: { id } })` | 指定IDの予定を削除 |
 
 ## PrismaService の初期化
 
@@ -152,3 +191,4 @@ npx prisma studio
   - `bcrypt` パッケージが依存関係に含まれているが現状未使用
 - `username` が主キーのため、同一ユーザー名の重複登録は DB レベルでも拒否される
 - `TaskAssignee` の担当者更新は `delete + insert` トランザクションで実施
+- `Event.description` は NOT NULL でデフォルト空文字（フロントエンドから未指定時も空文字として保存）
