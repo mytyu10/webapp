@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTaskForm } from '../hooks/useTaskForm';
 import { PRIORITY_VALUES, PRIORITY_LABELS } from '../api/taskApi';
@@ -14,6 +15,7 @@ import CancelButton from '../components/CancelButton';
  * タスク作成・編集ページ
  * URLパラメータにidが存在する場合は編集モード、存在しない場合は作成モードで動作する
  * クエリパラメータ parent_id が存在する場合は子タスク作成モードになる
+ * 通知日時を複数追加できるUIを提供する
  */
 function TaskFormPage() {
   const { id } = useParams<{ id?: string }>();
@@ -23,18 +25,24 @@ function TaskFormPage() {
   const parentIdParam = searchParams.get('parent_id');
   const parentId = parentIdParam !== null ? Number(parentIdParam) : undefined;
 
+  /** 通知日時入力の一時値 */
+  const [notificationInput, setNotificationInput] = useState('');
+
   const {
     values,
     errors,
     apiError,
     loading,
     isEditMode,
+    notifications,
     setTitle,
     setDescription,
     setDueDate,
     setAssigneesText,
     setPriority,
     setCategory,
+    addNotificationDatetime,
+    removeNotificationDatetime,
     handleSubmit,
   } = useTaskForm({ id: taskId, parentId });
 
@@ -48,12 +56,19 @@ function TaskFormPage() {
   /** キャンセル時の遷移先を決定する */
   function handleCancel(): void {
     if (isEditMode && taskId !== undefined) {
-      navigate(`/tasks/${taskId}`);
+      navigate('/tasks');
     } else if (parentId !== undefined) {
       navigate(`/tasks/${parentId}`);
     } else {
       navigate('/tasks');
     }
+  }
+
+  /** 通知日時を追加する */
+  function handleAddNotification(): void {
+    if (!notificationInput) return;
+    addNotificationDatetime(notificationInput);
+    setNotificationInput('');
   }
 
   /** 優先度の選択肢を生成する */
@@ -128,6 +143,56 @@ function TaskFormPage() {
           error={errors.assignees}
           disabled={loading}
         />
+
+        {/* 通知日時セクション */}
+        <div>
+          <p className="block text-sm font-medium text-slate-300 mb-1">通知日時（任意・複数設定可）</p>
+          <div className="flex gap-2 mb-2">
+            <DateTimeField
+              id="notification_input"
+              label=""
+              value={notificationInput}
+              onChange={setNotificationInput}
+              disabled={loading}
+            />
+            <button
+              type="button"
+              onClick={handleAddNotification}
+              disabled={loading || !notificationInput}
+              className="shrink-0 px-3 py-2 bg-sky-700 hover:bg-sky-600 disabled:opacity-50 text-white text-sm font-medium rounded-md transition-colors self-end mb-0"
+            >
+              追加
+            </button>
+          </div>
+          {notifications.length > 0 && (
+            <ul className="space-y-1">
+              {notifications.map((datetime, index) => (
+                <li
+                  key={index}
+                  className="flex items-center justify-between px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-sm text-slate-200"
+                >
+                  <span>
+                    {new Date(datetime).toLocaleString('ja-JP', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeNotificationDatetime(index)}
+                    disabled={loading}
+                    className="ml-3 text-red-400 hover:text-red-300 disabled:opacity-50 text-xs font-medium transition-colors"
+                  >
+                    削除
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         <div className="flex gap-3 mt-2">
           <CancelButton onClick={handleCancel} disabled={loading} />
