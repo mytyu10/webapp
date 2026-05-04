@@ -273,6 +273,8 @@ FullCalendar（dayGridPlugin / timeGridPlugin / interactionPlugin）を使用し
 カレンダーの日付・時間帯をクリックすると新規作成モード（`EventModal`）が開く。
 カレンダーのイベントをクリックすると編集モード（`EventModal`）が開く。タスクイベントは `isTaskEvent` 型ガードで判定しクリックしても編集モーダルを開かない。
 
+**スマホ対応（レスポンシブ）**: `useIsMobile` フックで画面幅 640px 未満を検知する。スマホ時に `currentView === 'timeGridWeek'` だった場合、`useEffect` で自動的に `timeGridDay`（日ビュー）へフォールバックする。`CalendarViewToggle` には `isMobile` を渡し、スマホ時は週ボタンを非表示にして誤操作を防ぐ。
+
 ```
 CalendarPage
 ├── ヘッダー（タイトル "カレンダー" + CalendarViewToggle）
@@ -797,21 +799,25 @@ div.flex.min-h-screen（スマホ: flex-col、PC[sm:]: flex-row）
 ### CalendarViewToggle
 
 カレンダーのビュー切り替えボタングループコンポーネント。月・週・日の3種類を切り替える。
+スマホ時（`isMobile=true`）は週ボタンを非表示にする。
 
 | props | 型 | 必須 | 説明 |
 |-------|-----|------|------|
 | `currentView` | `CalendarView` | ✅ | 現在のビュー |
 | `onChange` | `(view: CalendarView) => void` | ✅ | ビュー切り替えコールバック |
+| `isMobile` | `boolean` | ❌ | スマホ表示かどうか（`true` のとき週ボタンを非表示、デフォルト: `false`） |
 
 ```typescript
-const VIEW_BUTTONS: { view: CalendarView; label: string }[] = [
+const VIEW_BUTTONS: { view: CalendarView; label: string; mobileHidden?: boolean }[] = [
   { view: 'dayGridMonth', label: '月' },
-  { view: 'timeGridWeek', label: '週' },
+  { view: 'timeGridWeek', label: '週', mobileHidden: true },
   { view: 'timeGridDay', label: '日' },
 ];
 ```
 
 選択中: `bg-sky-700 text-white`、非選択: `text-slate-300 bg-slate-700 hover:bg-slate-600`
+
+`isMobile && mobileHidden` が `true` のボタンは `filter` で除外してレンダリングしない。
 
 ### EventModal
 
@@ -912,3 +918,23 @@ const VIEW_BUTTONS: { view: CalendarView; label: string }[] = [
 ```
 
 `--fc-today-bg-color` に紺ベースUIで視認しやすい sky 系の薄いオーバーレイを使用する（黄色デフォルトは使用しない）。
+
+**スマホ向けメディアクエリ（フォールバック）**
+
+```css
+@media (max-width: 639px) {
+  .calendar-wrapper .fc-col-header-cell-cushion {
+    font-size: 0.65rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 2.5rem;
+    display: block;
+  }
+  .calendar-wrapper .fc-timegrid-slot-label-cushion {
+    font-size: 0.6rem;
+  }
+}
+```
+
+週ビューがスマホで万一表示された場合（ブラウザ幅変化等）に、ヘッダーセルの文字が被らないようフォントサイズ縮小と `text-overflow: ellipsis` を適用するフォールバック。通常は `CalendarPage` の `useEffect` により `timeGridDay` へ自動フォールバックされるため、このCSSが適用されることは稀である。

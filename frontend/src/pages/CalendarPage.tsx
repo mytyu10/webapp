@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -11,6 +11,7 @@ import EventModal from '../components/EventModal';
 import TaskTooltip from '../components/TaskTooltip';
 import FormErrorBanner from '../components/FormErrorBanner';
 import CalendarViewToggle from '../components/CalendarViewToggle';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 /** ツールチップの状態型 */
 interface TooltipState {
@@ -62,6 +63,7 @@ function CalendarPage() {
   } = useCalendar();
 
   const calendarRef = useRef<FullCalendar>(null);
+  const isMobile = useIsMobile();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -79,6 +81,16 @@ function CalendarPage() {
     is_completed: false,
     created_by: '',
   });
+
+  /**
+   * スマホ時に週ビューが選択されていた場合、日ビューへ自動フォールバックする
+   */
+  useEffect(() => {
+    if (isMobile && currentView === 'timeGridWeek') {
+      setCurrentView('timeGridDay');
+      calendarRef.current?.getApi().changeView('timeGridDay');
+    }
+  }, [isMobile, currentView, setCurrentView]);
 
   /**
    * カレンダーの日付・時間帯をクリックして新規作成モーダルを開く
@@ -176,7 +188,7 @@ function CalendarPage() {
     <div className="flex flex-col h-full p-6" onMouseMove={handleMouseMove}>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-slate-100">カレンダー</h1>
-        <CalendarViewToggle currentView={currentView} onChange={handleViewChange} />
+        <CalendarViewToggle currentView={currentView} onChange={handleViewChange} isMobile={isMobile} />
       </div>
 
       {error && <FormErrorBanner message={error} />}

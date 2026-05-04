@@ -1,9 +1,9 @@
 import { CalendarView } from '../hooks/useCalendar';
 
 /** ビュー切り替えボタンの定義 */
-const VIEW_BUTTONS: { view: CalendarView; label: string }[] = [
+const VIEW_BUTTONS: { view: CalendarView; label: string; mobileHidden?: boolean }[] = [
   { view: 'dayGridMonth', label: '月' },
-  { view: 'timeGridWeek', label: '週' },
+  { view: 'timeGridWeek', label: '週', mobileHidden: true },
   { view: 'timeGridDay', label: '日' },
 ];
 
@@ -13,16 +13,19 @@ interface CalendarViewToggleProps {
   currentView: CalendarView;
   /** ビュー切り替えコールバック */
   onChange: (view: CalendarView) => void;
+  /** スマホ表示かどうか。true の場合、週ボタンを非表示にする */
+  isMobile?: boolean;
 }
 
 /**
  * カレンダーのビュー切り替えボタングループコンポーネント
- * 月・週・日の3種類のビューを切り替える
+ * 月・週・日の3種類のビューを切り替える。
+ * スマホ時（isMobile=true）は週ボタンを非表示にする
  */
-function CalendarViewToggle({ currentView, onChange }: CalendarViewToggleProps) {
+function CalendarViewToggle({ currentView, onChange, isMobile = false }: CalendarViewToggleProps) {
   return (
     <div className="flex gap-1">
-      {VIEW_BUTTONS.map(({ view, label }) => (
+      {VIEW_BUTTONS.filter(({ mobileHidden }) => !(isMobile && mobileHidden)).map(({ view, label }) => (
         <button
           key={view}
           type="button"

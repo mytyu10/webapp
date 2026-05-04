@@ -58,3 +58,19 @@
 .calendar-wrapper .fc-col-header-cell.fc-day-today {
   background-color: rgba(14, 116, 144, 0.35) !important;
 }
+
+/* スマホ向けフォールバック: 週ビューが万一表示された場合の文字被り防止 */
+@media (max-width: 639px) {
+  .calendar-wrapper .fc-col-header-cell-cushion {
+    font-size: 0.65rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 2.5rem;
+    display: block;
+  }
+
+  .calendar-wrapper .fc-timegrid-slot-label-cushion {
+    font-size: 0.6rem;
+  }
+}
