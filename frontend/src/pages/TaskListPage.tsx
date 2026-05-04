@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTaskList, TaskTreeNode } from '../hooks/useTaskList';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { getCurrentUsername, Task } from '../api/taskApi';
 import FormErrorBanner from '../components/FormErrorBanner';
 import ConfirmModal from '../components/ConfirmModal';
@@ -62,9 +63,11 @@ function findTaskById(tasks: Task[], id: number): Task | undefined {
  * 親子タスクは階層インデントで表示する。
  * タスクカードをクリックすると右側のサイドパネルにタスク詳細を表示する（ページ遷移なし）。
  * 一覧と詳細は useTaskList の同一 tasks ステートを共有する。
+ * スマホ（640px未満）では詳細パネルが全画面表示になり一覧を隠す。
  */
 function TaskListPage() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const {
     tasks,
     incompleteTrees,
@@ -219,10 +222,16 @@ function TaskListPage() {
   const hasAnyTask = incompleteTrees.length > 0 || completedTrees.length > 0;
   const isPanelOpen = selectedTaskId !== null;
 
+  /**
+   * スマホ時は詳細パネルが全画面を占有するため一覧エリアを非表示にする。
+   * PC時はパネルが開いていても一覧と横並びで表示する。
+   */
+  const shouldHideList = isMobile && isPanelOpen;
+
   return (
     <div className={`flex ${isPanelOpen ? 'items-start' : ''}`} ref={containerRef}>
-      {/* タスク一覧エリア */}
-      <div className={isPanelOpen ? 'flex-1 min-w-0' : 'w-full'}>
+      {/* タスク一覧エリア（スマホでパネルが開いているときは非表示） */}
+      <div className={`${isPanelOpen ? 'flex-1 min-w-0' : 'w-full'} ${shouldHideList ? 'hidden' : ''}`}>
         <ConfirmModal
           open={deleteTargetId !== null}
           title="タスクを削除"
@@ -305,17 +314,25 @@ function TaskListPage() {
       {/* リサイズ可能なディバイダー＋詳細パネル */}
       {isPanelOpen && (
         <>
+          {/* ドラッグリサイザーはスマホでは非表示 */}
+          {!isMobile && (
+            <div
+              onMouseDown={handleDividerMouseDown}
+              className="w-3 self-stretch cursor-col-resize shrink-0 flex items-stretch justify-center group"
+            >
+              <div className="w-px bg-slate-700 group-hover:bg-sky-500 transition-colors" />
+            </div>
+          )}
+          {/* スマホ時は全画面、PC時は固定幅 */}
           <div
-            onMouseDown={handleDividerMouseDown}
-            className="w-3 self-stretch cursor-col-resize shrink-0 flex items-stretch justify-center group"
+            style={isMobile ? undefined : { width: panelWidth }}
+            className={isMobile ? 'w-full' : 'shrink-0'}
           >
-            <div className="w-px bg-slate-700 group-hover:bg-sky-500 transition-colors" />
-          </div>
-          <div style={{ width: panelWidth }} className="shrink-0">
             <TaskDetailPanel
               task={selectedTask}
               isToggling={isDetailToggling}
               isOwner={isDetailOwner}
+              isMobile={isMobile}
               onClose={closeDetailPanel}
               onToggleComplete={handleToggleComplete}
               onSelectTask={(id) => setSelectedTaskId(id)}

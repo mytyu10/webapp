@@ -6,8 +6,18 @@
 |------|------|
 | ベースURL | `http://localhost:8000` |
 | Content-Type | `application/json` |
-| CORS許可オリジン | `http://localhost:3000`（credentials: true） |
+| CORS許可オリジン | 環境変数 `CORS_ORIGIN` で制御（デフォルト: `http://localhost:3000`） |
 | エラーレスポンス形式 | `{ "message": "エラーメッセージ" }` |
+
+**CORS設定の詳細（`main.ts`）:**
+
+| `CORS_ORIGIN` の値 | 動作 |
+|-------------------|------|
+| `*` | 全オリジン許可（`origin: true`） |
+| カンマ区切り文字列（例: `http://a.com,http://b.com`） | 指定オリジンのみ許可 |
+| 単一オリジン（例: `http://localhost:3000`） | そのオリジンのみ許可 |
+
+`credentials: true` は全ケースで有効。`backend/.env.local`（Git管理外）に `CORS_ORIGIN="*"` を設定することでトンネル経由テストに対応できる。
 
 ## グローバル設定
 
@@ -29,6 +39,8 @@ HTTP 400
 |---------|--------------|----------|
 | `HttpException` | 例外のステータスをそのまま使用 | `{ message: 例外メッセージ }` |
 | その他（Prismaエラー等） | 500 | `{ message: "データベースエラーが発生しました" }` |
+
+例外キャッチ時は `console.error` でエラー内容をサーバーコンソールに出力する（デバッグ用）。
 
 ### JwtAuthGuard
 

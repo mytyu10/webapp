@@ -53,22 +53,32 @@ PrivateRoute
 
 ### SidebarLayout
 
-ログイン後の全画面に共通するレイアウトコンポーネント。
+ログイン後の全画面に共通するレイアウトコンポーネント。レスポンシブ対応済み。
 
 ```
-SidebarLayout
-├── Sidebar（左固定、w-60）
-└── main（flex-1、p-8）
+SidebarLayout（スマホ: flex-col、PC[sm:]: flex-row）
+├── Sidebar（スマホ: 上部ナビバー / PC: 左サイドバー）
+└── main（flex-1、スマホ: p-4、PC[sm:]: p-8）
     └── <Outlet />（各ページコンポーネント）
 ```
 
+**レスポンシブブレークポイント:**
+
+| ブレークポイント | レイアウト | 説明 |
+|----------------|---------|------|
+| `sm:` 未満（スマホ） | `flex-col`（縦積み） | Sidebarが上部ナビバーとして表示 |
+| `sm:` 以上（PC） | `flex-row`（横並び） | Sidebarが左サイドバーとして表示 |
+
 ### Sidebar
 
-| 要素 | 内容 |
-|------|------|
-| ヘッダー | "WebApp" テキスト |
-| ナビゲーション | タスク管理（/tasks）・カレンダー（/calendar） |
-| フッター | ログアウトボタン（localStorage削除 → /login） |
+レスポンシブ対応済み。スマホでは上部ナビバー、PCでは左サイドバーとして表示する。
+
+| 要素 | スマホ（`sm:` 未満） | PC（`sm:` 以上） |
+|------|------|------|
+| 全体レイアウト | `flex-row`（横並び） | `flex-col`（縦並び）、`w-60` |
+| タイトル | 表示（左端） | 表示（上部） |
+| ナビゲーション | 横並び（`flex-row`） | 縦並び（`flex-col`） |
+| ログアウトボタン | 右端に配置 | 下部に配置 |
 
 ```typescript
 const NAV_LINKS = [
@@ -551,8 +561,13 @@ type CalendarView = 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay';
 **APIベースURL構築**
 
 ```typescript
-const BASE_URL = `${process.env.REACT_APP_API_SCHEME}://${process.env.REACT_APP_API_HOST}:${process.env.REACT_APP_API_PORT}`;
+const API_HOST = process.env.REACT_APP_API_HOST;
+const BASE_URL = API_HOST
+  ? `${process.env.REACT_APP_API_SCHEME}://${API_HOST}:${process.env.REACT_APP_API_PORT}`
+  : '';
 ```
+
+`REACT_APP_API_HOST` が空文字または未設定の場合、`BASE_URL = ''`（空文字）となり相対URLでリクエストを送信する。CRAの `"proxy": "http://localhost:8000"`（`frontend/package.json`）と組み合わせることで、トンネル1本（フロントエンドのURL）でAPIへの疎通が可能になる。`taskApi.ts` / `eventApi.ts` も同じフォールバックロジックを使用する。
 
 | 関数 | メソッド | エンドポイント | 戻り値 | エラー |
 |------|---------|-------------|-------|-------|
@@ -735,10 +750,12 @@ JWT有効期限検証コンポーネント。
 
 ### SidebarLayout
 
+レスポンシブ対応済み。`sm:` ブレークポイントを境にスマホ（縦積み）とPC（横並び）を切り替える。
+
 ```
-div.flex.min-h-screen
-├── Sidebar
-└── main.flex-1
+div.flex.min-h-screen（スマホ: flex-col、PC[sm:]: flex-row）
+├── Sidebar（スマホ: 上部ナビバー / PC: 左サイドバー w-60）
+└── main.flex-1（スマホ: p-4、PC[sm:]: p-8）
     └── <Outlet />
 ```
 

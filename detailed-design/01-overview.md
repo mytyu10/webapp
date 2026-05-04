@@ -38,6 +38,13 @@ React フロントエンドと NestJS バックエンドで構成される。
 | `JWT_SECRET` | JWT署名シークレット | ✅ |
 | `DATABASE_URL` | SQLiteファイルパス（例: `file:./dev.db`）| ✅ |
 | `PORT` | リッスンポート | ❌（デフォルト: 8000） |
+| `CORS_ORIGIN` | CORS許可オリジン | ❌（デフォルト: `http://localhost:3000`） |
+
+> **`CORS_ORIGIN` の動作:**
+> - 値が `*` の場合: 全オリジンを許可（`origin: true`）
+> - カンマ区切りで複数オリジンを指定可能（例: `http://localhost:3000,https://example.com`）
+> - `.env.local` に `CORS_ORIGIN="*"` を設定するとトンネル経由テスト（ngrok等）に対応できる
+> - `backend/.env.local` は `dotenv.config({ path: '.env.local', override: true })` で `.env` より後に読み込まれ、ローカル上書きに使用する（Git管理外）
 
 ### Frontend（`frontend/.env`）
 
@@ -46,6 +53,8 @@ React フロントエンドと NestJS バックエンドで構成される。
 | `REACT_APP_API_SCHEME` | APIのスキーム | `http` |
 | `REACT_APP_API_HOST` | APIのホスト | `localhost` |
 | `REACT_APP_API_PORT` | APIのポート | `8000` |
+
+> **`REACT_APP_API_HOST` が空の場合**: `API_BASE = ''`（空文字）となり相対URLでリクエストを送信する。CRAの `"proxy": "http://localhost:8000"`（`frontend/package.json`）と組み合わせることで、トンネル1本でAPIへ疎通できる。
 
 ## 実装済み機能
 

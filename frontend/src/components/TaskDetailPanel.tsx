@@ -18,6 +18,8 @@ interface TaskDetailPanelProps {
   isToggling: boolean;
   /** 現在のユーザーがタスクの作成者かどうか（削除ボタンの表示制御） */
   isOwner: boolean;
+  /** スマホ表示かどうか（一覧へ戻るボタン表示・閉じるボタンサイズ制御） */
+  isMobile: boolean;
   /** パネルを閉じるコールバック */
   onClose: () => void;
   /** 完了状態切り替えコールバック（useTaskList と共有） */
@@ -41,11 +43,13 @@ const ERROR_CLASS = 'mt-1 text-xs text-red-400';
  * タスクデータは useTaskList と共有した props で受け取り、独自の API 呼び出しは行わない。
  * 編集・削除・子タスク作成のアクションを提供する。
  * 「編集する」ボタン押下でパネル内にインライン編集フォームを表示する。
+ * スマホ（isMobile=true）時は「← 一覧へ戻る」ボタンを表示し、閉じるボタンを拡大する。
  */
 function TaskDetailPanel({
   task,
   isToggling,
   isOwner,
+  isMobile,
   onClose,
   onToggleComplete,
   onSelectTask,
@@ -125,17 +129,33 @@ function TaskDetailPanel({
     <div className="w-full bg-slate-800 border-l border-slate-600 flex flex-col h-full overflow-y-auto">
       {/* パネルヘッダー */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-600 sticky top-0 bg-slate-800 z-10">
-        <h2 className="text-base font-bold text-slate-100">
-          {isEditing ? 'タスク編集' : 'タスク詳細'}
-        </h2>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="詳細パネルを閉じる"
-          className="text-slate-400 hover:text-slate-200 transition-colors text-lg leading-none"
-        >
-          ×
-        </button>
+        <div className="flex items-center gap-3">
+          {/* スマホ時のみ「← 一覧へ戻る」ボタンを表示する */}
+          {isMobile && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="一覧へ戻る"
+              className="flex items-center gap-1 text-sky-400 hover:text-sky-300 transition-colors text-sm font-medium"
+            >
+              ← 一覧へ戻る
+            </button>
+          )}
+          <h2 className="text-base font-bold text-slate-100">
+            {isEditing ? 'タスク編集' : 'タスク詳細'}
+          </h2>
+        </div>
+        {/* PC時のみ右上の閉じるボタンを表示する（スマホは「一覧へ戻る」で代替） */}
+        {!isMobile && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="詳細パネルを閉じる"
+            className="text-slate-400 hover:text-slate-200 transition-colors text-lg leading-none"
+          >
+            ×
+          </button>
+        )}
       </div>
 
       {/* パネルコンテンツ */}
