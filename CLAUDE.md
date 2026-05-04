@@ -85,6 +85,7 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/hooks/useTaskList.ts` — タスク一覧・削除・カテゴリフィルタリング・階層ツリー構築（incompleteTrees/completedTrees）フック。`togglingIds`（PATCH処理中のタスクID集合）と `awaitToggle`（PATCH完了を外から待てる関数）を提供する
 - `src/hooks/useTaskDetail.ts` — タスク詳細取得・完了切り替えフック
 - `src/hooks/useTaskForm.ts` — タスクフォーム（作成/編集/子タスク作成モード対応）フック
+- `src/hooks/useCalendar.ts` — カレンダー予定・タスク表示・ビュー切り替えを管理するフック。タスクのカレンダー表示は日表示（timeGridDay）のみ。`taskToEventInput` でタスクをFullCalendar用EventInputに変換する際、`start = due_date - 1時間`・`end = due_date` に設定し、期限がイベントの終了時刻になるようにする
 - `src/validation/taskValidation.ts` — タスクフォームバリデーション（priority/category含む）
 - `src/components/ConfirmModal.tsx` — 削除確認モーダル
 - `src/components/TaskDetailPanel.tsx` — タスク詳細サイドパネル。`taskId: number | null` / `onClose` / `onSelectTask` を受け取り、`useTaskDetail` で詳細を取得して表示する。子タスク・親タスクのリンクは `onSelectTask` 経由でパネル内切り替え（ページ遷移なし）

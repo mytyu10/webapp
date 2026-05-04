@@ -43,29 +43,28 @@ export interface UseCalendarReturn {
   reload: () => void;
 }
 
-/** タスクをFullCalendarEventInputへ変換する際の背景色 */
-const TASK_EVENT_COLOR = '#334155';
-
 /** タスクイベントの表示時間（ミリ秒）。FullCalendarで視認できる高さを確保するために1時間分を設定する */
 const TASK_EVENT_DURATION_MS = 60 * 60 * 1000;
 
 /**
  * タスクをFullCalendar用EventInputへ変換する。
- * due_dateをstart、due_date+1時間をendに設定してタイムグリッドで視認可能な高さにする。
+ * due_date-1時間をstart、due_dateをendに設定して期限がイベントの終了時刻となるようにする。
  * 日表示（timeGridDay）ビュー専用として呼び出し側でフィルターする
  */
 function taskToEventInput(task: Task): FullCalendarEventInput {
-  const start = task.due_date;
-  const end = new Date(new Date(task.due_date).getTime() + TASK_EVENT_DURATION_MS).toISOString();
+  const end = task.due_date;
+  const start = new Date(new Date(task.due_date).getTime() - TASK_EVENT_DURATION_MS).toISOString();
+  const bgColor = task.is_completed ? '#374151' : '#6d28d9';
+  const textColor = task.is_completed ? '#9ca3af' : '#ede9fe';
   return {
     id: `task-${task.id}`,
     title: `[タスク] ${task.title}`,
     start,
     end,
     allDay: false,
-    backgroundColor: TASK_EVENT_COLOR,
-    borderColor: TASK_EVENT_COLOR,
-    textColor: '#94a3b8',
+    backgroundColor: bgColor,
+    borderColor: bgColor,
+    textColor,
     extendedProps: {
       type: 'task' as const,
       taskId: task.id,
@@ -87,9 +86,9 @@ function calendarEventToEventInput(event: CalendarEvent): FullCalendarEventInput
     title: event.title,
     start: event.start_at,
     end: event.end_at,
-    backgroundColor: '#0369a1',
-    borderColor: '#0369a1',
-    textColor: '#e0f2fe',
+    backgroundColor: '#0e7490',
+    borderColor: '#0e7490',
+    textColor: '#cffafe',
     extendedProps: {
       type: 'event' as const,
       eventId: event.id,
