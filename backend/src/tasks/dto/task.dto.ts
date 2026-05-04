@@ -120,6 +120,25 @@ export class UpdateTaskDto {
   is_completed?: boolean;
 }
 
+/** 通知作成リクエストDTO */
+export class CreateNotificationDto {
+  /** 通知日時（ISO8601形式） */
+  @IsDateString({}, { message: '正しい日時形式で入力してください' })
+  notify_at: string;
+}
+
+/** 通知レスポンスDTO */
+export interface NotificationResponseDto {
+  /** 通知ID */
+  id: number;
+  /** タスクID */
+  task_id: number;
+  /** 通知日時（ISO8601形式） */
+  notify_at: string;
+  /** 送信済みフラグ */
+  is_sent: boolean;
+}
+
 /** タスクレスポンスDTO */
 export interface TaskResponseDto {
   id: number;
@@ -137,4 +156,6 @@ export interface TaskResponseDto {
   closed_by: string | null;
   assignees: string[];
   children: TaskResponseDto[];
+  /** タスクに設定された通知一覧 */
+  notifications: NotificationResponseDto[];
 }
