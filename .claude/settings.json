@@ -1,4 +1,11 @@
 {
+  "permissions": {
+    "allow": [
+      "Write(/Users/yuto/workspace/webapp/**)",
+      "Edit(/Users/yuto/workspace/webapp/**)",
+      "Bash(*)"
+    ]
+  },
   "statusLine": {
     "type": "command",
     "command": "cat /tmp/claude-current-agent.txt 2>/dev/null || true",

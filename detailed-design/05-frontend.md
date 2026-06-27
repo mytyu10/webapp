@@ -7,32 +7,35 @@
 <BrowserRouter>
   <Routes>
     {/* 公開ルート */}
-    <Route path="/login"  element={<LoginPage />}  />
-    <Route path="/regist" element={<RegistPage />} />
+    <Route path="/login"         element={<LoginPage />}        />
+    <Route path="/regist"        element={<RegistPage />}       />
+    {/* LINE OAuthコールバック（認証不要：LINE から直接リダイレクトされる） */}
+    <Route path="/line-callback" element={<LineCallbackPage />} />
 
     {/* 認証済みルート（PrivateRoute + SidebarLayout） */}
     <Route element={<PrivateRoute />}>
       <Route element={<SidebarLayout />}>
-        <Route path="/"              element={<HomePage />}       />
-        <Route path="/tasks"         element={<TaskListPage />}   />
-        <Route path="/tasks/new"     element={<TaskFormPage />}   />
-        <Route path="/tasks/:id"     element={<TaskDetailPage />} />
-        <Route path="/tasks/:id/edit" element={<TaskFormPage />}  />
+        <Route path="/"          element={<HomePage />}     />
+        <Route path="/tasks"     element={<TaskListPage />} />
+        <Route path="/tasks/new" element={<TaskFormPage />} />
+        <Route path="/calendar"  element={<CalendarPage />} />
       </Route>
     </Route>
   </Routes>
 </BrowserRouter>
 ```
 
-| パス | コンポーネント | 認証 | 状態 |
+| パス | コンポーネント | 認証 | 説明 |
 |------|-------------|------|------|
 | `/` | `HomePage` → `/tasks` リダイレクト | 要認証 | 実装済み |
 | `/login` | `LoginPage` | 不要 | 実装済み |
 | `/regist` | `RegistPage` | 不要 | 実装済み |
+| `/line-callback` | `LineCallbackPage` | 不要 | LINE OAuth コールバック |
 | `/tasks` | `TaskListPage` | 要認証 | 実装済み |
-| `/tasks/new` | `TaskFormPage`（作成モード） | 要認証 | 実装済み |
-| `/tasks/:id` | `TaskDetailPage` | 要認証 | 実装済み |
-| `/tasks/:id/edit` | `TaskFormPage`（編集モード） | 要認証 | 実装済み |
+| `/tasks/new` | `TaskFormPage`（作成・子タスク作成モード） | 要認証 | 実装済み |
+| `/calendar` | `CalendarPage` | 要認証 | 実装済み |
+
+> **廃止済みルート**: `/tasks/:id`（タスク詳細）、`/tasks/:id/edit`（タスク編集）はサイドパネル統合により削除された。
 
 ---
 
@@ -43,7 +46,7 @@ PrivateRoute
 ├── localStorage.getItem('token') を取得
 ├── token が null → /login へリダイレクト
 ├── JWTをBase64デコードしてペイロードのexpを取得
-├── exp が未存在または現在時刻 <= exp → /login へリダイレクト
+├── exp が未存在または現在時刻 >= exp → /login へリダイレクト
 └── 有効 → <Outlet /> をレンダリング（SidebarLayout → ページコンポーネント）
 ```
 
@@ -53,22 +56,34 @@ PrivateRoute
 
 ### SidebarLayout
 
-ログイン後の全画面に共通するレイアウトコンポーネント。
+ログイン後の全画面に共通するレイアウトコンポーネント。レスポンシブ対応済み。
 
 ```
-SidebarLayout
-├── Sidebar（左固定、w-60）
-└── main（flex-1、p-8）
+SidebarLayout（スマホ: flex-col、PC[sm:]: flex-row）
+├── Sidebar（スマホ: 上部ナビバー / PC: 左サイドバー）
+└── main（flex-1、スマホ: p-4、PC[sm:]: p-8）
     └── <Outlet />（各ページコンポーネント）
 ```
 
+**レスポンシブブレークポイント:**
+
+| ブレークポイント | レイアウト |
+|----------------|---------|
+| `sm:` 未満（スマホ・640px未満） | `flex-col`（縦積み）：Sidebarが上部ナビバーとして表示 |
+| `sm:` 以上（PC） | `flex-row`（横並び）：Sidebarが左サイドバーとして表示 |
+
 ### Sidebar
 
-| 要素 | 内容 |
+レスポンシブ対応済み。LINE連携状態を `fetchMe()` で取得して表示する。
+
+| 要素 | 説明 |
 |------|------|
-| ヘッダー | "WebApp" テキスト |
-| ナビゲーション | タスク管理（/tasks） |
-| フッター | ログアウトボタン（localStorage削除 → /login） |
+| ブランド名 | "WebApp" |
+| NavLink | タスク管理（/tasks、アクティブ時 `bg-sky-700`） |
+| NavLink | カレンダー（/calendar、アクティブ時 `bg-sky-700`） |
+| LINE連携状態 | `line_user_id` が null → "LINEと連携する"ボタン（クリックで `/accounts/line/login` へ遷移）|
+|              | `line_user_id` あり → "LINE連携済み"テキスト（グレー・操作なし） |
+| ログアウトボタン | `localStorage.removeItem('token')` → `/login` |
 
 ---
 
@@ -76,7 +91,7 @@ SidebarLayout
 
 ### LoginPage
 
-**責務**: UIの描画のみ。ロジックは `useLoginForm` に委譲。
+ロジックは `useLoginForm` に委譲。
 
 ```
 LoginPage
@@ -90,7 +105,7 @@ LoginPage
 
 ### RegistPage
 
-**責務**: UIの描画のみ。ロジックは `useRegistForm` に委譲。
+ロジックは `useRegistForm` に委譲。
 
 ```
 RegistPage
@@ -102,294 +117,227 @@ RegistPage
     └── <Link to="/login">ログインはこちら</Link>
 ```
 
+### LineCallbackPage
+
+LINE OAuth完了後のコールバックページ。PrivateRoute 外に配置。
+
+```
+LineCallbackPage
+└── 中央カード（bg-slate-800）
+    ├── [status=success]
+    │   ├── ✓ アイコン（緑）
+    │   ├── "LINE連携が完了しました"
+    │   ├── "{N}秒後にタスク一覧へ移動します..." カウントダウン
+    │   └── "今すぐ移動する" ボタン → navigate('/tasks')
+    └── [status=error]
+        ├── ✗ アイコン（赤）
+        ├── "LINE連携に失敗しました"
+        ├── 再試行案内テキスト
+        └── "タスク一覧へ戻る" ボタン → navigate('/tasks')
+```
+
+**動作:**
+- `status=success` 時: 2秒後に自動で `/tasks` へリダイレクト（カウントダウン表示）
+- `status=error` 時: 手動でボタンをクリックして戻る
+
 ### TaskListPage
 
-**責務**: タスク一覧の表示・削除確認・ナビゲーション。ロジックは `useTaskList` に委譲。
-
-タスクは親子の階層構造で表示し、未完了セクション・完了済みセクションに分けて表示する。
-ルートタスク（depth === 0）かつ子タスクを持つ場合、左端のトグルボタンで子タスク一覧の表示/非表示を切り替えられる。
+タスク一覧・階層表示・カテゴリフィルター・削除確認・詳細サイドパネル。ロジックは `useTaskList` に委譲。
 
 ```
 TaskListPage
-├── ConfirmModal（削除確認モーダル）
-├── ヘッダー（タイトル + ActionButton "タスクを作成"）
-├── CategoryFilterBar（"すべて" + 各カテゴリのピルボタン）
-├── FormErrorBanner（API/削除/完了切り替えエラー）
-├── 読み込み中テキスト
-├── タスクなしメッセージ
-├── 未完了タスクセクション（incompleteTrees を isNodeHidden でフィルター済み）
-│   └── 階層ツリー表示（DEPTH_INDENT_CLASSES による depth ごとのインデント）
-│       └── 各タスクカード（renderTaskCard → TaskCard）
-│           ├── [depth === 0 かつ children あり] カード内左端にトグルボタン（展開時 rotate-90）
-│           ├── [depth === 0 かつ children なし] カード内左端に同幅スペーサー
-│           └── [depth > 0] インデント・「└」アイコン付き（既存構造を維持）
-└── 完了済みタスクセクション（completedTrees を isNodeHidden でフィルター済み）
-    ├── SectionToggleButton（"完了済み (N件)"、折りたたみ可）
-    └── 折りたたみ展開時: 階層ツリー表示（同上）
+├── [パネル表示時] 外側: flex コンテナ（ref={containerRef}）
+│   ├── 一覧エリア（flex-1 min-w-0 / パネル非表示時は w-full）
+│   │   ├── [スマホかつパネル表示中] hidden（一覧を非表示）
+│   │   ├── ConfirmModal（削除確認モーダル）
+│   │   ├── ヘッダー（"タスク管理" + ActionButton "タスクを作成"）
+│   │   ├── CategoryFilterBar（"すべて" + カテゴリピルボタン）
+│   │   ├── FormErrorBanner（API/削除/完了切り替えエラー）
+│   │   ├── 未完了タスクセクション（incompleteTrees・isNodeHiddenフィルター・インデント）
+│   │   └── 完了済みタスクセクション（completedTrees・SectionToggleButton・折りたたみ可）
+│   ├── [パネル表示時・PCのみ] ドラッグリサイザー（w-3、cursor-col-resize、240〜700px）
+│   └── [パネル表示時] パネルコンテナ（スマホ: w-full / PC: style={{ width: panelWidth }}）
+│       └── TaskDetailPanel（task・isToggling・isOwner・isMobile・各コールバック）
 ```
 
-**インデントクラス定数 `DEPTH_INDENT_CLASSES`**
+**スマホ対応:**
+- `useIsMobile` フックで640px未満を判定
+- パネル表示中はスマホで一覧エリアを `hidden` にしてパネルを全画面表示
+- ドラッグリサイザーはスマホでは非表示
 
-```typescript
-const DEPTH_INDENT_CLASSES: Record<number, string> = {
-  0: 'pl-0',
-  1: 'pl-5',
-  2: 'pl-10',
-};
+**通知削除フロー:**
 ```
-
-depth 0 がルートタスク、depth 1 以降が子・孫タスクに対応する。
-`DEPTH_INDENT_CLASSES` に存在しない depth には `DEPTH_INDENT_FALLBACK_CLASS`（`'pl-14'`）を使用する。
-
-**子タスクトグル関連定数**
-
-| 定数 | 値 | 定義場所 | 説明 |
-|------|-----|---------|------|
-| `TOGGLE_BUTTON_WIDTH_CLASS` | `'w-6'` | `TaskCard.tsx` | トグルボタン・スペーサーの幅クラス |
-| `MAX_TREE_DEPTH` | `10` | `TaskListPage.tsx` | ツリーノードの最大階層深さ（再帰打ち切り用） |
-| `DEPTH_INDENT_FALLBACK_CLASS` | `'pl-14'` | `TaskListPage.tsx` | `DEPTH_INDENT_CLASSES` に存在しない depth のフォールバック |
-
-**タスクカード状態別スタイル定数**（`TaskCard.tsx` に定義）
-
-| 定数 | Tailwindクラス | 適用条件 |
-|------|--------------|---------|
-| `CARD_COMPLETED_CLASSES` | `border-green-800 opacity-75` | `node.is_completed === true` |
-| `CARD_PARTIAL_CLASSES` | `border-yellow-700 bg-yellow-950` | `node.hasPartiallyCompletedChildren === true`（自身は未完了） |
-| `CARD_DEFAULT_CLASSES` | `border-slate-600` | 上記以外 |
-
-`CARD_COMPLETED_CLASSES` → `CARD_PARTIAL_CLASSES` → `CARD_DEFAULT_CLASSES` の優先順で適用する。
-
-**「一部完了」バッジ**（`TaskCard.tsx` に定義）
-
-`node.hasPartiallyCompletedChildren` が `true` の場合、タイトル行に「一部完了」バッジを表示する。
-
-```typescript
-const PARTIAL_COMPLETE_BADGE_CLASSES =
-  'shrink-0 px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-800 text-yellow-200';
+handleDeleteNotification(taskId, notificationId)
+  → deleteNotification(taskId, notificationId) [API]
+  → reload() [一覧再取得]
 ```
-
-**`isNodeHidden` 関数（コンポーネント外の純粋関数）**
-
-```typescript
-function isNodeHidden(
-  node: TaskTreeNode,
-  allNodes: TaskTreeNode[],
-  collapsed: Set<number>,
-  recursionDepth: number = 0,
-): boolean
-```
-
-指定ノードが折りたたみ状態により非表示となるかを判定する。
-
-- `node.depth === 0` または `recursionDepth >= MAX_TREE_DEPTH` の場合は `false`（常に表示）
-- `node.parent_id` が `collapsed` セットに含まれる場合は `true`（直接の親が折りたたまれている）
-- それ以外の場合、祖先ノードを再帰的にたどって判定する（循環防止のため `recursionDepth` をインクリメント）
 
 **ローカルステート**
 
 | ステート | 型 | 初期値 | 説明 |
 |---------|-----|--------|------|
-| `collapsedParentIds` | `Set<number>` | `new Set()` | 折りたたみ中の親タスク ID セット（空 = 全展開） |
-
-**ローカル関数**
-
-| 関数 | 説明 |
-|------|------|
-| `toggleCollapse(parentId: number)` | 指定 ID を `collapsedParentIds` に追加/削除して子タスクの表示/非表示を切り替える |
+| `deleteError` | `string` | `''` | 削除エラーメッセージ |
+| `deleteTargetId` | `number \| null` | `null` | 削除確認対象タスクID |
+| `isCompletedSectionOpen` | `boolean` | `true` | 完了済みセクション展開フラグ |
+| `collapsedParentIds` | `Set<number>` | `new Set()` | 折りたたみ中の親タスクIDセット |
+| `selectedTaskId` | `number \| null` | `null` | 詳細パネル表示中タスクID（null: 非表示） |
+| `panelWidth` | `number` | `320`（px） | サイドパネル幅（ドラッグで変更・画面更新でリセット） |
 
 ### TaskFormPage
 
-**責務**: タスク作成・編集フォームの表示。ロジックは `useTaskForm` に委譲。
-URLパラメータに `id` がある場合は編集モード。
+タスク作成・編集フォーム。ロジックは `useTaskForm` に委譲。
 
 ```
 TaskFormPage
-└── FormCard（"タスクを作成" or "タスクを編集"）
+└── FormCard（"タスクを作成" / "タスクを編集" / "子タスクを作成"）
     ├── FormErrorBanner
     ├── FormField（タイトル）
-    ├── textarea（説明文）
-    ├── input[datetime-local]（期限）
-    ├── FormField（担当者、カンマ区切り）
-    └── キャンセル / SubmitButton（"作成する" or "更新する"）
+    ├── TextAreaField（説明文）
+    ├── DateTimeField（期限）
+    ├── SelectField（優先度: 高/中/低）
+    ├── FormField（カテゴリ・任意）
+    ├── FormField（担当者・カンマ区切り・1人以上必須）
+    ├── 通知日時セクション（任意・複数設定可）
+    │   ├── DateTimeField（通知日時入力）+ "追加" ボタン
+    │   └── 追加済み通知リスト（日時表示 + "削除" ボタン）
+    ├── CancelButton
+    └── SubmitButton（"作成する" / "更新する"）
 ```
 
-### TaskDetailPage
+**動作モード:**
 
-**責務**: タスク詳細の表示・完了状態の切り替え。ロジックは `useTaskDetail` に委譲。
+| モード | 条件 | フォームタイトル | 送信後遷移 |
+|--------|------|--------------|---------|
+| 新規作成 | `id` も `parentId` も未指定 | "タスクを作成" | `/tasks` |
+| 子タスク作成 | `parentId` が URLクエリ `parent_id` で指定 | "子タスクを作成" | `/tasks` |
+| 編集 | URLパラメータ `id` が指定 | "タスクを編集" | `/tasks` |
+
+### CalendarPage
+
+カレンダー表示・予定CRUD。ロジックは `useCalendar` に委譲。
 
 ```
-TaskDetailPage
-├── ヘッダー（"← 一覧に戻る"ボタン + "タスク詳細"タイトル）
+CalendarPage
+├── ヘッダー（"カレンダー" + CalendarViewToggle）
 ├── FormErrorBanner
 ├── 読み込み中テキスト
-└── 詳細カード（完了時: 緑枠 `border-green-500`）
-    ├── 完了済みバナー（完了時のみ: 緑背景 "このタスクは完了済みです"）
-    ├── "← 親タスクへ" リンク（parent_id がある場合のみ表示）
-    ├── タイトル（完了時: 打ち消し線）
-    ├── 説明文
-    ├── 優先度バッジ・カテゴリバッジ
-    ├── 期限
-    ├── 担当者（タグ表示）
-    ├── 作成者
-    ├── 作成日時
-    ├── 子タスク一覧（クリッカブルリンク、完了済みは打ち消し線 + 薄表示）
-    ├── 完了にする / 未完了に戻すボタン（完了状態に応じて切り替え）
-    ├── 編集するボタン（作成者のみ）
-    └── 子タスクを作成ボタン
+└── .calendar-wrapper
+    └── FullCalendar（dayGrid/timeGrid/interaction）
+        ├── 月ビュー（dayGridMonth）: 予定のみ
+        ├── 週ビュー（timeGridWeek）: 予定のみ（スマホ時は日ビューへ自動フォールバック）
+        └── 日ビュー（timeGridDay）: 予定 + タスク（グレーブロック）
 ```
+
+**スマホ対応:**
+- `useIsMobile` で640px未満を判定
+- 週ビュー表示中にスマホになった場合 `useEffect` で日ビューへ自動フォールバック
+- `CalendarViewToggle` でスマホ時は週ボタンを非表示
 
 ---
 
 ## カスタムフック
 
-### useLoginForm
+### useLoginForm / useRegistForm
+
+ログイン・登録フォームの状態と送信処理を管理する。
 
 | state | 型 | 説明 |
 |-------|-----|------|
 | `username` | `string` | ユーザー名入力値 |
 | `password` | `string` | パスワード入力値 |
-| `errors` | `LoginFormErrors` | クライアントバリデーションエラー |
+| `errors` | `LoginFormErrors` / `RegistFormErrors` | クライアントバリデーションエラー |
 | `apiError` | `string` | APIエラーメッセージ |
 | `loading` | `boolean` | 送信中フラグ |
 
-**handleSubmit フロー**
+### useIsMobile
 
-```
-1. validateLoginForm(username, password) でクライアントバリデーション
-   → エラーあり: errors にセット、処理終了
-2. loading = true
-3. loginRequest(username, password) を呼び出し
-4. 成功: localStorage.setItem('token', token) → navigate('/')
-5. 失敗: apiError にエラーメッセージをセット
-6. loading = false
+```typescript
+function useIsMobile(): boolean
 ```
 
-### useRegistForm
-
-| state | 型 | 説明 |
-|-------|-----|------|
-| `username` | `string` | ユーザー名入力値 |
-| `password` | `string` | パスワード入力値 |
-| `errors` | `RegistFormErrors` | クライアントバリデーションエラー |
-| `apiError` | `string` | APIエラーメッセージ |
-| `loading` | `boolean` | 送信中フラグ |
+`window.innerWidth < 640` を初期値として返し、`window.resize` イベントでリアクティブに追従する。
+スマホ判定のブレークポイントは 640px（Tailwind の `sm:` と同一）。
 
 ### useTaskList
 
-| state | 型 | 説明 |
-|-------|-----|------|
-| `tasks` | `Task[]` | タスク一覧（全件） |
+タスク一覧・削除・完了切り替え・階層ツリー構築・インライン更新を管理するフック。
+
+| state / ref | 型 | 説明 |
+|-------------|-----|------|
+| `tasks` | `Task[]` | タスク一覧（全件）。`TaskDetailPanel` と共有 |
 | `incompleteTrees` | `TaskTreeNode[]` | 未完了タスクの階層ツリー（カテゴリフィルター済み） |
 | `completedTrees` | `TaskTreeNode[]` | 完了済みタスクの階層ツリー（カテゴリフィルター済み） |
 | `categories` | `string[]` | カテゴリ一覧 |
 | `selectedCategory` | `string` | 選択中カテゴリ（空文字 = 全件） |
-| `loading` | `boolean` | 読み込み中フラグ |
-| `error` | `string` | 取得エラーメッセージ |
-| `toggleCompleteError` | `string` | 完了切り替えエラーメッセージ（楽観的更新失敗時にセット） |
-
-> `deleteError` はフック外（`TaskListPage` のローカルstate）で管理する。
+| `togglingIds` | `Set<number>` | 現在PATCH処理中のタスクIDセット |
+| `togglePromisesRef` | `MutableRefObject<Map<number, Promise<void>>>` | PATCH中の各タスクIDに対応するPromise（外部からawaitするために使用） |
 
 | 関数 | 説明 |
 |------|------|
-| `handleDelete(id)` | タスクを削除しローカルstateを更新 |
-| `handleToggleComplete(id, is_completed)` | タスクの完了状態を楽観的UI更新で切り替える。ボタン押下直後にローカルステートを更新し、APIコール成功時はサーバーレスポンスで上書き、失敗時はスナップショットにロールバックする |
-| `setSelectedCategory(category)` | カテゴリフィルターを更新する |
-| `reload()` | 一覧を再読み込みするトリガーをインクリメント |
+| `handleDelete(id)` | タスクを削除してローカルstateを更新 |
+| `handleToggleComplete(id, is_completed)` | 楽観的UI更新で完了状態を切り替え。失敗時スナップショットにロールバック |
+| `awaitToggle(id)` | 指定IDのPATCH進行中なら完了まで待機（refベースで最新状態を参照） |
+| `handleUpdate(id, input)` | `updateTask` APIを呼び出し、`replaceTaskInTree` でローカルstateを更新 |
+| `setSelectedCategory(category)` | カテゴリフィルターを更新 |
+| `reload()` | `reloadTrigger` をインクリメントして一覧を再取得 |
 
 **TaskTreeNode 型**
 
 ```typescript
 interface TaskTreeNode extends Task {
-  /** 階層の深さ（ルートタスク: 0, 子タスク: 1, ...） */
-  depth: number;
-  /** 自身が未完了かつ直接の子タスク（孫以下は対象外）に1件以上完了があるかどうか */
-  hasPartiallyCompletedChildren: boolean;
+  depth: number;                         // 階層深さ（ルート: 0）
+  hasPartiallyCompletedChildren: boolean; // 自身未完了かつ直接子に1件以上完了あり
 }
-```
-
-**buildTaskTrees 関数**
-
-ルートタスク（`parent_id: null`）を起点に、`children` リレーションを再帰的に展開して `TaskTreeNode[]` を構築する。
-各ノードの `hasPartiallyCompletedChildren` は、自身が未完了かつ直接の子（孫以下は対象外）に1件以上完了タスクがある場合に `true` となる。
-
-**ソートロジック（getEffectiveDueDate）**
-
-`incompleteTrees` / `completedTrees` の並び順は `getEffectiveDueDate` 関数で計算した有効期限の昇順。
-子タスクを持つ親タスクは、子タスクの中で最も早い `due_date` を有効期限として扱う。
-
-**フィルタリングロジック**
-
-`selectedCategory` が指定されている場合、自タスクまたはいずれかの子孫タスクがそのカテゴリを持つツリーのみを表示する。
-
-### useTaskDetail
-
-タスク詳細ページのデータ取得・完了状態切り替えを管理するフック。
-
-| state | 型 | 説明 |
-|-------|-----|------|
-| `task` | `Task \| null` | 取得したタスクデータ |
-| `loading` | `boolean` | データ取得中フラグ |
-| `error` | `string` | エラーメッセージ |
-| `toggleLoading` | `boolean` | 完了切り替え中フラグ |
-
-| 関数 | 説明 |
-|------|------|
-| `handleToggleComplete()` | 現在の `is_completed` を反転して `toggleTaskCompletion` を呼び出す。成功後に task state を更新 |
-
-**初期化フロー**
-
-```
-1. useEffect: fetchTask(id) でタスク取得 → task に格納
-2. エラー時: error にメッセージをセット
 ```
 
 ### useTaskForm
 
-`id`（編集対象タスクID）と `parentId`（子タスク作成時の親タスクID）で3モードを切り替える。
+タスクフォーム（作成/編集/子タスク作成）と通知日時管理を統合するフック。
 
 | state | 型 | 説明 |
 |-------|-----|------|
-| `values` | `TaskFormValues` | フォーム入力値（title, description, due_date, assigneesText, priority, category） |
+| `values` | `TaskFormValues` | フォーム入力値 |
 | `errors` | `TaskFormErrors` | バリデーションエラー |
 | `apiError` | `string` | APIエラーメッセージ |
 | `loading` | `boolean` | 送信/読み込み中フラグ |
-| `isEditMode` | `boolean` | 編集モードフラグ（`id` が指定された場合 `true`） |
+| `isEditMode` | `boolean` | 編集モードフラグ |
+| `notifications` | `string[]` | 追加済み通知日時（datetime-local形式） |
 
-**動作モード**
+| 関数 | 説明 |
+|------|------|
+| `addNotificationDatetime(datetime)` | 通知日時を追加する |
+| `removeNotificationDatetime(index)` | 指定インデックスの通知日時を削除する |
+| `handleSubmit(e)` | バリデーション → タスク作成/更新 → 通知日時を `addNotification` API へ順次送信 |
 
-| モード | 条件 | 動作 |
-|--------|------|------|
-| 新規作成 | `id` も `parentId` も未指定 | 空フォームで作成し `/tasks` へ遷移 |
-| 子タスク作成 | `parentId` が指定された場合 | 親タスクの `category` を初期値に設定。作成後 `/tasks/:parentId` へ遷移 |
-| 編集 | `id` が指定された場合 | 既存タスクデータを取得してフォームに反映。更新後 `/tasks/:id` へ遷移 |
+**編集モード時の既存通知読み込み:**
 
-**handleSubmit フロー**
+`fetchTask(id)` で取得したタスクの `notifications` を datetime-local 形式に変換して `notifications` stateに設定する。
+
+### useCalendar
+
+カレンダー予定・タスク表示・ビュー切り替えを管理するフック。
+
+| state | 型 | 説明 |
+|-------|-----|------|
+| `events` | `CalendarEvent[]` | 予定一覧 |
+| `tasks` | `Task[]` | タスク一覧（日表示時にカレンダーに表示） |
+| `currentView` | `CalendarView` | 現在のビュー（初期値: `'dayGridMonth'`） |
+| `loading` | `boolean` | 読み込み中フラグ |
+| `error` | `string` | エラーメッセージ |
+
+**calendarEvents の構築（useMemo）:**
 
 ```
-1. validateTaskForm(values) でバリデーション
-2. 編集モード: updateTask(id, input) を呼び出し → navigate('/tasks/:id')
-3. 作成モード: getCurrentUsername() でユーザー名取得 → createTask(input) を呼び出し
-   - parentId あり: navigate('/tasks/:parentId')
-   - parentId なし: navigate('/tasks')
-4. 失敗: apiError にセット
+- CalendarEvent → EventInput: id "event-{id}", 背景色 #0369a1（sky系）
+- 日表示時のみタスクを追加
+  - Task → EventInput: id "task-{id}", 背景色 #334155（グレー）
+  - start = due_date - 1時間、end = due_date（期限がイベント終了時刻）
+  - extendedProps: type:'task', description, priority, category, is_completed, created_by
 ```
-
-**子タスク作成時のカテゴリ引き継ぎ**
-
-`parentId` が指定された場合、マウント時に `fetchTask(parentId)` で親タスクを取得し、`parent.category` を `values.category` の初期値にセットする。
 
 ---
 
 ## バリデーション
-
-### loginValidation / registValidation（同一ロジック）
-
-| フィールド | 条件 | エラーメッセージ |
-|-----------|------|----------------|
-| username | 空文字 | 「ユーザー名を入力してください。」 |
-| username | 11文字以上 | 「ユーザー名は10文字以内で入力してください。」 |
-| password | 空文字 | 「パスワードを入力してください。」 |
-| password | 8文字未満 または 21文字以上 | 「パスワードは8〜20文字で入力してください。」 |
 
 ### taskValidation
 
@@ -401,41 +349,41 @@ interface TaskTreeNode extends Task {
 | description | 1001文字以上 | 「説明文は1000文字以内で入力してください」 |
 | due_date | 空文字 | 「期限を入力してください」 |
 | due_date | 不正な日時形式 | 「正しい日時形式で入力してください」 |
+| assignees | 0人 | 「担当者を1人以上入力してください」 |
 | assignees | 51人以上 | 「担当者は50人以内で設定してください」 |
+
+### eventValidation
+
+| フィールド | 条件 | エラーメッセージ |
+|-----------|------|----------------|
+| title | 空文字 | 「タイトルを入力してください」 |
+| title | 201文字以上 | 「タイトルは200文字以内で入力してください」 |
+| start_at | 空文字 | 「開始日時を入力してください」 |
+| end_at | 空文字 | 「終了日時を入力してください」 |
+| end_at | start_at 以前の値 | 「終了日時は開始日時より後に設定してください」 |
 
 ---
 
-## API通信
-
-### accountApi.ts
-
-**APIベースURL構築**
-
-```typescript
-const BASE_URL = `${process.env.REACT_APP_API_SCHEME}://${process.env.REACT_APP_API_HOST}:${process.env.REACT_APP_API_PORT}`;
-```
-
-| 関数 | メソッド | エンドポイント | 戻り値 | エラー |
-|------|---------|-------------|-------|-------|
-| `loginRequest(username, password)` | POST | `/accounts/login` | `Promise<string>`（JWTトークン） | Error をthrow |
-| `registRequest(username, password)` | POST | `/accounts/regist` | `Promise<void>` | Error をthrow |
-
-### taskApi.ts
+## API通信（taskApi.ts）
 
 Authorizationヘッダー（`Bearer <token>`）を全リクエストに付与。
 
-| 関数 | メソッド | エンドポイント | 戻り値 | 説明 |
-|------|---------|-------------|-------|------|
-| `fetchTasks()` | GET | `/tasks` | `Promise<Task[]>` | ルートタスク一覧取得（期限昇順）。`children` リレーション込み |
-| `fetchTask(id)` | GET | `/tasks/:id` | `Promise<Task>` | 指定IDのタスク取得 |
-| `fetchCategories()` | GET | `/tasks/categories` | `Promise<string[]>` | カテゴリ一覧取得 |
-| `createTask(input)` | POST | `/tasks` | `Promise<Task>` | タスク作成 |
-| `updateTask(id, input)` | PATCH | `/tasks/:id` | `Promise<Task>` | タスク更新 |
-| `toggleTaskCompletion(id, is_completed)` | PATCH | `/tasks/:id` | `Promise<Task>` | `updateTask` のラッパー。完了状態のみ切り替え |
-| `deleteTask(id)` | DELETE | `/tasks/:id` | `Promise<void>` | タスク削除 |
-| `getCurrentUsername()` | - | - | `string \| null` | localStorage の JWT をデコードしてusernameを取得 |
+| 関数 | メソッド | エンドポイント | 説明 |
+|------|---------|-------------|------|
+| `fetchTasks()` | GET | `/tasks` | ルートタスク一覧取得 |
+| `fetchTask(id)` | GET | `/tasks/:id` | 指定IDのタスク取得 |
+| `fetchCategories()` | GET | `/tasks/categories` | カテゴリ一覧取得 |
+| `createTask(input)` | POST | `/tasks` | タスク作成 |
+| `updateTask(id, input)` | PATCH | `/tasks/:id` | タスク更新 |
+| `toggleTaskCompletion(id, is_completed)` | PATCH | `/tasks/:id` | `updateTask` のラッパー |
+| `deleteTask(id)` | DELETE | `/tasks/:id` | タスク削除 |
+| `fetchNotifications(taskId)` | GET | `/tasks/:id/notifications` | 通知一覧取得 |
+| `addNotification(taskId, notify_at)` | POST | `/tasks/:id/notifications` | 通知追加 |
+| `deleteNotification(taskId, notificationId)` | DELETE | `/tasks/:id/notifications/:notificationId` | 通知削除 |
+| `fetchMe()` | GET | `/accounts/me` | ログインユーザー情報取得（LINE連携状態含む） |
+| `getCurrentUsername()` | - | - | localStorage の JWT をデコードして username を取得 |
 
-**Task インターフェース（フロントエンド型定義）**
+**Task インターフェース**
 
 ```typescript
 interface Task {
@@ -443,156 +391,132 @@ interface Task {
   title: string;
   description: string;
   due_date: string;
-  priority: Priority;        // HIGH / MEDIUM / LOW
+  priority: Priority;
   category: string | null;
   parent_id: number | null;
   created_by: string;
   created_at: string;
   updated_at: string;
   is_completed: boolean;
+  closed_by: string | null;
   assignees: string[];
   children: Task[];
+  notifications?: TaskNotification[];
 }
 ```
 
-**定数・ユーティリティ**
+**TaskNotification インターフェース**
 
-| 定数 | 型 | 説明 |
-|------|-----|------|
-| `PRIORITY_VALUES` | `readonly ['HIGH', 'MEDIUM', 'LOW']` | 優先度の有効値 |
-| `PRIORITY_LABELS` | `Record<Priority, string>` | 優先度の日本語表示ラベル（高/中/低） |
-| `PRIORITY_BADGE_CLASSES` | `Record<Priority, string>` | 優先度バッジのTailwindクラス |
+```typescript
+interface TaskNotification {
+  id: number;
+  task_id: number;
+  notify_at: string;    // ISO8601形式
+  is_sent: boolean;
+}
+```
+
+**AccountMe インターフェース**
+
+```typescript
+interface AccountMe {
+  username: string;
+  line_user_id: string | null;
+}
+```
 
 ---
 
 ## 共通コンポーネント
 
-### FormCard
+### TaskDetailPanel
 
-フォームページ全体の外枠。ダーク系フルスクリーン中央配置。
-
-| props | 型 | 必須 | 説明 |
-|-------|-----|------|------|
-| `title` | `string` | ✅ | カードタイトル |
-| `onSubmit` | `FormEventHandler` | ✅ | フォーム送信ハンドラー |
-| `children` | `ReactNode` | ✅ | カード内コンテンツ |
-
-スタイル: `bg-slate-900`（背景）、`bg-slate-800`（カード）
-
-### FormField
-
-ラベル＋入力欄＋エラーメッセージのセット。
-
-| props | 型 | 必須 | デフォルト | 説明 |
-|-------|-----|------|---------|------|
-| `id` | `string` | ✅ | - | input の id |
-| `label` | `string` | ✅ | - | ラベルテキスト |
-| `type` | `'text' \| 'password'` | ❌ | `'text'` | input の type |
-| `value` | `string` | ✅ | - | 入力値 |
-| `onChange` | `(v: string) => void` | ✅ | - | 変更ハンドラー |
-| `error` | `string` | ❌ | - | エラーメッセージ |
-| `disabled` | `boolean` | ❌ | `false` | 非活性フラグ |
-| `maxLength` | `number` | ❌ | - | 最大文字数 |
-| `autoComplete` | `string` | ❌ | - | オートコンプリート |
-
-エラー時: `border-red-500` + 赤テキスト表示
-
-### FormErrorBanner
-
-APIエラーメッセージを赤背景バナーで表示。
+タスク一覧画面の右側に表示するサイドパネル。独自 API 呼び出しを行わない。
 
 | props | 型 | 必須 | 説明 |
 |-------|-----|------|------|
-| `message` | `string` | ✅ | エラーメッセージ（空文字で非表示） |
+| `task` | `Task \| null` | ✅ | 表示対象タスク |
+| `isToggling` | `boolean` | ✅ | PATCH処理中フラグ（全ボタンdisabled） |
+| `isOwner` | `boolean` | ✅ | 作成者かどうか（削除ボタン表示制御） |
+| `isMobile` | `boolean` | ✅ | スマホ表示かどうか |
+| `onClose` | `() => void` | ✅ | パネルを閉じるコールバック |
+| `onToggleComplete` | `(id, is_completed) => Promise<void>` | ✅ | 完了状態切り替え |
+| `onSelectTask` | `(id: number) => void` | ✅ | 子タスク・親タスクリンクのコールバック |
+| `onDeleteClick` | `(id: number) => void` | ✅ | 削除確認モーダルを開くコールバック |
+| `onUpdate` | `(id, input) => Promise<Task>` | ✅ | タスク更新コールバック |
+| `onDeleteNotification` | `(taskId, notificationId) => Promise<void>` | ✅ | 通知削除コールバック（親に委譲） |
 
-### SubmitButton
+**スマホ対応（`isMobile`）:**
+- `isMobile=true` 時: 「← 一覧へ戻る」ボタンを表示（PC向け × ボタンは非表示）
+- `isMobile=false` 時: × ボタンを表示（「← 一覧へ戻る」は非表示）
 
-送信ボタン。ローディング中はラベル変更＋非活性。
-
-| props | 型 | 必須 | デフォルト | 説明 |
-|-------|-----|------|---------|------|
-| `label` | `string` | ✅ | - | ボタンラベル |
-| `loadingLabel` | `string` | ❌ | `'処理中...'` | ローディング中ラベル |
-| `loading` | `boolean` | ❌ | `false` | ローディングフラグ |
-
-### PrivateRoute
-
-JWT有効期限検証コンポーネント。
-
-- `localStorage` の `token` を取得
-- JWTのペイロード `exp`（UNIX秒）を検証
-- 無効・期限切れ → `<Navigate to="/login" replace />`
-- 有効 → `<Outlet />`
+**通知一覧表示:**
+- `task.notifications` が存在する場合、「通知設定」セクションとして各通知を表示
+- 各通知に `notify_at`（日時）・`is_sent`（"送信済み" バッジ）・"削除" ボタン
 
 ### Sidebar
 
 | 要素 | 説明 |
 |------|------|
 | ブランド名 | "WebApp" |
-| NavLink | タスク管理（アクティブ時 `bg-sky-700`） |
-| ログアウトボタン | `localStorage.removeItem('token')` → `/login` |
+| NavLink | タスク管理・カレンダー |
+| LINE連携表示 | `fetchMe()` でマウント時に取得。連携済み → グレーテキスト、未連携 → 緑ボタン |
+| ログアウト | `localStorage.removeItem('token')` → `/login` |
 
-### SidebarLayout
+### CalendarViewToggle
 
+月/週/日ビューの切り替えボタングループ。スマホ時は週ボタンを非表示。
+
+| props | 型 | 必須 | 説明 |
+|-------|-----|------|------|
+| `currentView` | `CalendarView` | ✅ | 現在のビュー |
+| `onChange` | `(view: CalendarView) => void` | ✅ | ビュー切り替えコールバック |
+| `isMobile` | `boolean` | ❌ | スマホ表示かどうか（デフォルト: `false`） |
+
+### その他共通コンポーネント
+
+| コンポーネント | 説明 |
+|--------------|------|
+| `FormCard` | フォームページ外枠（`bg-slate-800`） |
+| `FormField` | ラベル＋input＋エラー表示 |
+| `FormErrorBanner` | APIエラー赤バナー |
+| `SubmitButton` | 送信ボタン（ローディング対応） |
+| `CancelButton` | キャンセルボタン |
+| `DeleteButton` | 削除ボタン（確認トリガー） |
+| `TextAreaField` | textareaラッパー |
+| `DateTimeField` | datetime-local入力ラッパー |
+| `SelectField` | selectラッパー |
+| `ConfirmModal` | 削除確認モーダル |
+| `PrivateRoute` | JWT exp検証コンポーネント |
+| `SidebarLayout` | Sidebar＋メインコンテンツのレイアウト |
+| `TaskCard` | タスク1件表示カード（クリックでパネル表示） |
+| `EventModal` | 予定作成・編集モーダル（作成者のみ編集可） |
+| `TaskTooltip` | カレンダー日表示タスクのホバーツールチップ |
+| `ActionButton` | ナビゲーション用スカイブルーボタン |
+| `CategoryFilterBar` | カテゴリフィルターピルボタン群 |
+| `SectionToggleButton` | 完了済みセクション折りたたみボタン |
+
+---
+
+## FullCalendar テーマ設定（index.css）
+
+```css
+.calendar-wrapper {
+  --fc-border-color: #334155;
+  --fc-today-bg-color: rgba(14, 165, 233, 0.12); /* sky系薄いオーバーレイ */
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: #1e293b;
+}
+
+/* スマホ向けフォールバック（週ビュー万一表示時） */
+@media (max-width: 639px) {
+  .calendar-wrapper .fc-col-header-cell-cushion {
+    font-size: 0.65rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 2.5rem;
+    display: block;
+  }
+}
 ```
-div.flex.min-h-screen
-├── Sidebar
-└── main.flex-1
-    └── <Outlet />
-```
-
-### TaskCard
-
-タスク1件の表示と操作ボタンを提供するコンポーネント。`TaskListPage` から切り出し。
-
-| props | 型 | 必須 | 説明 |
-|-------|-----|------|------|
-| `node` | `TaskTreeNode` | ✅ | 表示対象のタスクツリーノード |
-| `isCollapsed` | `boolean` | ✅ | 子タスクが折りたたまれているか（depth=0 のみ使用） |
-| `onToggleCollapse` | `() => void` | ✅ | 子タスク表示/非表示の切り替えコールバック |
-| `onToggleComplete` | `(id: number, is_completed: boolean) => void` | ✅ | 完了状態切り替えコールバック |
-| `onNavigateDetail` | `(id: number) => void` | ✅ | 詳細ページへの遷移コールバック |
-| `onNavigateEdit` | `(id: number) => void` | ✅ | 編集ページへの遷移コールバック |
-| `onDeleteClick` | `(id: number) => void` | ✅ | 削除確認ダイアログを開くコールバック |
-| `isOwner` | `boolean` | ✅ | 現在のユーザーがタスクの作成者かどうか |
-
-**depth 別レンダリング:**
-- `depth === 0` かつ `children.length > 0`: カード内部の左端にトグルボタン（＞）を表示。展開中は `rotate-90`
-- `depth === 0` かつ `children.length === 0`: カード内部の左端に同幅スペーサーを表示
-- `depth > 0`: タイトル行の先頭に「└」アイコンを表示
-
-**アクションボタン（カード右端）:** 完了切り替え・詳細・編集（`isOwner` のみ）・削除（`isOwner` のみ）
-
-### ActionButton
-
-ナビゲーション・アクション用の汎用ボタンコンポーネント。スカイブルー塗りつぶしスタイル。
-
-| props | 型 | 必須 | 説明 |
-|-------|-----|------|------|
-| `label` | `string` | ✅ | ボタンに表示するラベル |
-| `onClick` | `() => void` | ✅ | クリック時のコールバック |
-
-### CategoryFilterBar
-
-カテゴリフィルターバーコンポーネント。「すべて」ボタンと各カテゴリのピルボタンを横並びで表示。
-
-| props | 型 | 必須 | 説明 |
-|-------|-----|------|------|
-| `categories` | `string[]` | ✅ | カテゴリ名の一覧 |
-| `selectedCategory` | `string` | ✅ | 現在選択中のカテゴリ（空文字は「すべて」） |
-| `onSelect` | `(category: string) => void` | ✅ | カテゴリ選択時のコールバック |
-
-選択中: `bg-sky-600 text-white`、非選択: `bg-slate-600 text-slate-300 hover:bg-slate-500`
-
-### SectionToggleButton
-
-セクション折りたたみボタンコンポーネント。
-
-| props | 型 | 必須 | 説明 |
-|-------|-----|------|------|
-| `label` | `string` | ✅ | セクション名（例: "完了済み"） |
-| `count` | `number` | ✅ | 表示する件数 |
-| `isOpen` | `boolean` | ✅ | セクションが展開中かどうか |
-| `onClick` | `() => void` | ✅ | クリック時のコールバック |
-
-展開中は `▾`、折りたたみ中は `▸` を表示。ラベルと件数を "ラベル (N件)" の形式で表示。

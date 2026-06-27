@@ -25,6 +25,7 @@ function makeTask(overrides: Partial<taskApi.Task>): taskApi.Task {
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     is_completed: false,
+    closed_by: null,
     assignees: [],
     children: [],
     ...overrides,

@@ -51,7 +51,9 @@ describe('TaskRepository', () => {
 
   describe('findAll', () => {
     it('prisma.task.findMany が where: { parent_id: null } を含む引数で呼ばれる', async () => {
-      mockPrismaService.task.findMany.mockResolvedValue([mockTaskWithRelations]);
+      mockPrismaService.task.findMany.mockResolvedValue([
+        mockTaskWithRelations,
+      ]);
 
       await repository.findAll();
 
@@ -63,7 +65,9 @@ describe('TaskRepository', () => {
     });
 
     it('prisma.task.findMany が orderBy: { due_date: "asc" } を含む引数で呼ばれる', async () => {
-      mockPrismaService.task.findMany.mockResolvedValue([mockTaskWithRelations]);
+      mockPrismaService.task.findMany.mockResolvedValue([
+        mockTaskWithRelations,
+      ]);
 
       await repository.findAll();
 
@@ -75,7 +79,9 @@ describe('TaskRepository', () => {
     });
 
     it('タスク一覧を返す', async () => {
-      mockPrismaService.task.findMany.mockResolvedValue([mockTaskWithRelations]);
+      mockPrismaService.task.findMany.mockResolvedValue([
+        mockTaskWithRelations,
+      ]);
 
       const result = await repository.findAll();
 
@@ -94,7 +100,9 @@ describe('TaskRepository', () => {
 
   describe('findById', () => {
     it('指定IDのタスクを返す', async () => {
-      mockPrismaService.task.findUnique.mockResolvedValue(mockTaskWithRelations);
+      mockPrismaService.task.findUnique.mockResolvedValue(
+        mockTaskWithRelations,
+      );
 
       const result = await repository.findById(1);
 
@@ -115,7 +123,9 @@ describe('TaskRepository', () => {
     beforeEach(() => {
       /** $transaction の実装: コールバックを実行してその結果を返す */
       mockPrismaService.$transaction.mockImplementation(
-        async (callback: (tx: typeof mockPrismaService) => Promise<unknown>) => {
+        async (
+          callback: (tx: typeof mockPrismaService) => Promise<unknown>,
+        ) => {
           return callback(mockPrismaService);
         },
       );

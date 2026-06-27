@@ -62,6 +62,7 @@ function makeNode(overrides: Partial<TaskTreeNode>): TaskTreeNode {
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     is_completed: false,
+    closed_by: null,
     assignees: [],
     children: [],
     depth: 0,
@@ -84,6 +85,7 @@ function makeTask(overrides: Partial<taskApi.Task>): taskApi.Task {
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
     is_completed: false,
+    closed_by: null,
     assignees: [],
     children: [],
     ...overrides,
@@ -414,32 +416,50 @@ describe('TaskListPage', () => {
   });
 
   describe('作成者によるボタン表示制御', () => {
-    it('自分が作成者の場合は編集・削除ボタンが表示される', async () => {
+    it('自分が作成者の場合はタスクカードをクリックすると詳細パネルに編集・削除ボタンが表示される', async () => {
       (taskApi.getCurrentUsername as jest.Mock).mockReturnValue('owner');
       const task = makeTask({ id: 1, title: '自分のタスク', created_by: 'owner' });
       (taskApi.fetchTasks as jest.Mock).mockResolvedValue([task]);
 
       render(<TaskListPage />);
 
+      // タスクカードが表示されるまで待機する
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: '編集' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: '削除' })).toBeInTheDocument();
+        expect(screen.getByText('自分のタスク')).toBeInTheDocument();
+      });
+
+      // タスクカードをクリックして詳細パネルを開く
+      fireEvent.click(screen.getByText('自分のタスク'));
+
+      // 詳細パネルに「編集する」「削除する」ボタンが表示される
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: '編集する' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '削除する' })).toBeInTheDocument();
       });
     });
 
-    it('他者が作成者の場合は編集・削除ボタンが表示されない', async () => {
+    it('他者が作成者の場合はタスクカードをクリックすると詳細パネルに編集ボタンは表示されるが削除ボタンは表示されない', async () => {
       (taskApi.getCurrentUsername as jest.Mock).mockReturnValue('viewer');
       const task = makeTask({ id: 1, title: '他者のタスク', created_by: 'owner' });
       (taskApi.fetchTasks as jest.Mock).mockResolvedValue([task]);
 
       render(<TaskListPage />);
 
+      // タスクカードが表示されるまで待機する
       await waitFor(() => {
         expect(screen.getByText('他者のタスク')).toBeInTheDocument();
       });
 
-      expect(screen.queryByRole('button', { name: '編集' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: '削除' })).not.toBeInTheDocument();
+      // タスクカードをクリックして詳細パネルを開く
+      fireEvent.click(screen.getByText('他者のタスク'));
+
+      // 詳細パネルに「編集する」ボタンは表示される（ログインユーザーに関わらず常時表示）
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: '編集する' })).toBeInTheDocument();
+      });
+
+      // 「削除する」ボタンは作成者のみ表示するため表示されない
+      expect(screen.queryByRole('button', { name: '削除する' })).not.toBeInTheDocument();
     });
   });
 });

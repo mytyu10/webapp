@@ -9,26 +9,30 @@ datasource db {
 model Account {
   username        String         @id
   hashed_password String
+  line_user_id    String?
   task_assignees  TaskAssignee[]
   created_tasks   Task[]         @relation("TaskCreator")
+  created_events  Event[]        @relation("EventCreator")
 }
 
 model Task {
-  id           Int            @id @default(autoincrement())
-  title        String
-  description  String
-  due_date     DateTime
-  priority     String         @default("MEDIUM")
-  category     String?
-  parent_id    Int?
-  created_by   String
-  created_at   DateTime       @default(now())
-  updated_at   DateTime       @updatedAt
-  is_completed Boolean        @default(false)
-  assignees    TaskAssignee[]
-  creator      Account        @relation("TaskCreator", fields: [created_by], references: [username])
-  parent       Task?          @relation("TaskChildren", fields: [parent_id], references: [id])
-  children     Task[]         @relation("TaskChildren")
+  id            Int                @id @default(autoincrement())
+  title         String
+  description   String
+  due_date      DateTime
+  priority      String             @default("MEDIUM")
+  category      String?
+  parent_id     Int?
+  created_by    String
+  created_at    DateTime           @default(now())
+  updated_at    DateTime           @updatedAt
+  is_completed  Boolean            @default(false)
+  closed_by     String?
+  assignees     TaskAssignee[]
+  notifications TaskNotification[]
+  creator       Account            @relation("TaskCreator", fields: [created_by], references: [username])
+  parent        Task?              @relation("TaskChildren", fields: [parent_id], references: [id])
+  children      Task[]             @relation("TaskChildren")
 }
 
 model TaskAssignee {
@@ -38,4 +42,24 @@ model TaskAssignee {
   account  Account @relation(fields: [username], references: [username], onDelete: Cascade)
 
   @@id([task_id, username])
+}
+
+model TaskNotification {
+  id        Int      @id @default(autoincrement())
+  task_id   Int
+  notify_at DateTime
+  is_sent   Boolean  @default(false)
+  task      Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
+}
+
+model Event {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String   @default("")
+  start_at    DateTime
+  end_at      DateTime
+  created_by  String
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  creator     Account  @relation("EventCreator", fields: [created_by], references: [username])
 }

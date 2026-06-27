@@ -1,19 +1,18 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  ValidationPipe,
-  Res,
-} from '@nestjs/common';
-import type { Response } from 'express';
+import { Body, Controller, Get, Post, Query, Redirect, Req, Res, UseGuards } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { AccountService } from '../service/account.service';
 import { AccountDto } from '../dto/account';
 import { HttpStatus } from '../../common/type/status.enum';
 import { MESSAGE } from '../../common/type/message';
 import { LoggerService } from '../../common/service/logger.service';
+import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
 
 const CONTEXT = 'AccountsController';
+
+/** フロントエンドのLINEコールバックページURL */
+const FRONTEND_LINE_CALLBACK_URL = process.env.FRONTEND_URL
+  ? `${process.env.FRONTEND_URL}/line-callback`
+  : 'http://localhost:3000/line-callback';
 
 @Controller('accounts')
 export class AccountsController {
@@ -28,7 +27,7 @@ export class AccountsController {
    */
   @Post('login')
   async checkAccount(
-    @Body(ValidationPipe) account: AccountDto,
+    @Body() account: AccountDto,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `ログインリクエスト: ${account.username}`);
@@ -52,7 +51,7 @@ export class AccountsController {
    */
   @Post('regist')
   async registAccount(
-    @Body(ValidationPipe) account: AccountDto,
+    @Body() account: AccountDto,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `アカウント登録リクエスト: ${account.username}`);
@@ -83,4 +82,69 @@ export class AccountsController {
 
   @Get('logout')
   logout() {}
+
+  /**
+   * LINE OAuth認証URLへリダイレクトするエンドポイント
+   * ユーザーをLINEログイン画面へ誘導する
+   */
+  @Get('line/login')
+  @Redirect()
+  lineLogin() {
+    this.logger.log(CONTEXT, 'LINE認証URLへリダイレクト');
+    const url = this.accountService.getLineLoginUrl();
+    return { url, statusCode: HttpStatus.OK };
+  }
+
+  /**
+   * LINE OAuthコールバックエンドポイント
+   * LINEからの認可コードを受け取り、User IDを取得してアカウントに保存する
+   * 処理後はフロントエンドのコールバックページへリダイレクトする
+   * JwtAuthGuardを適用してログイン済みユーザーのみ連携可能にする
+   */
+  @Get('line/callback')
+  @UseGuards(JwtAuthGuard)
+  async lineCallback(
+    @Query('code') code: string,
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<void> {
+    this.logger.log(CONTEXT, 'LINE OAuthコールバック受信');
+
+    const requestUser = req.user;
+    if (!requestUser) {
+      this.logger.error(CONTEXT, '認証情報が取得できません');
+      response.redirect(`${FRONTEND_LINE_CALLBACK_URL}?status=error`);
+      return;
+    }
+
+    try {
+      await this.accountService.handleLineCallback(code, requestUser.username);
+      this.logger.log(CONTEXT, `LINE連携成功: ${requestUser.username}`);
+      response.redirect(`${FRONTEND_LINE_CALLBACK_URL}?status=success`);
+    } catch (error) {
+      this.logger.error(CONTEXT, `LINE連携失敗: ${String(error)}`);
+      response.redirect(`${FRONTEND_LINE_CALLBACK_URL}?status=error`);
+    }
+  }
+
+  /**
+   * ログインユーザー情報取得エンドポイント
+   * LINE連携状態の確認に使用する
+   */
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getMe(
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(CONTEXT, 'ユーザー情報取得リクエスト');
+    const requestUser = req.user;
+    if (!requestUser) {
+      return response
+        .status(HttpStatus.UNAUTHORIZED)
+        .json({ message: MESSAGE.AUTH.UNAUTHORIZED });
+    }
+    const me = await this.accountService.getMe(requestUser.username);
+    return response.status(HttpStatus.OK).json(me);
+  }
 }

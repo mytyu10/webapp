@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { Task, TaskAssignee } from '@prisma/client';
+import { Task, TaskAssignee, TaskNotification } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Priority } from '../dto/task.dto';
 
-/** タスクとアサイニー・子タスクを含む型 */
+/** タスクとアサイニー・子タスク・通知を含む型 */
 export type TaskWithRelations = Task & {
   assignees: TaskAssignee[];
-  children: (Task & { assignees: TaskAssignee[] })[];
+  children: (Task & { assignees: TaskAssignee[]; notifications: TaskNotification[] })[];
+  notifications: TaskNotification[];
 };
 
 @Injectable()
@@ -14,15 +15,19 @@ export class TaskRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * 全タスクを担当者・子タスク情報込みで取得する。子タスクは一覧に含めない
+   * 全タスクを担当者・子タスク・通知情報込みで取得する。子タスクは一覧に含めない
    */
   async findAll(): Promise<TaskWithRelations[]> {
     return this.prisma.task.findMany({
       where: { parent_id: null },
       include: {
         assignees: true,
+        notifications: { orderBy: { notify_at: 'asc' } },
         children: {
-          include: { assignees: true },
+          include: {
+            assignees: true,
+            notifications: { orderBy: { notify_at: 'asc' } },
+          },
         },
       },
       orderBy: { due_date: 'asc' },
@@ -30,15 +35,19 @@ export class TaskRepository {
   }
 
   /**
-   * 指定IDのタスクを担当者・子タスク情報込みで取得する
+   * 指定IDのタスクを担当者・子タスク・通知情報込みで取得する
    */
   async findById(id: number): Promise<TaskWithRelations | null> {
     return this.prisma.task.findUnique({
       where: { id },
       include: {
         assignees: true,
+        notifications: { orderBy: { notify_at: 'asc' } },
         children: {
-          include: { assignees: true },
+          include: {
+            assignees: true,
+            notifications: { orderBy: { notify_at: 'asc' } },
+          },
         },
       },
     });
@@ -72,8 +81,12 @@ export class TaskRepository {
       },
       include: {
         assignees: true,
+        notifications: { orderBy: { notify_at: 'asc' } },
         children: {
-          include: { assignees: true },
+          include: {
+            assignees: true,
+            notifications: { orderBy: { notify_at: 'asc' } },
+          },
         },
       },
     });
@@ -93,6 +106,7 @@ export class TaskRepository {
       parent_id?: number;
       assignees?: string[];
       is_completed?: boolean;
+      closed_by?: string | null;
     },
   ): Promise<TaskWithRelations> {
     return this.prisma.$transaction(async (tx) => {
@@ -114,6 +128,7 @@ export class TaskRepository {
           ...(data.is_completed !== undefined && {
             is_completed: data.is_completed,
           }),
+          ...('closed_by' in data && { closed_by: data.closed_by }),
           ...(data.assignees !== undefined && {
             assignees: {
               create: data.assignees.map((username) => ({ username })),
@@ -122,8 +137,12 @@ export class TaskRepository {
         },
         include: {
           assignees: true,
+          notifications: { orderBy: { notify_at: 'asc' } },
           children: {
-            include: { assignees: true },
+            include: {
+              assignees: true,
+              notifications: { orderBy: { notify_at: 'asc' } },
+            },
           },
         },
       });
@@ -147,8 +166,6 @@ export class TaskRepository {
       distinct: ['category'],
       orderBy: { category: 'asc' },
     });
-    return tasks
-      .map((t) => t.category)
-      .filter((c): c is string => c !== null);
+    return tasks.map((t) => t.category).filter((c): c is string => c !== null);
   }
 }

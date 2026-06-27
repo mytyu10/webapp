@@ -6,9 +6,10 @@ import {
 import { TaskService } from './task.service';
 import { TaskRepository } from '../repository/task.repository';
 import { LoggerService } from 'src/common/service/logger.service';
+import { BatchQueueService } from 'src/common/service/batch-queue.service';
 import { MESSAGE } from 'src/common/type/message';
 
-/** モック用タスクデータ */
+/** モック用タスクデータ（notifications フィールドを含む） */
 const mockTask = {
   id: 1,
   title: 'テストタスク',
@@ -21,7 +22,9 @@ const mockTask = {
   created_at: new Date('2026-01-01T00:00:00.000Z'),
   updated_at: new Date('2026-01-01T00:00:00.000Z'),
   is_completed: false,
+  closed_by: null,
   assignees: [{ task_id: 1, username: 'testuser' }],
+  notifications: [],
   children: [],
 };
 
@@ -49,6 +52,10 @@ describe('TaskService', () => {
         TaskService,
         { provide: TaskRepository, useValue: mockTaskRepository },
         { provide: LoggerService, useValue: mockLoggerService },
+        {
+          provide: BatchQueueService,
+          useValue: { enqueue: jest.fn().mockImplementation((fn) => fn()) },
+        },
       ],
     }).compile();
 
@@ -93,6 +100,37 @@ describe('TaskService', () => {
 
       expect(result[0].is_completed).toBe(true);
     });
+
+    it('findAll の戻り値に notifications が含まれる', async () => {
+      mockTaskRepository.findAll.mockResolvedValue([mockTask]);
+
+      const result = await service.findAll();
+
+      expect(result[0]).toHaveProperty('notifications');
+      expect(result[0].notifications).toEqual([]);
+    });
+
+    it('通知が設定されているタスクの notifications を正しく変換する', async () => {
+      const taskWithNotification = {
+        ...mockTask,
+        notifications: [
+          {
+            id: 10,
+            task_id: 1,
+            notify_at: new Date('2026-12-01T09:00:00.000Z'),
+            is_sent: false,
+          },
+        ],
+      };
+      mockTaskRepository.findAll.mockResolvedValue([taskWithNotification]);
+
+      const result = await service.findAll();
+
+      expect(result[0].notifications).toHaveLength(1);
+      expect(result[0].notifications[0].id).toBe(10);
+      expect(result[0].notifications[0].notify_at).toBe('2026-12-01T09:00:00.000Z');
+      expect(result[0].notifications[0].is_sent).toBe(false);
+    });
   });
 
   describe('findById', () => {
@@ -121,6 +159,15 @@ describe('TaskService', () => {
 
       expect(result).toHaveProperty('is_completed');
       expect(result.is_completed).toBe(false);
+    });
+
+    it('findById の戻り値に notifications が含まれる', async () => {
+      mockTaskRepository.findById.mockResolvedValue(mockTask);
+
+      const result = await service.findById(1);
+
+      expect(result).toHaveProperty('notifications');
+      expect(result.notifications).toEqual([]);
     });
   });
 
@@ -175,7 +222,7 @@ describe('TaskService', () => {
       mockTaskRepository.update.mockResolvedValue(updatedTask);
 
       const dto = { title: '更新後タスク' };
-      const result = await service.update(1, dto);
+      const result = await service.update(1, dto, 'testuser');
 
       expect(result.title).toBe('更新後タスク');
     });
@@ -183,18 +230,18 @@ describe('TaskService', () => {
     it('存在しないIDの場合はNotFoundExceptionをスローする', async () => {
       mockTaskRepository.findById.mockResolvedValue(null);
 
-      await expect(service.update(999, { title: '更新' })).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.update(999, { title: '更新' }, 'testuser'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('DBエラー時はInternalServerErrorExceptionをスローする', async () => {
       mockTaskRepository.findById.mockResolvedValue(mockTask);
       mockTaskRepository.update.mockRejectedValue(new Error('DB error'));
 
-      await expect(service.update(1, { title: '更新' })).rejects.toThrow(
-        InternalServerErrorException,
-      );
+      await expect(
+        service.update(1, { title: '更新' }, 'testuser'),
+      ).rejects.toThrow(InternalServerErrorException);
     });
 
     it('is_completed: true を渡すと Repository の update が is_completed: true で呼ばれる', async () => {
@@ -202,7 +249,7 @@ describe('TaskService', () => {
       const completedTask = { ...mockTask, is_completed: true, assignees: [] };
       mockTaskRepository.update.mockResolvedValue(completedTask);
 
-      await service.update(1, { is_completed: true });
+      await service.update(1, { is_completed: true }, 'testuser');
 
       expect(mockTaskRepository.update).toHaveBeenCalledWith(
         1,
@@ -212,10 +259,14 @@ describe('TaskService', () => {
 
     it('is_completed: false を渡すと Repository の update が is_completed: false で呼ばれる', async () => {
       mockTaskRepository.findById.mockResolvedValue(mockTask);
-      const uncompletedTask = { ...mockTask, is_completed: false, assignees: [] };
+      const uncompletedTask = {
+        ...mockTask,
+        is_completed: false,
+        assignees: [],
+      };
       mockTaskRepository.update.mockResolvedValue(uncompletedTask);
 
-      await service.update(1, { is_completed: false });
+      await service.update(1, { is_completed: false }, 'testuser');
 
       expect(mockTaskRepository.update).toHaveBeenCalledWith(
         1,
@@ -228,13 +279,103 @@ describe('TaskService', () => {
       const updatedTask = { ...mockTask, title: 'タイトル変更', assignees: [] };
       mockTaskRepository.update.mockResolvedValue(updatedTask);
 
-      const result = await service.update(1, { title: 'タイトル変更' });
+      const result = await service.update(
+        1,
+        { title: 'タイトル変更' },
+        'testuser',
+      );
 
       expect(result.title).toBe('タイトル変更');
       expect(mockTaskRepository.update).toHaveBeenCalledWith(
         1,
         expect.objectContaining({ title: 'タイトル変更' }),
       );
+    });
+
+    // --- closed_by ロジックのテスト ---
+
+    it('is_completed が false → true に変化したとき、closed_by に requestUsername がセットされる', async () => {
+      const incompleteTask = {
+        ...mockTask,
+        is_completed: false,
+        assignees: [],
+      };
+      mockTaskRepository.findById.mockResolvedValue(incompleteTask);
+      const completedTask = {
+        ...mockTask,
+        is_completed: true,
+        closed_by: 'closer',
+        assignees: [],
+      };
+      mockTaskRepository.update.mockResolvedValue(completedTask);
+
+      await service.update(1, { is_completed: true }, 'closer');
+
+      expect(mockTaskRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ closed_by: 'closer' }),
+      );
+    });
+
+    it('is_completed が true → false に変化したとき、closed_by が null にクリアされる', async () => {
+      const completedTask = {
+        ...mockTask,
+        is_completed: true,
+        closed_by: 'closer',
+        assignees: [],
+      };
+      mockTaskRepository.findById.mockResolvedValue(completedTask);
+      const revertedTask = {
+        ...mockTask,
+        is_completed: false,
+        closed_by: null,
+        assignees: [],
+      };
+      mockTaskRepository.update.mockResolvedValue(revertedTask);
+
+      await service.update(1, { is_completed: false }, 'closer');
+
+      expect(mockTaskRepository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ closed_by: null }),
+      );
+    });
+
+    it('is_completed が false → false で変化なしのとき、closed_by が Repository に渡されない', async () => {
+      const incompleteTask = {
+        ...mockTask,
+        is_completed: false,
+        assignees: [],
+      };
+      mockTaskRepository.findById.mockResolvedValue(incompleteTask);
+      mockTaskRepository.update.mockResolvedValue(incompleteTask);
+
+      await service.update(1, { is_completed: false }, 'testuser');
+
+      const calledWith = mockTaskRepository.update.mock.calls[0][1] as Record<
+        string,
+        unknown
+      >;
+      expect('closed_by' in calledWith).toBe(false);
+    });
+
+    it('is_completed が true → true で変化なしのとき、closed_by が Repository に渡されない', async () => {
+      const completedTask = {
+        ...mockTask,
+        is_completed: true,
+        closed_by: 'closer',
+        assignees: [],
+      };
+      mockTaskRepository.findById.mockResolvedValue(completedTask);
+      mockTaskRepository.update.mockResolvedValue(completedTask);
+
+      await service.update(1, { is_completed: true }, 'closer');
+
+      const calledWith = mockTaskRepository.update.mock.calls[0][1] as Record<
+        string,
+        unknown
+      >;
+      expect('closed_by' in calledWith).toBe(false);
     });
   });
 

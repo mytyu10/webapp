@@ -60,14 +60,12 @@ export function validateTaskForm(values: TaskFormValues): TaskFormErrors {
     }
   }
 
-  if (values.assigneesText.trim()) {
-    const assignees = values.assigneesText
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    if (assignees.length > ASSIGNEES_MAX_COUNT) {
-      errors.assignees = `担当者は${ASSIGNEES_MAX_COUNT}人以内で設定してください`;
-    }
+  /** 担当者は1人以上必須 */
+  const assignees = parseAssignees(values.assigneesText);
+  if (assignees.length === 0) {
+    errors.assignees = '担当者を1人以上入力してください';
+  } else if (assignees.length > ASSIGNEES_MAX_COUNT) {
+    errors.assignees = `担当者は${ASSIGNEES_MAX_COUNT}人以内で設定してください`;
   }
 
   if (!PRIORITY_VALUES.includes(values.priority)) {

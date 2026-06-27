@@ -7,6 +7,9 @@ import { JwtService } from 'src/jwt/jwt.service';
 import { AccountRepository } from '../repository/account.repository';
 import { PrismaService } from 'src/prisma/prisma.service';
 
+/**
+ * アカウント管理モジュール
+ */
 @Module({
   controllers: [AccountsController],
   providers: [

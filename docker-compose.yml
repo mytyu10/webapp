@@ -1,0 +1,37 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8001:8000"   # Mac側:コンテナ内
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: file:/data/dev.db
+      CORS_ORIGIN: http://localhost:3001   # フロントエンドのMac側ポートに合わせる
+    volumes:
+      - ./backend/src:/app/src
+      - db-data:/data
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3001:3000"   # Mac側:コンテナ内
+    environment:
+      HOST: "0.0.0.0"
+      REACT_APP_API_SCHEME: http
+      REACT_APP_API_HOST: localhost
+      REACT_APP_API_PORT: "8001"   # ブラウザはMac側ポートでアクセスする
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      WDS_SOCKET_HOST: localhost
+      WDS_SOCKET_PORT: "3001"   # HMR WebSocketもMac側ポートを指定
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    depends_on:
+      - backend
+
+volumes:
+  db-data:

@@ -102,6 +102,16 @@ src/<feature>/
 - Tailwind CSSのユーティリティクラスのみ使用する
 - CSSモジュール・インラインスタイル・外部CSSファイルは禁止
 - レスポンシブ対応はTailwindのブレークポイント（sm, md, lg）を使用する
+- [2026-05-03] カレンダー画面の文字色は白基調（`text-slate-100` / `text-slate-200` 相当）にすること
+- [2026-05-03] FullCalendarのテーマ上書きは`src/index.css`の`.calendar-wrapper`スコープ内でCSS変数を使って行う（`--fc-today-bg-color`等）。今日の日付ハイライトは紺ベースのUIで視認しやすい色（sky系の薄いオーバーレイ等）にし、黄色デフォルトを使わないこと
+
+### レスポンシブ・スマホ対応
+
+- [2026-05-04] スマホ判定のブレークポイントは640px未満とし、`src/hooks/useIsMobile.ts`（`useIsMobile`フック）で一元管理する。`window.resize` イベントでリアクティブに追従する
+- [2026-05-04] タスク詳細サイドパネルはスマホ時（`isMobile=true`）に全画面表示とし、一覧エリアを `hidden` で非表示にする（PC時は flex 横並び）
+- [2026-05-04] サイドパネルのドラッグリサイザーはスマホでは非表示にする
+- [2026-05-04] パネルの閉じるボタン（×）はPC専用とし、スマホでは「← 一覧へ戻る」ボタンに置き換える。両方同時に表示しない
+- [2026-05-04] `isMobile` フラグはページから props 経由でコンポーネントに渡す（コンポーネント内で `useIsMobile` を直接呼ばない）
 
 ### ディレクトリ構成
 
@@ -140,7 +150,8 @@ src/
 
 ### アクセス制御
 
-- タスクの編集・削除ボタンは作成者（`created_by`）とログイン中ユーザー（`getCurrentUsername()`）が一致する場合のみ表示する
+- タスクの削除ボタンは作成者（`created_by`）とログイン中ユーザー（`getCurrentUsername()`）が一致する場合のみ表示する
+- タスクの編集ボタンはログインユーザーに関わらず全ユーザーに表示する（作成者限定にしない）
 
 ---
 
@@ -174,6 +185,7 @@ model Task {
   created_at   DateTime       @default(now())
   updated_at   DateTime       @updatedAt
   is_completed Boolean        @default(false)
+  closed_by    String?
   assignees    TaskAssignee[]
   creator      Account        @relation("TaskCreator", fields: [created_by], references: [username])
   parent       Task?          @relation("TaskChildren", fields: [parent_id], references: [id])
@@ -194,6 +206,7 @@ model TaskAssignee {
 - categoryはオプショナル（`String?`）。カテゴリ一覧は`GET /tasks/categories`で取得する
 - parent_idによる親子タスク構造をサポートする。子タスクは`children`リレーションで取得
 - is_completedフィールドはタスクの完了状態を管理する（デフォルト: `false`）。`PATCH /tasks/:id` の `is_completed` フィールドで切り替える
+- closed_byフィールドはタスクをクローズ（完了）したユーザー名を記録する（デフォルト: `null`）。`is_completed` が `false→true` に変化したとき Service レイヤーでリクエストユーザー名を自動セットし、`true→false` に戻したとき `null` にクリアする。フロントエンドから直接 `closed_by` を送信する必要はない
 - SQLiteはBooleanをinteger（0/1）で保存するため、Prismaから返る値をフロントエンドで比較する際は `=== true/false` の厳密比較ではなく `Boolean(value)` に変換してから比較すること（例: `Boolean(t.is_completed) === completedFilter`）
 - TaskAssigneeの担当者更新はdelete+insertトランザクションで対応する
 - Taskの削除はCascade設定によりTaskAssigneeも連動削除される
@@ -202,3 +215,29 @@ model TaskAssignee {
 
 - テーブル名: PascalCase（Prismaモデル名に準拠）
 - カラム名: snake_case
+
+---
+
+## LINE連携・通知機能規約
+
+### LINE OAuth フロー
+
+- LINE Login の認可エンドポイントへのリダイレクトは `GET /accounts/line/login` で行う（JwtAuthGuard適用）
+- コールバックエンドポイント `GET /accounts/line/callback` は JwtAuthGuard 適用済み。LINE から届くリクエストに Bearer トークンが必要
+- LINE OAuth のコールバック URL（`LINE_CALLBACK_URL`）はバックエンド側に固定（`http://localhost:8000/accounts/line/callback`）。本番環境では適切な URL に変更すること
+- フロントエンドのリダイレクト先は `FRONTEND_URL` 環境変数から構築する（ハードコード禁止）
+- LINE コールバックページ（`/line-callback`）は PrivateRoute 外に配置する（LINE OAuth からの直接リダイレクトのため JWT が localStorage にない状態でアクセスされる）
+
+### TaskNotification（通知モデル）
+
+- [2026-05-04] `TaskNotification` の `notify_at` は ISO8601 文字列として受け取り、Service レイヤーで `new Date()` に変換してから Repository に渡す
+- 通知の送信済みフラグ（`is_sent`）は LINE Messaging API への送信成功後にのみ `true` に更新する。送信失敗時は `false` のままにして次回 Cron で再試行できるようにする
+- LINE 未連携の担当者（`line_user_id` が null）はスキップしてログを出力する（エラーとして扱わない）
+
+### AppModule のモジュール設計
+
+- [2026-05-04] `AppModule` の providers に `TaskNotificationRepository`・`PrismaService`・`LoggerService` を直接登録しない。`TaskModule`（`TaskNotificationRepository` をエクスポート）と `CommonModule`（`LoggerService` をエクスポート）を imports に追加して DI で受け取ること（重複登録禁止）
+
+### TaskDetailPanel の設計方針
+
+- [2026-05-04] `TaskDetailPanel` は独自 API 呼び出しを行わない。通知削除も `onDeleteNotification: (taskId: number, notificationId: number) => Promise<void>` コールバック prop を通じて親（TaskListPage）に委譲する。`deleteNotification` を TaskDetailPanel 内で直接 import・呼び出しをしない

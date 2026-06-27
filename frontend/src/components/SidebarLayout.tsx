@@ -7,9 +7,9 @@ import Sidebar from './Sidebar';
  */
 function SidebarLayout() {
   return (
-    <div className="flex min-h-screen bg-slate-800">
+    <div className="flex flex-col sm:flex-row min-h-screen bg-slate-800">
       <Sidebar />
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-4 sm:p-8 overflow-y-auto">
         <Outlet />
       </main>
     </div>
