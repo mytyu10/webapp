@@ -11,3 +11,4 @@
 | [05-frontend.md](05-frontend.md) | ルーティング・ページ・カスタムフック・共通コンポーネント |
 | [06-auth-flow.md](06-auth-flow.md) | 認証フロー・LINE OAuthフロー・LINE通知フロー |
 | [07-docker.md](07-docker.md) | Docker構成・起動手順・ホットリロード・シークレット管理 |
+| [08-claude-code.md](08-claude-code.md) | Claude Code の使い方・/implement フロー・承認ゲートの操作方法 |
