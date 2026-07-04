@@ -54,7 +54,9 @@ describe('TaskService', () => {
         { provide: LoggerService, useValue: mockLoggerService },
         {
           provide: BatchQueueService,
-          useValue: { enqueue: jest.fn().mockImplementation((fn) => fn()) },
+          useValue: {
+            enqueue: jest.fn().mockImplementation((fn: () => unknown) => fn()),
+          },
         },
       ],
     }).compile();
@@ -128,7 +130,9 @@ describe('TaskService', () => {
 
       expect(result[0].notifications).toHaveLength(1);
       expect(result[0].notifications[0].id).toBe(10);
-      expect(result[0].notifications[0].notify_at).toBe('2026-12-01T09:00:00.000Z');
+      expect(result[0].notifications[0].notify_at).toBe(
+        '2026-12-01T09:00:00.000Z',
+      );
       expect(result[0].notifications[0].is_sent).toBe(false);
     });
   });
@@ -352,6 +356,7 @@ describe('TaskService', () => {
 
       await service.update(1, { is_completed: false }, 'testuser');
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const calledWith = mockTaskRepository.update.mock.calls[0][1] as Record<
         string,
         unknown
@@ -371,6 +376,7 @@ describe('TaskService', () => {
 
       await service.update(1, { is_completed: true }, 'closer');
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const calledWith = mockTaskRepository.update.mock.calls[0][1] as Record<
         string,
         unknown

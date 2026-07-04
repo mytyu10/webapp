@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import axios from 'axios';
-import { TaskNotificationRepository } from 'src/tasks/repository/task-notification.repository';
+import {
+  TaskNotificationRepository,
+  PendingNotificationWithAssignees,
+} from 'src/tasks/repository/task-notification.repository';
 import { LoggerService } from 'src/common/service/logger.service';
 import { MESSAGE } from 'src/common/type/message';
 
@@ -40,13 +43,17 @@ export class LineNotificationService {
 
     const accessToken = process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN ?? '';
     if (!accessToken) {
-      this.logger.warn(CONTEXT, 'LINE_MESSAGING_CHANNEL_ACCESS_TOKENが未設定です');
+      this.logger.warn(
+        CONTEXT,
+        'LINE_MESSAGING_CHANNEL_ACCESS_TOKENが未設定です',
+      );
       return;
     }
 
-    let pendingNotifications;
+    let pendingNotifications: PendingNotificationWithAssignees[];
     try {
-      pendingNotifications = await this.notificationRepository.findPendingNotifications();
+      pendingNotifications =
+        await this.notificationRepository.findPendingNotifications();
     } catch (error) {
       this.logger.error(CONTEXT, `通知一覧取得失敗: ${String(error)}`);
       return;
@@ -70,8 +77,7 @@ export class LineNotificationService {
       });
 
       /** メッセージ本文を構築する */
-      const messageText =
-        `タスク期限のお知らせ\nタスク名: ${task.title}\n期限: ${dueDateStr}`;
+      const messageText = `タスク期限のお知らせ\nタスク名: ${task.title}\n期限: ${dueDateStr}`;
 
       /** 担当者ごとにLINEプッシュ通知を送信する */
       for (const assignee of task.assignees) {
@@ -114,7 +120,10 @@ export class LineNotificationService {
       /** 全担当者への送信処理が完了したら is_sent を true に更新する */
       try {
         await this.notificationRepository.markAsSent(notification.id);
-        this.logger.log(CONTEXT, `通知送信済みマーク完了: id=${notification.id}`);
+        this.logger.log(
+          CONTEXT,
+          `通知送信済みマーク完了: id=${notification.id}`,
+        );
       } catch (error) {
         this.logger.error(
           CONTEXT,

@@ -73,7 +73,7 @@ describe('BatchQueueService', () => {
       // enqueue が返す Promise は reject になる。
       // Promise.allSettled を先に登録してから タイマーを進めることで
       // unhandled rejection を回避する
-      const failingFn = jest.fn().mockImplementation(async () => {
+      const failingFn = jest.fn().mockImplementation(() => {
         throw new Error('job error');
       });
       const successFn = jest.fn().mockResolvedValue('ok');
