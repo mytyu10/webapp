@@ -241,3 +241,27 @@ model TaskAssignee {
 ### TaskDetailPanel の設計方針
 
 - [2026-05-04] `TaskDetailPanel` は独自 API 呼び出しを行わない。通知削除も `onDeleteNotification: (taskId: number, notificationId: number) => Promise<void>` コールバック prop を通じて親（TaskListPage）に委譲する。`deleteNotification` を TaskDetailPanel 内で直接 import・呼び出しをしない
+
+---
+
+## リンク集機能規約
+
+### LinkItem モデル設計方針
+
+- [2026-07-04] 階層構造はフォルダ（FOLDER タイプ）のみが持つ。リンク（LINK タイプ）は末端要素（葉ノード）であり、children を持てない
+- [2026-07-04] `parent_id` はフォルダの親フォルダを指す用途にのみ使用する。リンクの `parent_id` は所属フォルダID（またはルート直下の null）
+- [2026-07-04] LINK タイプを親（parent_id の参照先）にすることはできない。バックエンド Service の `validateParentIsFolder` で強制する
+- [2026-07-04] LINK タイプには `url` が必須。FOLDER タイプの `url` は null。この制約はバックエンド Service とフロントエンド validation の両方で保証する
+- [2026-07-04] FOLDER 削除時は Prisma の `onDelete: Cascade` により配下の全子孫（サブフォルダ・リンク）が連動削除される。フロントエンドの削除確認モーダルにはその旨の警告文を表示すること
+- [2026-07-04] `order` フィールドはDB登録のみ。並び替えUIはスコープ外。フロントエンドでは `order` 昇順でソートして表示する（Repository で `orderBy: [{ order: 'asc' }, { created_at: 'asc' }]`）
+
+### LinkItem API 設計方針
+
+- [2026-07-04] `GET /links` はフラット配列をServiceでツリー構造に変換して返す（Map を使った O(n) 変換）。LINK の children は常に空配列
+- [2026-07-04] 削除は作成者（`created_by`）のみ可能。編集（PATCH）は全ユーザーに許可する
+
+### フロントエンド リンク集の設計方針
+
+- [2026-07-04] リンク集のフォルダ展開/折りたたみ状態は `useLinkList` フックの `expandedIds: Set<number>` で一元管理する
+- [2026-07-04] `LinkFormModal` の親フォルダ選択肢には FOLDER タイプのみ表示する。編集時は自分自身と子孫を候補から除外する（循環参照防止）
+- [2026-07-04] `LinkFormModal` の type 選択は編集時に変更不可とする（type 変更は別途削除・再作成で対応）

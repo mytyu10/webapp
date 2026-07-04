@@ -57,16 +57,20 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/tasks/repository/` — Prisma CRUD・カテゴリ取得（is_completed・closed_by・notifications フィールド対応）。`task-notification.repository.ts` で通知の作成・取得・削除・送信対象抽出・送信済みマークを提供
 - `src/tasks/dto/task.dto.ts` — CreateTaskDto / UpdateTaskDto（is_completed含む） / TaskResponseDto（is_completed・closed_by・notifications含む） / Priority型 / CreateNotificationDto / NotificationResponseDto
 - `src/line/line-notification.service.ts` — `@Cron(CronExpression.EVERY_MINUTE)` で毎分実行するCronジョブ。未送信かつ `notify_at <= 現在時刻` の通知を取得し、担当者（LINE連携済みのみ）に LINE Messaging API でプッシュ通知を送信。全担当者処理後に `is_sent=true` にマーク。送信失敗時は `is_sent` を更新せず次回再試行
+- `src/links/controller/` — REST endpoints (`GET /links`, `POST /links`, `PATCH /links/:id`, `DELETE /links/:id`) — JwtAuthGuard適用済み
+- `src/links/service/` — リンク/フォルダのビジネスロジック。ツリー構築（Map を使ったフラット→ツリー変換）・LINK を親にできない制約チェック・作成者チェック
+- `src/links/repository/` — Prisma CRUD（findAll/findById/create/update/delete）。order昇順・created_at昇順でソート
+- `src/links/dto/link.dto.ts` — CreateLinkItemDto / UpdateLinkItemDto / LinkItemResponseDto（children: LinkItemResponseDto[]）/ LinkItemType型（"FOLDER" | "LINK"）
 - `src/jwt/jwt.service.ts` — JWT creation (1h expiry, secret from `JWT_SECRET` env)
 - `src/jwt/jwt-auth.guard.ts` — JwtAuthGuard（Bearerトークン検証）。検証成功時に `request.user` へ `JwtPayload` をセット
 - `src/types/express.d.ts` — Express `Request` 型拡張（`request.user?: JwtPayload`）
 - `src/prisma/prisma.service.ts` — Prisma client singleton
 - `src/common/service/hash.service.ts` — SHA256 password hashing
 - `src/common/service/logger.service.ts` — ロガーサービス
-- `src/common/type/message.ts` — Japanese message constants (centralised)。`AUTH`（LINE OAuth関連含む）・`NOTIFICATION`（通知CRUD・LINE送信失敗）セクションを含む
+- `src/common/type/message.ts` — Japanese message constants (centralised)。`AUTH`（LINE OAuth関連含む）・`NOTIFICATION`（通知CRUD・LINE送信失敗）・`LINK`（リンク集CRUD・権限エラー）セクションを含む
 - `src/common/type/status.enum.ts` — HTTP status enums
 
-`AppModule` imports `ScheduleModule.forRoot()`（Cronジョブ有効化）・`CommonModule`・`AccountsModule`・`TaskModule`・`EventsModule`。`LineNotificationService` は `AppModule` の providers に登録し、`TaskModule` エクスポートの `TaskNotificationRepository` と `CommonModule` エクスポートの `LoggerService` を DI で受け取る。重複登録なし。
+`AppModule` imports `ScheduleModule.forRoot()`（Cronジョブ有効化）・`CommonModule`・`AccountsModule`・`TaskModule`・`EventsModule`・`LinkModule`。`LineNotificationService` は `AppModule` の providers に登録し、`TaskModule` エクスポートの `TaskNotificationRepository` と `CommonModule` エクスポートの `LoggerService` を DI で受け取る。重複登録なし。
 
 **Login flow**: DTO validation → SHA256 hash password → query DB by username → compare hashes → issue JWT.
 
@@ -76,26 +80,34 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 
 **LINE通知フロー**: Cron毎分 → `findPendingNotifications`（is_sent=false かつ notify_at <= 現在時刻）→ 担当者ごとに line_user_id を確認 → LINE Messaging API push → `markAsSent`。
 
+**リンク集フロー**: JwtAuthGuard → Controller → Service（ツリー構築・親フォルダ検証・作成者チェック）→ Repository → Prisma。LINK タイプは子を持てない末端要素。FOLDER タイプのみ children を持つ。削除は作成者のみ可能。FOLDER 削除時は Cascade で配下の全子孫も削除される。
+
 ### Frontend (React + CRA)
 
-- `src/App.tsx` — router: `/` → `HomePage`（タスク一覧へリダイレクト）, `/login` → `LoginPage`, `/tasks` → `TaskListPage`, `/tasks/new` → `TaskFormPage`, `/calendar` → `CalendarPage`, `/line-callback` → `LineCallbackPage`（PrivateRoute外・LINE OAuthコールバック用）
+- `src/App.tsx` — router: `/` → `HomePage`（タスク一覧へリダイレクト）, `/login` → `LoginPage`, `/tasks` → `TaskListPage`, `/tasks/new` → `TaskFormPage`, `/calendar` → `CalendarPage`, `/links` → `LinkListPage`, `/line-callback` → `LineCallbackPage`（PrivateRoute外・LINE OAuthコールバック用）
 - `src/components/PrivateRoute.tsx` — JWT存在チェック + exp有効期限検証。無効時は`/login`へリダイレクト
-- `src/components/Sidebar.tsx` — サイドバーコンポーネント（タスク管理リンク・ログアウト・LINE連携状態表示）。マウント時に `fetchMe()` を呼び出し `line_user_id` が null でなければ「LINE連携済み」テキスト、null なら「LINEと連携する」ボタンを表示
+- `src/components/Sidebar.tsx` — サイドバーコンポーネント（タスク管理・カレンダー・リンク集リンク・ログアウト・LINE連携状態表示）。NAV_LINKSに `/tasks`・`/calendar`・`/links` を定義
 - `src/components/SidebarLayout.tsx` — サイドバー付きレイアウト（Outlet使用）
 - `src/pages/LoginPage.tsx` — login form, posts to backend `/accounts/login`, stores JWT in `localStorage`
 - `src/pages/LineCallbackPage.tsx` — LINE OAuth完了後のコールバックページ。クエリパラメータ `status=success` で成功メッセージ＋カウントダウン後タスク一覧へ遷移。`status=error` でエラーメッセージ＋戻るボタン。PrivateRoute外に配置（LINE OAuthから直接リダイレクトされるため）
 - `src/pages/TaskListPage.tsx` — タスク一覧・階層表示・カテゴリフィルター・削除確認モーダル・完了セクション折りたたみ。削除は作成者のみ表示・編集は全ユーザー表示。「詳細」ボタン押下時に `awaitToggle` で完了 PATCH の完了を待機してから右側のサイドパネル（`TaskDetailPanel`）を開く（ページ遷移なし・URL変更なし）。パネル表示中は flex 左右分割（左: 一覧、右: 詳細パネル）。スマホ（640px未満）ではパネル開時に一覧を非表示にしてパネルを全画面表示する。`handleDeleteNotification` で通知削除 API を呼び出して `reload()` し `TaskDetailPanel` に `onDeleteNotification` として渡す
 - `src/pages/TaskFormPage.tsx` — タスク作成・編集・子タスク作成（URLクエリ`parent_id`で切り替え）。通知日時を複数追加できる UI を提供（`DateTimeField` + 追加ボタン + 削除ボタン付きリスト）
 - `src/pages/TaskDetailPage.tsx` — タスク詳細・完了/未完了ボタン・完了スタイル（緑枠・バナー・取り消し線）・`closed_by`表示・子タスク一覧・子タスク作成ボタン。編集ボタンは全ユーザーに表示。直リンク（`/tasks/:id`）対応のため引き続き存在する
+- `src/pages/LinkListPage.tsx` — リンク集一覧ページ。エクスプローラー風ツリー表示。`LinkTreeNode` コンポーネントで再帰レンダリング。フォルダクリックで展開/折りたたみ。リンククリックで別タブを開く。追加ボタンで `LinkFormModal` を開く。削除は作成者のみ表示。フォルダ削除時に「配下の全リンク・フォルダも削除されます」という警告を表示する
 - `src/api/taskApi.ts` — タスクAPI通信（`fetchTasks`, `fetchTask`, `fetchCategories`, `createTask`, `updateTask`, `toggleTaskCompletion`, `deleteTask`, `getCurrentUsername`, `fetchNotifications`, `addNotification`, `deleteNotification`, `fetchMe`）。`TaskNotification` インターフェース・`AccountMe` インターフェース・`Task.notifications?: TaskNotification[]` フィールドを含む
+- `src/api/linkApi.ts` — リンク集API通信（`fetchLinks`, `createLink`, `updateLink`, `deleteLink`）。`LinkItem` インターフェース（children: LinkItem[] を含む再帰型）・`LinkItemInput` インターフェース・`LinkItemType`（"FOLDER" | "LINK"）を定義
 - `src/hooks/useTaskList.ts` — タスク一覧・削除・カテゴリフィルタリング・階層ツリー構築（incompleteTrees/completedTrees）フック。`togglingIds`（PATCH処理中のタスクID集合）と `awaitToggle`（PATCH完了を外から待てる関数）を提供する
 - `src/hooks/useTaskDetail.ts` — タスク詳細取得・完了切り替えフック
 - `src/hooks/useTaskForm.ts` — タスクフォーム（作成/編集/子タスク作成モード対応）フック。`notifications: string[]`（datetime-local形式）状態を管理し、`addNotificationDatetime`・`removeNotificationDatetime` を提供。フォーム送信後に通知日時を `addNotification` API へ順次送信する。編集モード時は既存通知を datetime-local 形式に変換して初期値として読み込む
+- `src/hooks/useLinkList.ts` — リンク集一覧取得・フォルダ展開/折りたたみ状態管理（expandedIds: Set<number>）・削除処理・リロードを提供するフック
+- `src/hooks/useLinkForm.ts` — リンク/フォルダ作成・編集フォームを管理するフック。editItem 指定で編集モード。type が FOLDER に変更されたら url をクリアする
 - `src/hooks/useCalendar.ts` — カレンダー予定・タスク表示・ビュー切り替えを管理するフック。タスクのカレンダー表示は日表示（timeGridDay）のみ。`taskToEventInput` でタスクをFullCalendar用EventInputに変換する際、`start = due_date - 1時間`・`end = due_date` に設定し、期限がイベントの終了時刻になるようにする
 - `src/hooks/useIsMobile.ts` — 画面幅が640px未満かどうかをリアクティブに返すカスタムフック。`window.resize` イベントで追従する
 - `src/validation/taskValidation.ts` — タスクフォームバリデーション（priority/category含む）。担当者は1人以上必須
+- `src/validation/linkValidation.ts` — リンク/フォルダフォームバリデーション。title必須。type="LINK" の場合は url も必須
 - `src/components/ConfirmModal.tsx` — 削除確認モーダル
 - `src/components/TaskDetailPanel.tsx` — タスク詳細サイドパネル。`task: Task | null` / `isToggling` / `isOwner` / `isMobile` / `onClose` / `onToggleComplete` / `onSelectTask` / `onDeleteClick` / `onUpdate` / `onDeleteNotification` を受け取り、タスクデータを props で表示する（独自 API 呼び出しなし）。スマホ時（`isMobile=true`）は「← 一覧へ戻る」ボタンを表示し PC 向け × ボタンを非表示にする。子タスク・親タスクのリンクは `onSelectTask` 経由でパネル内切り替え（ページ遷移なし）。通知一覧を表示し `onDeleteNotification` コールバックで削除を親に委譲する
+- `src/components/LinkFormModal.tsx` — リンク/フォルダ作成・編集フォームモーダル。タイプ選択（編集時は変更不可）・タイトル・URL（LINK タイプのみ）・説明・親フォルダ選択（FOLDER タイプのみ表示）。自分自身と子孫は親フォルダ候補から除外する
 - `src/components/TextAreaField.tsx` — textareaラッパー共通コンポーネント
 - `src/components/DateTimeField.tsx` — datetime-local入力ラッパー共通コンポーネント
 - `src/components/SelectField.tsx` — selectラッパー共通コンポーネント
@@ -128,6 +140,7 @@ model Account {
   task_assignees  TaskAssignee[]
   created_tasks   Task[]         @relation("TaskCreator")
   created_events  Event[]        @relation("EventCreator")
+  created_links   LinkItem[]     @relation("LinkCreator")
 }
 
 model Task {
@@ -177,6 +190,22 @@ model Event {
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
   creator     Account  @relation("EventCreator", fields: [created_by], references: [username])
+}
+
+model LinkItem {
+  id          Int        @id @default(autoincrement())
+  title       String
+  url         String?                // LINK の場合のみ値あり。FOLDER は null
+  description String     @default("")
+  type        String                 // "FOLDER" | "LINK"
+  parent_id   Int?                   // 親フォルダのID（ルート直下は null）
+  order       Int        @default(0)
+  created_by  String
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+  creator     Account    @relation("LinkCreator", fields: [created_by], references: [username])
+  parent      LinkItem?  @relation("LinkChildren", fields: [parent_id], references: [id], onDelete: Cascade)
+  children    LinkItem[] @relation("LinkChildren")
 }
 ```
 

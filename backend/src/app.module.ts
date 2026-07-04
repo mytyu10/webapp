@@ -7,6 +7,7 @@ import { TaskModule } from './tasks/module/task.module';
 import { EventsModule } from './events/events.module';
 import { CommonModule } from './common/common.module';
 import { LineNotificationService } from './line/line-notification.service';
+import { LinkModule } from './links/link.module';
 
 /**
  * アプリケーションルートモジュール
@@ -21,11 +22,9 @@ import { LineNotificationService } from './line/line-notification.service';
     AccountsModule,
     TaskModule,
     EventsModule,
+    LinkModule,
   ],
   controllers: [AppController],
-  providers: [
-    AppService,
-    LineNotificationService,
-  ],
+  providers: [AppService, LineNotificationService],
 })
 export class AppModule {}
