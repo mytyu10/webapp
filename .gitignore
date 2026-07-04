@@ -4,8 +4,5 @@ node_modules/
 .claude/settings.local.json
 .claude/worktrees/
 
-# エージェントの生成物（計画・実行結果）
-agent-work/
-
 # 環境変数（各サブプロジェクトの .env は各ディレクトリの .gitignore で管理）
 .env
