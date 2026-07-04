@@ -51,7 +51,9 @@ export class TaskNotificationRepository {
    * 送信対象の通知を取得する
    * notify_at が現在時刻以前かつ is_sent が false の通知を担当者情報込みで返す
    */
-  async findPendingNotifications(): Promise<PendingNotificationWithAssignees[]> {
+  async findPendingNotifications(): Promise<
+    PendingNotificationWithAssignees[]
+  > {
     return this.prisma.taskNotification.findMany({
       where: {
         is_sent: false,

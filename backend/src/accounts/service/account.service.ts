@@ -149,9 +149,12 @@ export class AccountService {
     const accessToken = tokenResponse.data.access_token;
 
     /** アクセストークンを使ってLINEプロフィール（User ID）を取得する */
-    const profileResponse = await axios.get<LineProfileResponse>(LINE_PROFILE_URL, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const profileResponse = await axios.get<LineProfileResponse>(
+      LINE_PROFILE_URL,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
 
     const lineUserId = profileResponse.data.userId;
     this.logger.log(CONTEXT, `LINE User ID取得成功: ${lineUserId}`);

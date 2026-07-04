@@ -34,7 +34,9 @@ export class TaskNotificationService {
       return this.toResponseDto(notification);
     } catch (error) {
       this.logger.error(CONTEXT, `通知追加失敗: ${String(error)}`);
-      throw new InternalServerErrorException(MESSAGE.NOTIFICATION.CREATE_FAILED);
+      throw new InternalServerErrorException(
+        MESSAGE.NOTIFICATION.CREATE_FAILED,
+      );
     }
   }
 
@@ -44,7 +46,8 @@ export class TaskNotificationService {
   async getNotifications(taskId: number): Promise<NotificationResponseDto[]> {
     this.logger.log(CONTEXT, `通知一覧取得開始: taskId=${taskId}`);
     try {
-      const notifications = await this.notificationRepository.findByTaskId(taskId);
+      const notifications =
+        await this.notificationRepository.findByTaskId(taskId);
       return notifications.map((n) => this.toResponseDto(n));
     } catch (error) {
       this.logger.error(CONTEXT, `通知一覧取得失敗: ${String(error)}`);
@@ -61,7 +64,10 @@ export class TaskNotificationService {
       await this.notificationRepository.delete(notificationId);
       this.logger.log(CONTEXT, `通知削除完了: id=${notificationId}`);
     } catch (error) {
-      this.logger.error(CONTEXT, `通知削除失敗: id=${notificationId} - ${String(error)}`);
+      this.logger.error(
+        CONTEXT,
+        `通知削除失敗: id=${notificationId} - ${String(error)}`,
+      );
       throw new NotFoundException(MESSAGE.NOTIFICATION.NOT_FOUND);
     }
   }

@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { Event } from '@prisma/client';
 import { EventRepository } from '../repository/event.repository';
-import { CreateEventDto, UpdateEventDto, EventResponseDto } from '../dto/event.dto';
+import {
+  CreateEventDto,
+  UpdateEventDto,
+  EventResponseDto,
+} from '../dto/event.dto';
 import { MESSAGE } from 'src/common/type/message';
 import { LoggerService } from 'src/common/service/logger.service';
 
@@ -44,7 +48,10 @@ export class EventService {
   /**
    * 予定を作成する。作成者はControllerから渡されたJWT認証済みユーザー名を使用する
    */
-  async create(dto: CreateEventDto, createdBy: string): Promise<EventResponseDto> {
+  async create(
+    dto: CreateEventDto,
+    createdBy: string,
+  ): Promise<EventResponseDto> {
     this.logger.log(CONTEXT, `予定作成開始: ${dto.title}`);
     try {
       const event = await this.eventRepository.create({
@@ -79,7 +86,10 @@ export class EventService {
     }
 
     if (existing.created_by !== requestUsername) {
-      this.logger.warn(CONTEXT, `予定更新権限なし: id=${id}, user=${requestUsername}`);
+      this.logger.warn(
+        CONTEXT,
+        `予定更新権限なし: id=${id}, user=${requestUsername}`,
+      );
       throw new ForbiddenException(MESSAGE.EVENT.FORBIDDEN);
     }
 
@@ -111,7 +121,10 @@ export class EventService {
     }
 
     if (existing.created_by !== requestUsername) {
-      this.logger.warn(CONTEXT, `予定削除権限なし: id=${id}, user=${requestUsername}`);
+      this.logger.warn(
+        CONTEXT,
+        `予定削除権限なし: id=${id}, user=${requestUsername}`,
+      );
       throw new ForbiddenException(MESSAGE.EVENT.FORBIDDEN);
     }
 

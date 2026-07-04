@@ -6,7 +6,10 @@ import { Priority } from '../dto/task.dto';
 /** タスクとアサイニー・子タスク・通知を含む型 */
 export type TaskWithRelations = Task & {
   assignees: TaskAssignee[];
-  children: (Task & { assignees: TaskAssignee[]; notifications: TaskNotification[] })[];
+  children: (Task & {
+    assignees: TaskAssignee[];
+    notifications: TaskNotification[];
+  })[];
   notifications: TaskNotification[];
 };
 

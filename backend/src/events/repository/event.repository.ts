@@ -47,7 +47,9 @@ export class EventRepository {
       where: { id },
       data: {
         ...(data.title !== undefined && { title: data.title }),
-        ...(data.description !== undefined && { description: data.description }),
+        ...(data.description !== undefined && {
+          description: data.description,
+        }),
         ...(data.start_at !== undefined && { start_at: data.start_at }),
         ...(data.end_at !== undefined && { end_at: data.end_at }),
       },
