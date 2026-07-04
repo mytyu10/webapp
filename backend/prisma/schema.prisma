@@ -13,6 +13,7 @@ model Account {
   task_assignees  TaskAssignee[]
   created_tasks   Task[]         @relation("TaskCreator")
   created_events  Event[]        @relation("EventCreator")
+  created_links   LinkItem[]     @relation("LinkCreator")
 }
 
 model Task {
@@ -62,4 +63,20 @@ model Event {
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
   creator     Account  @relation("EventCreator", fields: [created_by], references: [username])
+}
+
+model LinkItem {
+  id          Int        @id @default(autoincrement())
+  title       String
+  url         String?
+  description String     @default("")
+  type        String
+  parent_id   Int?
+  order       Int        @default(0)
+  created_by  String
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+  creator     Account    @relation("LinkCreator", fields: [created_by], references: [username])
+  parent      LinkItem?  @relation("LinkChildren", fields: [parent_id], references: [id], onDelete: Cascade)
+  children    LinkItem[] @relation("LinkChildren")
 }

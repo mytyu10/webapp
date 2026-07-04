@@ -236,7 +236,9 @@ export class TaskService {
         is_completed: child.is_completed,
         closed_by: child.closed_by,
         assignees: child.assignees.map((a) => a.username),
-        notifications: child.notifications.map((n) => this.toNotificationDto(n)),
+        notifications: child.notifications.map((n) =>
+          this.toNotificationDto(n),
+        ),
         children: [],
       })),
     };

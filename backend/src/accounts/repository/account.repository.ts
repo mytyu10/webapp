@@ -25,7 +25,10 @@ export class AccountRepository {
   /**
    * アカウントの LINE User ID を更新する
    */
-  async updateLineUserId(username: string, lineUserId: string): Promise<Account> {
+  async updateLineUserId(
+    username: string,
+    lineUserId: string,
+  ): Promise<Account> {
     return this.prisma.account.update({
       where: { username },
       data: { line_user_id: lineUserId },

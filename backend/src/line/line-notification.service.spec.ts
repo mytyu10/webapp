@@ -69,7 +69,7 @@ jest.mock('axios', () => ({
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const axios = require('axios');
+const axios = require('axios') as { post: jest.Mock; get: jest.Mock };
 
 describe('LineNotificationService', () => {
   let service: LineNotificationService;
@@ -118,11 +118,13 @@ describe('LineNotificationService', () => {
         'https://api.line.me/v2/bot/message/push',
         expect.objectContaining({
           to: 'U123456789',
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           messages: expect.arrayContaining([
             expect.objectContaining({ type: 'text' }),
           ]),
         }),
         expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           headers: expect.objectContaining({
             Authorization: 'Bearer test_token',
           }),
@@ -149,7 +151,9 @@ describe('LineNotificationService', () => {
 
       await service.sendPendingNotifications();
 
-      expect(mockNotificationRepository.findPendingNotifications).not.toHaveBeenCalled();
+      expect(
+        mockNotificationRepository.findPendingNotifications,
+      ).not.toHaveBeenCalled();
     });
 
     it('LINE API 送信失敗時も markAsSent は呼ばれ、次回再送できる状態にする', async () => {
@@ -174,6 +178,7 @@ describe('LineNotificationService', () => {
 
       await service.sendPendingNotifications();
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const callArgs = axios.post.mock.calls[0][1] as {
         messages: { text: string }[];
       };

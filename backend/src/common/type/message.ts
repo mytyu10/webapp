@@ -50,4 +50,17 @@ export const MESSAGE = {
     DELETE_FAILED: '予定の削除に失敗しました',
     FORBIDDEN: 'この予定を操作する権限がありません',
   },
+  LINK: {
+    CREATE_SUCCESS: 'リンクを作成しました',
+    UPDATE_SUCCESS: 'リンクを更新しました',
+    DELETE_SUCCESS: 'リンクを削除しました',
+    NOT_FOUND: '指定されたリンクが見つかりません',
+    CREATE_FAILED: 'リンクの作成に失敗しました',
+    UPDATE_FAILED: 'リンクの更新に失敗しました',
+    DELETE_FAILED: 'リンクの削除に失敗しました',
+    FORBIDDEN: 'このリンクを削除する権限がありません',
+    PARENT_NOT_FOLDER: '親要素にはフォルダのみ指定できます',
+    URL_REQUIRED: 'リンクタイプにはURLが必須です',
+    PARENT_NOT_FOUND: '指定された親フォルダが見つかりません',
+  },
 };

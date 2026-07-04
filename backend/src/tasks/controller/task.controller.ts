@@ -15,7 +15,11 @@ import {
 import type { Request, Response } from 'express';
 import { TaskService } from '../service/task.service';
 import { TaskNotificationService } from '../service/task-notification.service';
-import { CreateTaskDto, UpdateTaskDto, CreateNotificationDto } from '../dto/task.dto';
+import {
+  CreateTaskDto,
+  UpdateTaskDto,
+  CreateNotificationDto,
+} from '../dto/task.dto';
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
 import { HttpStatus } from 'src/common/type/status.enum';
 import { MESSAGE } from 'src/common/type/message';
@@ -130,7 +134,10 @@ export class TaskController {
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `通知追加リクエスト: taskId=${id}`);
-    const notification = await this.taskNotificationService.addNotification(id, dto.notify_at);
+    const notification = await this.taskNotificationService.addNotification(
+      id,
+      dto.notify_at,
+    );
     return response
       .status(HttpStatus.CREATED)
       .json({ message: MESSAGE.NOTIFICATION.CREATE_SUCCESS, notification });
@@ -145,7 +152,8 @@ export class TaskController {
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `通知一覧取得リクエスト: taskId=${id}`);
-    const notifications = await this.taskNotificationService.getNotifications(id);
+    const notifications =
+      await this.taskNotificationService.getNotifications(id);
     return response.status(HttpStatus.OK).json(notifications);
   }
 
@@ -158,7 +166,10 @@ export class TaskController {
     @Param('notificationId', ParseIntPipe) notificationId: number,
     @Res() response: Response,
   ): Promise<Response> {
-    this.logger.log(CONTEXT, `通知削除リクエスト: taskId=${id}, notificationId=${notificationId}`);
+    this.logger.log(
+      CONTEXT,
+      `通知削除リクエスト: taskId=${id}, notificationId=${notificationId}`,
+    );
     await this.taskNotificationService.removeNotification(notificationId);
     return response
       .status(HttpStatus.OK)

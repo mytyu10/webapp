@@ -139,6 +139,7 @@ describe('TaskRepository', () => {
 
       expect(mockPrismaService.task.update).toHaveBeenCalledWith(
         expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           data: expect.objectContaining({ is_completed: true }),
         }),
       );
@@ -152,6 +153,7 @@ describe('TaskRepository', () => {
 
       expect(mockPrismaService.task.update).toHaveBeenCalledWith(
         expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           data: expect.objectContaining({ is_completed: false }),
         }),
       );
@@ -163,6 +165,7 @@ describe('TaskRepository', () => {
 
       await repository.update(1, { title: '更新後タイトル' });
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const callArgs = mockPrismaService.task.update.mock.calls[0][0] as {
         data: Record<string, unknown>;
       };
@@ -177,6 +180,7 @@ describe('TaskRepository', () => {
 
       expect(mockPrismaService.task.update).toHaveBeenCalledWith(
         expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           data: expect.objectContaining({ title: '新しいタイトル' }),
         }),
       );

@@ -166,6 +166,7 @@ describe('EventRepository', () => {
 
       expect(mockPrismaService.event.update).toHaveBeenCalledWith(
         expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           data: expect.objectContaining({ title: '更新後タイトル' }),
         }),
       );
@@ -179,6 +180,7 @@ describe('EventRepository', () => {
 
       expect(mockPrismaService.event.update).toHaveBeenCalledWith(
         expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           data: expect.objectContaining({ description: '新しい説明' }),
         }),
       );
@@ -193,6 +195,7 @@ describe('EventRepository', () => {
 
       expect(mockPrismaService.event.update).toHaveBeenCalledWith(
         expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           data: expect.objectContaining({ start_at: newStartAt }),
         }),
       );
@@ -207,6 +210,7 @@ describe('EventRepository', () => {
 
       expect(mockPrismaService.event.update).toHaveBeenCalledWith(
         expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           data: expect.objectContaining({ end_at: newEndAt }),
         }),
       );
@@ -217,6 +221,7 @@ describe('EventRepository', () => {
 
       await repository.update(1, { title: '新タイトル' });
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const callArgs = mockPrismaService.event.update.mock.calls[0][0] as {
         data: Record<string, unknown>;
       };

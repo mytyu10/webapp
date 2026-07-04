@@ -53,7 +53,10 @@ describe('TaskNotificationService', () => {
     it('通知を追加して NotificationResponseDto を返す', async () => {
       mockNotificationRepository.create.mockResolvedValue(mockNotification);
 
-      const result = await service.addNotification(10, '2026-12-01T09:00:00.000Z');
+      const result = await service.addNotification(
+        10,
+        '2026-12-01T09:00:00.000Z',
+      );
 
       expect(result.id).toBe(1);
       expect(result.task_id).toBe(10);
@@ -66,7 +69,9 @@ describe('TaskNotificationService', () => {
     });
 
     it('DBエラー時は InternalServerErrorException をスローする', async () => {
-      mockNotificationRepository.create.mockRejectedValue(new Error('DB error'));
+      mockNotificationRepository.create.mockRejectedValue(
+        new Error('DB error'),
+      );
 
       await expect(
         service.addNotification(10, '2026-12-01T09:00:00.000Z'),
