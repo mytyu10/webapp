@@ -26,6 +26,48 @@ export interface EventInput {
   end_at: string;
 }
 
+/** 繰り返しタイプ */
+export type RepeatType = 'daily' | 'weekly' | 'monthly';
+
+/** 繰り返しルール型 */
+export interface RepeatRule {
+  /** 繰り返しタイプ（daily: 毎日, weekly: 毎週, monthly: 毎月） */
+  type: RepeatType;
+  /** 繰り返し間隔（例: 2 の場合は毎2日・毎2週・毎2ヶ月） */
+  interval: number;
+  /**
+   * 対象曜日（0=日, 1=月, ..., 6=土）。type が weekly の場合のみ有効。
+   * 未指定時は start_at の曜日を使用する
+   */
+  days_of_week?: number[];
+  /** 繰り返し終了日（ISO8601形式）。count と排他的に使用する */
+  end_date?: string;
+  /** 繰り返し回数。end_date と排他的に使用する */
+  count?: number;
+}
+
+/** 複数日付一括作成リクエスト型 */
+export interface MultipleEventInput {
+  title: string;
+  description?: string;
+  /** 予定の長さ（分単位） */
+  duration_minutes: number;
+  /** 開始日時の配列（ISO8601形式）。1件以上必須 */
+  start_times: string[];
+}
+
+/** 繰り返し予定作成リクエスト型 */
+export interface RepeatEventInput {
+  title: string;
+  description?: string;
+  /** 予定の長さ（分単位） */
+  duration_minutes: number;
+  /** 繰り返しの最初の開始日時（ISO8601形式） */
+  start_at: string;
+  /** 繰り返しルール */
+  repeat: RepeatRule;
+}
+
 /**
  * 認証ヘッダーを構築する
  */
@@ -81,6 +123,54 @@ export async function createEvent(input: EventInput): Promise<CalendarEvent> {
   logger.info(CONTEXT, '予定作成成功');
   const data = (await response.json()) as { message: string; event: CalendarEvent };
   return data.event;
+}
+
+/**
+ * 複数の開始日時を指定して同じ内容の予定を一括作成する
+ */
+export async function createMultipleEvents(input: MultipleEventInput): Promise<CalendarEvent[]> {
+  logger.info(CONTEXT, `複数予定作成リクエスト送信: ${input.title}, 件数=${input.start_times.length}`);
+
+  const response = await fetch(`${API_BASE}/events/multiple`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = (data as { message?: string }).message || '複数予定の作成に失敗しました。';
+    logger.warn(CONTEXT, `複数予定作成失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, '複数予定作成成功');
+  const data = (await response.json()) as { message: string; events: CalendarEvent[] };
+  return data.events;
+}
+
+/**
+ * 繰り返しルールに基づいて予定を一括作成する
+ */
+export async function createRepeatEvent(input: RepeatEventInput): Promise<CalendarEvent[]> {
+  logger.info(CONTEXT, `繰り返し予定作成リクエスト送信: ${input.title}`);
+
+  const response = await fetch(`${API_BASE}/events/repeat`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = (data as { message?: string }).message || '繰り返し予定の作成に失敗しました。';
+    logger.warn(CONTEXT, `繰り返し予定作成失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, '繰り返し予定作成成功');
+  const data = (await response.json()) as { message: string; events: CalendarEvent[] };
+  return data.events;
 }
 
 /**

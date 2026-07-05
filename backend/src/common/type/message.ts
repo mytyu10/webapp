@@ -49,6 +49,10 @@ export const MESSAGE = {
     UPDATE_FAILED: '予定の更新に失敗しました',
     DELETE_FAILED: '予定の削除に失敗しました',
     FORBIDDEN: 'この予定を操作する権限がありません',
+    CREATE_MULTIPLE_FAILED: '複数予定の作成に失敗しました',
+    REPEAT_LIMIT_EXCEEDED:
+      '繰り返し予定の生成件数が上限（100件）を超えています',
+    START_TIMES_REQUIRED: '開始日時を1つ以上指定してください',
   },
   LINK: {
     CREATE_SUCCESS: 'リンクを作成しました',

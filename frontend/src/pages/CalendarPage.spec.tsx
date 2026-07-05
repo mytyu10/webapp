@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import CalendarPage from './CalendarPage';
 import * as useCalendarModule from '../hooks/useCalendar';
 import * as useIsMobileModule from '../hooks/useIsMobile';
@@ -34,6 +34,8 @@ jest.mock('@fullcalendar/interaction', () => ({}));
 jest.mock('../api/eventApi', () => ({
   fetchEvents: jest.fn().mockResolvedValue([]),
   createEvent: jest.fn(),
+  createMultipleEvents: jest.fn(),
+  createRepeatEvent: jest.fn(),
   updateEvent: jest.fn(),
   deleteEvent: jest.fn(),
 }));
@@ -68,6 +70,8 @@ function buildUseCalendarReturn(
     currentUsername: 'testuser',
     setCurrentView: jest.fn(),
     handleCreateEvent: jest.fn(),
+    handleCreateMultipleEvents: jest.fn(),
+    handleCreateRepeatEvent: jest.fn(),
     handleUpdateEvent: jest.fn(),
     handleDeleteEvent: jest.fn(),
     reload: jest.fn(),

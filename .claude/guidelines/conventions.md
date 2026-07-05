@@ -265,3 +265,28 @@ model TaskAssignee {
 - [2026-07-04] リンク集のフォルダ展開/折りたたみ状態は `useLinkList` フックの `expandedIds: Set<number>` で一元管理する
 - [2026-07-04] `LinkFormModal` の親フォルダ選択肢には FOLDER タイプのみ表示する。編集時は自分自身と子孫を候補から除外する（循環参照防止）
 - [2026-07-04] `LinkFormModal` の type 選択は編集時に変更不可とする（type 変更は別途削除・再作成で対応）
+
+---
+
+## カレンダー予定 複数日付・繰り返し機能規約
+
+### Event モデルと一括作成の設計方針
+
+- [2026-07-05] 複数日付・繰り返し予定は独立した `Event` レコードとして一括作成する。DB スキーマに繰り返しルールを保持するカラムは追加しない（シンプルさを優先）
+- [2026-07-05] 一括作成後の個別イベントは互いに独立しており、一括削除・一括編集の連鎖は対応しない
+- [2026-07-05] 一括作成の最大件数は100件とし、バックエンド Service と フロントエンド validation の両方で強制する
+
+### バックエンド Event 一括作成の実装方針
+
+- [2026-07-05] SQLite は `prisma.event.createMany` の戻り値が `{ count: N }` のみで個別 ID が返らないため、`$transaction` + 個別 `create` 配列実行で実装する（`EventRepository.createMany`）
+- [2026-07-05] 固定パスルート (`POST /events/multiple`・`POST /events/repeat`) は可変パスルート (`PATCH /events/:id` 等) より前に Controller に定義すること
+- [2026-07-05] 繰り返しの `days_of_week` は `weekly` タイプ時のみ有効とし、`daily`・`monthly` では無視する
+- [2026-07-05] 毎月繰り返しで指定日が存在しない月は `Math.min(baseDay, lastDayOfMonth)` でその月の末日に補正する
+- [2026-07-05] `duration_minutes` は予定の長さ（分単位）として受け取り、Service 内で算出する
+
+### フロントエンド EventModal の設計方針
+
+- [2026-07-05] `EventModal` の作成モードは「通常」「複数日付」「繰り返し」の3種類をタブで切り替える。編集時はタブを表示せず通常フォームのみ表示する
+- [2026-07-05] 複数日付モードの開始日時リストは `DateTimeField` を追加・削除できる形式で実装する
+- [2026-07-05] 繰り返しモードの曜日選択は `repeat_type === 'weekly'` のときのみ表示する
+- [2026-07-05] `EventModal` に `onSaveMultiple` / `onSaveRepeat` の2つの新規 props を追加する

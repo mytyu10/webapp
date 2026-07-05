@@ -385,4 +385,96 @@ describe('useCalendar', () => {
       expect(taskApi.fetchTasks).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe('handleCreateMultipleEvents', () => {
+    it('複数予定を一括作成してローカルステートに追加する', async () => {
+      (eventApi.fetchEvents as jest.Mock).mockResolvedValue([]);
+      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
+      const created1 = { ...mockEvent, id: 2 };
+      const created2 = { ...mockEvent, id: 3 };
+      (eventApi.createMultipleEvents as jest.Mock).mockResolvedValue([created1, created2]);
+
+      const { result } = renderHook(() => useCalendar());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await act(async () => {
+        await result.current.handleCreateMultipleEvents({
+          title: 'ミーティング',
+          duration_minutes: 60,
+          start_times: [
+            '2026-06-01T10:00:00.000Z',
+            '2026-06-02T10:00:00.000Z',
+          ],
+        });
+      });
+
+      expect(result.current.events).toHaveLength(2);
+      expect(result.current.events.map((e) => e.id)).toEqual([2, 3]);
+    });
+
+    it('複数予定作成失敗時に例外をスローする', async () => {
+      (eventApi.fetchEvents as jest.Mock).mockResolvedValue([]);
+      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
+      (eventApi.createMultipleEvents as jest.Mock).mockRejectedValue(new Error('複数作成失敗'));
+
+      const { result } = renderHook(() => useCalendar());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await expect(
+        act(async () => {
+          await result.current.handleCreateMultipleEvents({
+            title: 'ミーティング',
+            duration_minutes: 60,
+            start_times: ['2026-06-01T10:00:00.000Z'],
+          });
+        }),
+      ).rejects.toThrow('複数作成失敗');
+    });
+  });
+
+  describe('handleCreateRepeatEvent', () => {
+    it('繰り返し予定を一括作成してローカルステートに追加する', async () => {
+      (eventApi.fetchEvents as jest.Mock).mockResolvedValue([]);
+      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
+      const created1 = { ...mockEvent, id: 4 };
+      const created2 = { ...mockEvent, id: 5 };
+      const created3 = { ...mockEvent, id: 6 };
+      (eventApi.createRepeatEvent as jest.Mock).mockResolvedValue([created1, created2, created3]);
+
+      const { result } = renderHook(() => useCalendar());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await act(async () => {
+        await result.current.handleCreateRepeatEvent({
+          title: '週次ミーティング',
+          duration_minutes: 60,
+          start_at: '2026-06-01T10:00:00.000Z',
+          repeat: { type: 'weekly', interval: 1, count: 3 },
+        });
+      });
+
+      expect(result.current.events).toHaveLength(3);
+      expect(result.current.events.map((e) => e.id)).toEqual([4, 5, 6]);
+    });
+
+    it('繰り返し予定作成失敗時に例外をスローする', async () => {
+      (eventApi.fetchEvents as jest.Mock).mockResolvedValue([]);
+      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
+      (eventApi.createRepeatEvent as jest.Mock).mockRejectedValue(new Error('繰り返し作成失敗'));
+
+      const { result } = renderHook(() => useCalendar());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await expect(
+        act(async () => {
+          await result.current.handleCreateRepeatEvent({
+            title: '週次ミーティング',
+            duration_minutes: 60,
+            start_at: '2026-06-01T10:00:00.000Z',
+            repeat: { type: 'weekly', interval: 1, count: 3 },
+          });
+        }),
+      ).rejects.toThrow('繰り返し作成失敗');
+    });
+  });
 });

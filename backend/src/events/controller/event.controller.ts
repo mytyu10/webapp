@@ -14,7 +14,12 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { EventService } from '../service/event.service';
-import { CreateEventDto, UpdateEventDto } from '../dto/event.dto';
+import {
+  CreateEventDto,
+  CreateMultipleEventsDto,
+  CreateRepeatEventDto,
+  UpdateEventDto,
+} from '../dto/event.dto';
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
 import { HttpStatus } from 'src/common/type/status.enum';
 import { MESSAGE } from 'src/common/type/message';
@@ -75,6 +80,54 @@ export class EventController {
     return response
       .status(HttpStatus.CREATED)
       .json({ message: MESSAGE.EVENT.CREATE_SUCCESS, event });
+  }
+
+  /**
+   * 複数日付一括作成エンドポイント。
+   * 固定パスルートのため :id より前に定義する
+   */
+  @Post('multiple')
+  async createMultiple(
+    @Body() dto: CreateMultipleEventsDto,
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(CONTEXT, `複数予定作成リクエスト: ${dto.title}`);
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
+    const events = await this.eventService.createMultiple(
+      dto,
+      requestUser.username,
+    );
+    return response
+      .status(HttpStatus.CREATED)
+      .json({ message: MESSAGE.EVENT.CREATE_SUCCESS, events });
+  }
+
+  /**
+   * 繰り返し予定一括作成エンドポイント。
+   * 固定パスルートのため :id より前に定義する
+   */
+  @Post('repeat')
+  async createRepeat(
+    @Body() dto: CreateRepeatEventDto,
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(CONTEXT, `繰り返し予定作成リクエスト: ${dto.title}`);
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
+    const events = await this.eventService.createRepeat(
+      dto,
+      requestUser.username,
+    );
+    return response
+      .status(HttpStatus.CREATED)
+      .json({ message: MESSAGE.EVENT.CREATE_SUCCESS, events });
   }
 
   /**

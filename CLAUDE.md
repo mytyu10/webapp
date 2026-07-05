@@ -57,7 +57,11 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/tasks/repository/` — Prisma CRUD・カテゴリ取得（is_completed・closed_by・notifications フィールド対応）。`task-notification.repository.ts` で通知の作成・取得・削除・送信対象抽出・送信済みマークを提供
 - `src/tasks/dto/task.dto.ts` — CreateTaskDto / UpdateTaskDto（is_completed含む） / TaskResponseDto（is_completed・closed_by・notifications含む） / Priority型 / CreateNotificationDto / NotificationResponseDto
 - `src/line/line-notification.service.ts` — `@Cron(CronExpression.EVERY_MINUTE)` で毎分実行するCronジョブ。未送信かつ `notify_at <= 現在時刻` の通知を取得し、担当者（LINE連携済みのみ）に LINE Messaging API でプッシュ通知を送信。全担当者処理後に `is_sent=true` にマーク。送信失敗時は `is_sent` を更新せず次回再試行
-- `src/links/controller/` — REST endpoints (`GET /links`, `POST /links`, `PATCH /links/:id`, `DELETE /links/:id`) — JwtAuthGuard適用済み
+- `src/events/controller/` — REST endpoints (`GET /events`, `GET /events/:id`, `POST /events`, `POST /events/multiple`, `POST /events/repeat`, `PATCH /events/:id`, `DELETE /events/:id`) — JwtAuthGuard適用済み。`POST /events/multiple` は複数日付一括作成、`POST /events/repeat` は繰り返しルール一括作成
+- `src/events/service/` — 予定のビジネスロジック（`event.service.ts`）。単件作成（`create`）・複数日付一括作成（`createMultiple`）・繰り返し一括作成（`createRepeat`）・更新・削除。繰り返し展開は daily/weekly/monthly の3タイプ対応。monthly は月末補正あり。最大生成件数100件制限
+- `src/events/repository/` — Prisma CRUD（findAll/findById/create/createMany/update/delete）。`createMany` は SQLite の `createMany` 制約回避のため `$transaction` + 個別 `create` 配列で実装
+- `src/events/dto/event.dto.ts` — CreateEventDto / CreateMultipleEventsDto（start_times配列・duration_minutes） / CreateRepeatEventDto（RepeatRuleDto含む） / UpdateEventDto / EventResponseDto / RepeatType enum（daily/weekly/monthly）
+- - `src/links/controller/` — REST endpoints (`GET /links`, `POST /links`, `PATCH /links/:id`, `DELETE /links/:id`) — JwtAuthGuard適用済み
 - `src/links/service/` — リンク/フォルダのビジネスロジック。ツリー構築（Map を使ったフラット→ツリー変換）・LINK を親にできない制約チェック・作成者チェック
 - `src/links/repository/` — Prisma CRUD（findAll/findById/create/update/delete）。order昇順・created_at昇順でソート
 - `src/links/dto/link.dto.ts` — CreateLinkItemDto / UpdateLinkItemDto / LinkItemResponseDto（children: LinkItemResponseDto[]）/ LinkItemType型（"FOLDER" | "LINK"）
@@ -82,6 +86,8 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 
 **リンク集フロー**: JwtAuthGuard → Controller → Service（ツリー構築・親フォルダ検証・作成者チェック）→ Repository → Prisma。LINK タイプは子を持てない末端要素。FOLDER タイプのみ children を持つ。削除は作成者のみ可能。FOLDER 削除時は Cascade で配下の全子孫も削除される。
 
+**カレンダー予定フロー**: JwtAuthGuard → Controller → Service → Repository → Prisma。単件作成（`POST /events`）・複数日付一括作成（`POST /events/multiple`）・繰り返し一括作成（`POST /events/repeat`）の3パターンをサポート。複数・繰り返しは Service 内で日付展開後に `$transaction` で一括 INSERT。更新・削除は作成者のみ可能。
+
 ### Frontend (React + CRA)
 
 - `src/App.tsx` — router: `/` → `HomePage`（タスク一覧へリダイレクト）, `/login` → `LoginPage`, `/tasks` → `TaskListPage`, `/tasks/new` → `TaskFormPage`, `/calendar` → `CalendarPage`, `/links` → `LinkListPage`, `/line-callback` → `LineCallbackPage`（PrivateRoute外・LINE OAuthコールバック用）
@@ -95,13 +101,14 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/pages/TaskDetailPage.tsx` — タスク詳細・完了/未完了ボタン・完了スタイル（緑枠・バナー・取り消し線）・`closed_by`表示・子タスク一覧・子タスク作成ボタン。編集ボタンは全ユーザーに表示。直リンク（`/tasks/:id`）対応のため引き続き存在する
 - `src/pages/LinkListPage.tsx` — リンク集一覧ページ。エクスプローラー風ツリー表示。`LinkTreeNode` コンポーネントで再帰レンダリング。フォルダクリックで展開/折りたたみ。リンククリックで別タブを開く。追加ボタンで `LinkFormModal` を開く。削除は作成者のみ表示。フォルダ削除時に「配下の全リンク・フォルダも削除されます」という警告を表示する
 - `src/api/taskApi.ts` — タスクAPI通信（`fetchTasks`, `fetchTask`, `fetchCategories`, `createTask`, `updateTask`, `toggleTaskCompletion`, `deleteTask`, `getCurrentUsername`, `fetchNotifications`, `addNotification`, `deleteNotification`, `fetchMe`）。`TaskNotification` インターフェース・`AccountMe` インターフェース・`Task.notifications?: TaskNotification[]` フィールドを含む
-- `src/api/linkApi.ts` — リンク集API通信（`fetchLinks`, `createLink`, `updateLink`, `deleteLink`）。`LinkItem` インターフェース（children: LinkItem[] を含む再帰型）・`LinkItemInput` インターフェース・`LinkItemType`（"FOLDER" | "LINK"）を定義
+- `src/api/eventApi.ts` — カレンダー予定API通信（`fetchEvents`, `createEvent`, `createMultipleEvents`, `createRepeatEvent`, `updateEvent`, `deleteEvent`）。`CalendarEvent`・`EventInput`・`MultipleEventInput`・`RepeatEventInput`・`RepeatRule`・`RepeatType` インターフェースを定義
+- - `src/api/linkApi.ts` — リンク集API通信（`fetchLinks`, `createLink`, `updateLink`, `deleteLink`）。`LinkItem` インターフェース（children: LinkItem[] を含む再帰型）・`LinkItemInput` インターフェース・`LinkItemType`（"FOLDER" | "LINK"）を定義
 - `src/hooks/useTaskList.ts` — タスク一覧・削除・カテゴリフィルタリング・階層ツリー構築（incompleteTrees/completedTrees）フック。`togglingIds`（PATCH処理中のタスクID集合）と `awaitToggle`（PATCH完了を外から待てる関数）を提供する
 - `src/hooks/useTaskDetail.ts` — タスク詳細取得・完了切り替えフック
 - `src/hooks/useTaskForm.ts` — タスクフォーム（作成/編集/子タスク作成モード対応）フック。`notifications: string[]`（datetime-local形式）状態を管理し、`addNotificationDatetime`・`removeNotificationDatetime` を提供。フォーム送信後に通知日時を `addNotification` API へ順次送信する。編集モード時は既存通知を datetime-local 形式に変換して初期値として読み込む
 - `src/hooks/useLinkList.ts` — リンク集一覧取得・フォルダ展開/折りたたみ状態管理（expandedIds: Set<number>）・削除処理・リロードを提供するフック
 - `src/hooks/useLinkForm.ts` — リンク/フォルダ作成・編集フォームを管理するフック。editItem 指定で編集モード。type が FOLDER に変更されたら url をクリアする
-- `src/hooks/useCalendar.ts` — カレンダー予定・タスク表示・ビュー切り替えを管理するフック。タスクのカレンダー表示は日表示（timeGridDay）のみ。`taskToEventInput` でタスクをFullCalendar用EventInputに変換する際、`start = due_date - 1時間`・`end = due_date` に設定し、期限がイベントの終了時刻になるようにする
+- `src/hooks/useCalendar.ts` — カレンダー予定・タスク表示・ビュー切り替えを管理するフック。タスクのカレンダー表示は日表示（timeGridDay）のみ。`taskToEventInput` でタスクをFullCalendar用EventInputに変換する際、`start = due_date - 1時間`・`end = due_date` に設定し、期限がイベントの終了時刻になるようにする。`handleCreateMultipleEvents`（複数日付一括作成）・`handleCreateRepeatEvent`（繰り返し一括作成）を提供し、作成後はローカルステートに全件追加する
 - `src/hooks/useIsMobile.ts` — 画面幅が640px未満かどうかをリアクティブに返すカスタムフック。`window.resize` イベントで追従する
 - `src/validation/taskValidation.ts` — タスクフォームバリデーション（priority/category含む）。担当者は1人以上必須
 - `src/validation/linkValidation.ts` — リンク/フォルダフォームバリデーション。title必須。type="LINK" の場合は url も必須
@@ -111,7 +118,9 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/components/TextAreaField.tsx` — textareaラッパー共通コンポーネント
 - `src/components/DateTimeField.tsx` — datetime-local入力ラッパー共通コンポーネント
 - `src/components/SelectField.tsx` — selectラッパー共通コンポーネント
-- `src/components/CancelButton.tsx` — キャンセルボタン共通コンポーネント
+- `src/components/EventModal.tsx` — 予定作成・編集モーダル。新規作成時は「通常」「複数日付」「繰り返し」の3モードをタブで切り替えられる。編集時は通常フォームのみ表示。複数日付モードは `DateTimeField` リストで開始日時を複数追加・削除可能。繰り返しモードは繰り返しタイプ（毎日/毎週/毎月）・間隔・曜日（毎週のみ）・終了条件（終了日 or 回数）を設定可能
+- `src/validation/eventValidation.ts` — カレンダー予定フォームのバリデーション。`validateEventForm`（通常）・`validateMultipleEventForm`（複数日付）・`validateRepeatEventForm`（繰り返し）の3種類を提供
+- - `src/components/CancelButton.tsx` — キャンセルボタン共通コンポーネント
 
 API base URL is built from env vars: `REACT_APP_API_SCHEME`, `REACT_APP_API_HOST`, `REACT_APP_API_PORT`.
 
