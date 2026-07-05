@@ -5,7 +5,7 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import type { EventClickArg, DateSelectArg, EventContentArg } from '@fullcalendar/core';
 import { useCalendar, CalendarView } from '../hooks/useCalendar';
-import { CalendarEvent, EventInput } from '../api/eventApi';
+import { CalendarEvent, EventInput, MultipleEventInput, RepeatEventInput } from '../api/eventApi';
 import { Priority } from '../api/taskApi';
 import EventModal from '../components/EventModal';
 import TaskTooltip from '../components/TaskTooltip';
@@ -46,6 +46,7 @@ function isTaskEvent(props: unknown): props is TaskEventProps {
 /**
  * カレンダーページ
  * FullCalendarを使用して予定の表示・作成・編集・削除を提供する。
+ * 新規作成時は「通常」「複数日付」「繰り返し」の3モードを選択できる。
  * 日表示のみタスクを表示し、マウスオーバーでタスク詳細をツールチップ表示する
  */
 function CalendarPage() {
@@ -58,6 +59,8 @@ function CalendarPage() {
     currentUsername,
     setCurrentView,
     handleCreateEvent,
+    handleCreateMultipleEvents,
+    handleCreateRepeatEvent,
     handleUpdateEvent,
     handleDeleteEvent,
   } = useCalendar();
@@ -173,7 +176,7 @@ function CalendarPage() {
   }
 
   /**
-   * モーダルの保存処理（作成・更新を判別して呼び分ける）
+   * 通常予定の保存処理（作成・更新を判別して呼び分ける）
    */
   async function handleModalSave(input: EventInput): Promise<void> {
     setModalError('');
@@ -182,6 +185,22 @@ function CalendarPage() {
     } else {
       await handleCreateEvent(input);
     }
+  }
+
+  /**
+   * 複数日付一括作成の保存処理
+   */
+  async function handleModalSaveMultiple(input: MultipleEventInput): Promise<void> {
+    setModalError('');
+    await handleCreateMultipleEvents(input);
+  }
+
+  /**
+   * 繰り返し予定作成の保存処理
+   */
+  async function handleModalSaveRepeat(input: RepeatEventInput): Promise<void> {
+    setModalError('');
+    await handleCreateRepeatEvent(input);
   }
 
   return (
@@ -234,6 +253,8 @@ function CalendarPage() {
         initialStart={initialStart}
         currentUsername={currentUsername}
         onSave={handleModalSave}
+        onSaveMultiple={handleModalSaveMultiple}
+        onSaveRepeat={handleModalSaveRepeat}
         onDelete={handleDeleteEvent}
         onClose={() => setModalOpen(false)}
       />

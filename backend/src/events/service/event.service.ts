@@ -3,11 +3,15 @@ import {
   NotFoundException,
   ForbiddenException,
   InternalServerErrorException,
+  BadRequestException,
 } from '@nestjs/common';
 import { Event } from '@prisma/client';
 import { EventRepository } from '../repository/event.repository';
 import {
   CreateEventDto,
+  CreateMultipleEventsDto,
+  CreateRepeatEventDto,
+  RepeatType,
   UpdateEventDto,
   EventResponseDto,
 } from '../dto/event.dto';
@@ -15,6 +19,12 @@ import { MESSAGE } from 'src/common/type/message';
 import { LoggerService } from 'src/common/service/logger.service';
 
 const CONTEXT = 'EventService';
+
+/** 繰り返し予定の最大生成件数 */
+const REPEAT_MAX_COUNT = 100;
+
+/** 分をミリ秒に変換する係数 */
+const MINUTES_TO_MS = 60 * 1000;
 
 @Injectable()
 export class EventService {
@@ -67,6 +77,266 @@ export class EventService {
       this.logger.error(CONTEXT, `予定作成失敗: ${String(error)}`);
       throw new InternalServerErrorException(MESSAGE.EVENT.CREATE_FAILED);
     }
+  }
+
+  /**
+   * 複数の開始日時を指定して同じ内容の予定を一括作成する。
+   * end_at = start_at + duration_minutes として各イベントの終了日時を算出する
+   */
+  async createMultiple(
+    dto: CreateMultipleEventsDto,
+    createdBy: string,
+  ): Promise<EventResponseDto[]> {
+    this.logger.log(
+      CONTEXT,
+      `複数予定作成開始: ${dto.title}, 件数=${dto.start_times.length}`,
+    );
+
+    if (dto.start_times.length === 0) {
+      throw new BadRequestException(MESSAGE.EVENT.START_TIMES_REQUIRED);
+    }
+
+    if (dto.start_times.length > REPEAT_MAX_COUNT) {
+      throw new BadRequestException(MESSAGE.EVENT.REPEAT_LIMIT_EXCEEDED);
+    }
+
+    try {
+      const durationMs = dto.duration_minutes * MINUTES_TO_MS;
+      const data = dto.start_times.map((startTimeStr) => {
+        const startAt = new Date(startTimeStr);
+        const endAt = new Date(startAt.getTime() + durationMs);
+        return {
+          title: dto.title,
+          description: dto.description ?? '',
+          start_at: startAt,
+          end_at: endAt,
+          created_by: createdBy,
+        };
+      });
+
+      const events = await this.eventRepository.createMany(data);
+      this.logger.log(CONTEXT, `複数予定作成完了: ${events.length}件`);
+      return events.map((e) => this.toResponseDto(e));
+    } catch (error) {
+      this.logger.error(CONTEXT, `複数予定作成失敗: ${String(error)}`);
+      throw new InternalServerErrorException(
+        MESSAGE.EVENT.CREATE_MULTIPLE_FAILED,
+      );
+    }
+  }
+
+  /**
+   * 繰り返しルールに基づいて予定を一括作成する。
+   * repeat.type に応じて開始日時を展開し、最大100件を上限とする。
+   * - daily: interval 日ごとに繰り返す。days_of_week は無視する
+   * - weekly: interval 週ごとに繰り返す。days_of_week が指定された場合はその曜日のみ対象とする
+   * - monthly: interval ヶ月ごとに繰り返す。月末補正（例: 31日 → その月の末日）を行う。days_of_week は無視する
+   */
+  async createRepeat(
+    dto: CreateRepeatEventDto,
+    createdBy: string,
+  ): Promise<EventResponseDto[]> {
+    this.logger.log(
+      CONTEXT,
+      `繰り返し予定作成開始: ${dto.title}, type=${dto.repeat.type}`,
+    );
+
+    const startTimes = this.expandRepeatDates(dto);
+
+    if (startTimes.length === 0) {
+      throw new BadRequestException(MESSAGE.EVENT.START_TIMES_REQUIRED);
+    }
+
+    if (startTimes.length > REPEAT_MAX_COUNT) {
+      throw new BadRequestException(MESSAGE.EVENT.REPEAT_LIMIT_EXCEEDED);
+    }
+
+    try {
+      const durationMs = dto.duration_minutes * MINUTES_TO_MS;
+      const data = startTimes.map((startAt) => {
+        const endAt = new Date(startAt.getTime() + durationMs);
+        return {
+          title: dto.title,
+          description: dto.description ?? '',
+          start_at: startAt,
+          end_at: endAt,
+          created_by: createdBy,
+        };
+      });
+
+      const events = await this.eventRepository.createMany(data);
+      this.logger.log(CONTEXT, `繰り返し予定作成完了: ${events.length}件`);
+      return events.map((e) => this.toResponseDto(e));
+    } catch (error) {
+      this.logger.error(CONTEXT, `繰り返し予定作成失敗: ${String(error)}`);
+      throw new InternalServerErrorException(
+        MESSAGE.EVENT.CREATE_MULTIPLE_FAILED,
+      );
+    }
+  }
+
+  /**
+   * 繰り返しルールから開始日時の配列を展開する。
+   * end_date と count の両方が未指定の場合は count=1 として扱う
+   */
+  private expandRepeatDates(dto: CreateRepeatEventDto): Date[] {
+    const { repeat } = dto;
+    const baseDate = new Date(dto.start_at);
+    const endDate = repeat.end_date ? new Date(repeat.end_date) : null;
+    const maxCount = repeat.count ?? (endDate ? REPEAT_MAX_COUNT : 1);
+
+    const dates: Date[] = [];
+
+    if (repeat.type === RepeatType.DAILY) {
+      dates.push(
+        ...this.expandDaily(baseDate, repeat.interval, endDate, maxCount),
+      );
+    } else if (repeat.type === RepeatType.WEEKLY) {
+      dates.push(
+        ...this.expandWeekly(
+          baseDate,
+          repeat.interval,
+          repeat.days_of_week,
+          endDate,
+          maxCount,
+        ),
+      );
+    } else if (repeat.type === RepeatType.MONTHLY) {
+      dates.push(
+        ...this.expandMonthly(baseDate, repeat.interval, endDate, maxCount),
+      );
+    }
+
+    return dates;
+  }
+
+  /**
+   * 毎日繰り返しの日付配列を生成する
+   */
+  private expandDaily(
+    baseDate: Date,
+    interval: number,
+    endDate: Date | null,
+    maxCount: number,
+  ): Date[] {
+    const dates: Date[] = [];
+    const current = new Date(baseDate);
+
+    while (dates.length < maxCount) {
+      if (endDate && current > endDate) break;
+      dates.push(new Date(current));
+      current.setDate(current.getDate() + interval);
+    }
+
+    return dates;
+  }
+
+  /**
+   * 毎週繰り返しの日付配列を生成する。
+   * days_of_week が指定された場合はその曜日のみ対象とし、interval 週ごとに巡回する。
+   * days_of_week が未指定の場合は baseDate の曜日を使用する
+   */
+  private expandWeekly(
+    baseDate: Date,
+    interval: number,
+    daysOfWeek: number[] | undefined,
+    endDate: Date | null,
+    maxCount: number,
+  ): Date[] {
+    const dates: Date[] = [];
+
+    if (!daysOfWeek || daysOfWeek.length === 0) {
+      // 曜日指定なしの場合は baseDate の曜日をそのまま interval 週ごとに繰り返す
+      const current = new Date(baseDate);
+      while (dates.length < maxCount) {
+        if (endDate && current > endDate) break;
+        dates.push(new Date(current));
+        current.setDate(current.getDate() + interval * 7);
+      }
+      return dates;
+    }
+
+    // 指定曜日がある場合: baseDate が属する週の月曜を起点に interval 週ごとに各曜日を生成する
+    const sortedDays = [...daysOfWeek].sort((a, b) => a - b);
+    const weekStart = this.getWeekStart(baseDate);
+
+    let weekOffset = 0;
+    while (dates.length < maxCount) {
+      for (const day of sortedDays) {
+        const candidate = new Date(weekStart);
+        candidate.setDate(weekStart.getDate() + weekOffset * 7 + day);
+        // 時分秒は baseDate に合わせる
+        candidate.setHours(
+          baseDate.getHours(),
+          baseDate.getMinutes(),
+          baseDate.getSeconds(),
+          0,
+        );
+
+        if (candidate < baseDate) continue;
+        if (endDate && candidate > endDate) return dates;
+        if (dates.length >= maxCount) return dates;
+
+        dates.push(new Date(candidate));
+      }
+      weekOffset += interval;
+    }
+
+    return dates;
+  }
+
+  /**
+   * 毎月繰り返しの日付配列を生成する。
+   * 月末補正: 指定日が存在しない月（例: 2月31日）はその月の末日に補正する
+   */
+  private expandMonthly(
+    baseDate: Date,
+    interval: number,
+    endDate: Date | null,
+    maxCount: number,
+  ): Date[] {
+    const dates: Date[] = [];
+    const baseDay = baseDate.getDate();
+
+    let year = baseDate.getFullYear();
+    let month = baseDate.getMonth();
+
+    while (dates.length < maxCount) {
+      // 月末補正: 指定した日付が当月に存在しない場合は月末日を使用する
+      const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+      const day = Math.min(baseDay, lastDayOfMonth);
+
+      const candidate = new Date(
+        year,
+        month,
+        day,
+        baseDate.getHours(),
+        baseDate.getMinutes(),
+        baseDate.getSeconds(),
+        0,
+      );
+
+      if (endDate && candidate > endDate) break;
+      dates.push(candidate);
+
+      month += interval;
+      if (month > 11) {
+        year += Math.floor(month / 12);
+        month = month % 12;
+      }
+    }
+
+    return dates;
+  }
+
+  /**
+   * 指定日が属する週の日曜日（週の開始日）を返す
+   */
+  private getWeekStart(date: Date): Date {
+    const d = new Date(date);
+    d.setDate(d.getDate() - d.getDay());
+    d.setHours(0, 0, 0, 0);
+    return d;
   }
 
   /**

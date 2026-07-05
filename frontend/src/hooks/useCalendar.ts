@@ -3,8 +3,12 @@ import type { EventInput as FullCalendarEventInput } from '@fullcalendar/core';
 import {
   CalendarEvent,
   EventInput,
+  MultipleEventInput,
+  RepeatEventInput,
   fetchEvents,
   createEvent,
+  createMultipleEvents,
+  createRepeatEvent,
   updateEvent,
   deleteEvent,
 } from '../api/eventApi';
@@ -35,6 +39,10 @@ export interface UseCalendarReturn {
   setCurrentView: (view: CalendarView) => void;
   /** 予定を作成する */
   handleCreateEvent: (input: EventInput) => Promise<void>;
+  /** 複数日付で予定を一括作成する */
+  handleCreateMultipleEvents: (input: MultipleEventInput) => Promise<void>;
+  /** 繰り返しルールで予定を一括作成する */
+  handleCreateRepeatEvent: (input: RepeatEventInput) => Promise<void>;
   /** 予定を更新する */
   handleUpdateEvent: (id: number, input: Partial<EventInput>) => Promise<void>;
   /** 予定を削除する */
@@ -180,6 +188,40 @@ export function useCalendar(): UseCalendarReturn {
   }, []);
 
   /**
+   * 複数の開始日時を指定して同じ内容の予定を一括作成する。
+   * 作成後はローカルステートに全件追加する
+   */
+  const handleCreateMultipleEvents = useCallback(async (input: MultipleEventInput): Promise<void> => {
+    logger.info(CONTEXT, `複数予定作成実行: ${input.title}, 件数=${input.start_times.length}`);
+    try {
+      const created = await createMultipleEvents(input);
+      setEvents((prev) => [...prev, ...created]);
+      logger.info(CONTEXT, `複数予定作成完了: ${created.length}件`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '複数予定の作成に失敗しました。';
+      logger.warn(CONTEXT, `複数予定作成失敗: ${message}`);
+      throw new Error(message);
+    }
+  }, []);
+
+  /**
+   * 繰り返しルールに基づいて予定を一括作成する。
+   * 作成後はローカルステートに全件追加する
+   */
+  const handleCreateRepeatEvent = useCallback(async (input: RepeatEventInput): Promise<void> => {
+    logger.info(CONTEXT, `繰り返し予定作成実行: ${input.title}`);
+    try {
+      const created = await createRepeatEvent(input);
+      setEvents((prev) => [...prev, ...created]);
+      logger.info(CONTEXT, `繰り返し予定作成完了: ${created.length}件`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '繰り返し予定の作成に失敗しました。';
+      logger.warn(CONTEXT, `繰り返し予定作成失敗: ${message}`);
+      throw new Error(message);
+    }
+  }, []);
+
+  /**
    * 予定を更新する。更新後はローカルステートの該当予定をサーバーレスポンスで置き換える
    */
   const handleUpdateEvent = useCallback(
@@ -223,6 +265,8 @@ export function useCalendar(): UseCalendarReturn {
     currentUsername,
     setCurrentView,
     handleCreateEvent,
+    handleCreateMultipleEvents,
+    handleCreateRepeatEvent,
     handleUpdateEvent,
     handleDeleteEvent,
     reload,

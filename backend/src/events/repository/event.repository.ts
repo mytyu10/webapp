@@ -32,6 +32,17 @@ export class EventRepository {
   }
 
   /**
+   * 複数予定を一括作成する。
+   * SQLite では createMany の戻り値が count のみで個別IDが取れないため、
+   * $transaction + 個別 create の配列実行で全件レコードを返す
+   */
+  async createMany(data: Prisma.EventUncheckedCreateInput[]): Promise<Event[]> {
+    return this.prisma.$transaction(
+      data.map((item) => this.prisma.event.create({ data: item })),
+    );
+  }
+
+  /**
    * 指定IDの予定を更新する
    */
   async update(
