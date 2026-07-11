@@ -13,6 +13,7 @@ export interface CalendarEvent {
   description: string;
   start_at: string;
   end_at: string;
+  repeat_group_id: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -50,22 +51,35 @@ export interface RepeatRule {
 export interface MultipleEventInput {
   title: string;
   description?: string;
-  /** 予定の長さ（分単位） */
-  duration_minutes: number;
   /** 開始日時の配列（ISO8601形式）。1件以上必須 */
   start_times: string[];
+  /** 終了日時の配列（ISO8601形式）。start_times と同件数必須 */
+  end_times: string[];
 }
 
 /** 繰り返し予定作成リクエスト型 */
 export interface RepeatEventInput {
   title: string;
   description?: string;
-  /** 予定の長さ（分単位） */
-  duration_minutes: number;
   /** 繰り返しの最初の開始日時（ISO8601形式） */
   start_at: string;
+  /**
+   * 繰り返しの最初の終了日時（ISO8601形式）。
+   * end_at - start_at の差分ミリ秒を保持し、各繰り返し日の end_at を算出する
+   */
+  end_at: string;
   /** 繰り返しルール */
   repeat: RepeatRule;
+}
+
+/** 繰り返しグループ全件更新リクエスト型 */
+export interface UpdateRepeatGroupInput {
+  title?: string;
+  description?: string;
+  /** 開始日時の差分（ミリ秒）。各予定の start_at に加算してシフトする */
+  start_diff_ms?: number;
+  /** 終了日時の差分（ミリ秒）。各予定の end_at に加算してシフトする */
+  end_diff_ms?: number;
 }
 
 /**
@@ -126,7 +140,7 @@ export async function createEvent(input: EventInput): Promise<CalendarEvent> {
 }
 
 /**
- * 複数の開始日時を指定して同じ内容の予定を一括作成する
+ * 複数の開始日時と終了日時を指定して同じ内容の予定を一括作成する
  */
 export async function createMultipleEvents(input: MultipleEventInput): Promise<CalendarEvent[]> {
   logger.info(CONTEXT, `複数予定作成リクエスト送信: ${input.title}, 件数=${input.start_times.length}`);
@@ -195,6 +209,33 @@ export async function updateEvent(id: number, input: Partial<EventInput>): Promi
   logger.info(CONTEXT, `予定更新成功: id=${id}`);
   const data = (await response.json()) as { message: string; event: CalendarEvent };
   return data.event;
+}
+
+/**
+ * 繰り返しグループに属する全予定を一括更新する
+ */
+export async function updateRepeatGroupEvent(
+  groupId: string,
+  input: UpdateRepeatGroupInput,
+): Promise<CalendarEvent[]> {
+  logger.info(CONTEXT, `繰り返しグループ更新リクエスト送信: groupId=${groupId}`);
+
+  const response = await fetch(`${API_BASE}/events/repeat-group/${groupId}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = (data as { message?: string }).message || '繰り返し予定の更新に失敗しました。';
+    logger.warn(CONTEXT, `繰り返しグループ更新失敗: groupId=${groupId} - ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, `繰り返しグループ更新成功: groupId=${groupId}`);
+  const data = (await response.json()) as { message: string; events: CalendarEvent[] };
+  return data.events;
 }
 
 /**

@@ -53,6 +53,12 @@ export const MESSAGE = {
     REPEAT_LIMIT_EXCEEDED:
       '繰り返し予定の生成件数が上限（100件）を超えています',
     START_TIMES_REQUIRED: '開始日時を1つ以上指定してください',
+    START_END_TIMES_LENGTH_MISMATCH:
+      '開始日時と終了日時の件数が一致していません',
+    UPDATE_GROUP_SUCCESS: '繰り返し予定を全て更新しました',
+    UPDATE_GROUP_FAILED: '繰り返し予定の更新に失敗しました',
+    REPEAT_GROUP_NOT_FOUND: '指定された繰り返しグループの予定が見つかりません',
+    REPEAT_GROUP_FORBIDDEN: 'この繰り返し予定を操作する権限がありません',
   },
   LINK: {
     CREATE_SUCCESS: 'リンクを作成しました',

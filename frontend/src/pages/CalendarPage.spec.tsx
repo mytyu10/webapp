@@ -73,6 +73,7 @@ function buildUseCalendarReturn(
     handleCreateMultipleEvents: jest.fn(),
     handleCreateRepeatEvent: jest.fn(),
     handleUpdateEvent: jest.fn(),
+    handleUpdateRepeatGroupEvent: jest.fn(),
     handleDeleteEvent: jest.fn(),
     reload: jest.fn(),
     ...overrides,

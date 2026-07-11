@@ -5,11 +5,13 @@ import {
   EventInput,
   MultipleEventInput,
   RepeatEventInput,
+  UpdateRepeatGroupInput,
   fetchEvents,
   createEvent,
   createMultipleEvents,
   createRepeatEvent,
   updateEvent,
+  updateRepeatGroupEvent,
   deleteEvent,
 } from '../api/eventApi';
 import { fetchTasks, Task } from '../api/taskApi';
@@ -45,6 +47,8 @@ export interface UseCalendarReturn {
   handleCreateRepeatEvent: (input: RepeatEventInput) => Promise<void>;
   /** 予定を更新する */
   handleUpdateEvent: (id: number, input: Partial<EventInput>) => Promise<void>;
+  /** 繰り返しグループの全予定を一括更新する */
+  handleUpdateRepeatGroupEvent: (groupId: string, input: UpdateRepeatGroupInput) => Promise<void>;
   /** 予定を削除する */
   handleDeleteEvent: (id: number) => Promise<void>;
   /** 一覧を再読み込みする */
@@ -188,7 +192,7 @@ export function useCalendar(): UseCalendarReturn {
   }, []);
 
   /**
-   * 複数の開始日時を指定して同じ内容の予定を一括作成する。
+   * 複数の開始日時と終了日時を指定して同じ内容の予定を一括作成する。
    * 作成後はローカルステートに全件追加する
    */
   const handleCreateMultipleEvents = useCallback(async (input: MultipleEventInput): Promise<void> => {
@@ -241,6 +245,30 @@ export function useCalendar(): UseCalendarReturn {
   );
 
   /**
+   * 繰り返しグループの全予定を一括更新する。
+   * 更新後はローカルステートの該当グループの全予定をサーバーレスポンスで置き換える
+   */
+  const handleUpdateRepeatGroupEvent = useCallback(
+    async (groupId: string, input: UpdateRepeatGroupInput): Promise<void> => {
+      logger.info(CONTEXT, `繰り返しグループ更新実行: groupId=${groupId}`);
+      try {
+        const updated = await updateRepeatGroupEvent(groupId, input);
+        const updatedIds = new Set(updated.map((e) => e.id));
+        setEvents((prev) => [
+          ...prev.filter((e) => !updatedIds.has(e.id)),
+          ...updated,
+        ]);
+        logger.info(CONTEXT, `繰り返しグループ更新完了: groupId=${groupId}, 件数=${updated.length}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '繰り返し予定の更新に失敗しました。';
+        logger.warn(CONTEXT, `繰り返しグループ更新失敗: groupId=${groupId} - ${message}`);
+        throw new Error(message);
+      }
+    },
+    [],
+  );
+
+  /**
    * 予定を削除する。削除後はローカルステートから除去する
    */
   const handleDeleteEvent = useCallback(async (id: number): Promise<void> => {
@@ -268,6 +296,7 @@ export function useCalendar(): UseCalendarReturn {
     handleCreateMultipleEvents,
     handleCreateRepeatEvent,
     handleUpdateEvent,
+    handleUpdateRepeatGroupEvent,
     handleDeleteEvent,
     reload,
   };

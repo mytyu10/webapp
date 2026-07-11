@@ -47,6 +47,7 @@ function isTaskEvent(props: unknown): props is TaskEventProps {
  * カレンダーページ
  * FullCalendarを使用して予定の表示・作成・編集・削除を提供する。
  * 新規作成時は「通常」「複数日付」「繰り返し」の3モードを選択できる。
+ * 繰り返しグループ予定の編集時は「この予定のみ」「繰り返し全て」の選択ができる。
  * 日表示のみタスクを表示し、マウスオーバーでタスク詳細をツールチップ表示する
  */
 function CalendarPage() {
@@ -62,6 +63,7 @@ function CalendarPage() {
     handleCreateMultipleEvents,
     handleCreateRepeatEvent,
     handleUpdateEvent,
+    handleUpdateRepeatGroupEvent,
     handleDeleteEvent,
   } = useCalendar();
 
@@ -176,12 +178,27 @@ function CalendarPage() {
   }
 
   /**
-   * 通常予定の保存処理（作成・更新を判別して呼び分ける）
+   * 通常予定の保存処理（作成・更新を判別して呼び分ける）。
+   * 編集かつ繰り返しグループ予定の場合は updateScope に応じて単件更新またはグループ全件更新を行う
    */
-  async function handleModalSave(input: EventInput): Promise<void> {
+  async function handleModalSave(input: EventInput, updateScope: 'single' | 'all'): Promise<void> {
     setModalError('');
     if (selectedEvent) {
-      await handleUpdateEvent(selectedEvent.id, input);
+      if (updateScope === 'all' && selectedEvent.repeat_group_id) {
+        // 繰り返しグループ全件更新: 元の start_at / end_at との差分ミリ秒を算出して送信する
+        const origStart = new Date(selectedEvent.start_at).getTime();
+        const origEnd = new Date(selectedEvent.end_at).getTime();
+        const newStart = new Date(input.start_at).getTime();
+        const newEnd = new Date(input.end_at).getTime();
+        await handleUpdateRepeatGroupEvent(selectedEvent.repeat_group_id, {
+          title: input.title,
+          description: input.description,
+          start_diff_ms: newStart - origStart,
+          end_diff_ms: newEnd - origEnd,
+        });
+      } else {
+        await handleUpdateEvent(selectedEvent.id, input);
+      }
     } else {
       await handleCreateEvent(input);
     }

@@ -26,6 +26,9 @@ import DeleteButton from './DeleteButton';
 /** 作成モードの種別 */
 type CreateMode = 'single' | 'multiple' | 'repeat';
 
+/** 繰り返し予定編集時のスコープ選択 */
+type UpdateScope = 'single' | 'all';
+
 /** EventModalのprops型 */
 interface EventModalProps {
   /** モーダルの表示状態 */
@@ -36,8 +39,8 @@ interface EventModalProps {
   initialStart?: string;
   /** ログイン中ユーザー名 */
   currentUsername: string | null;
-  /** 通常作成の保存ボタン押下時のコールバック */
-  onSave: (input: EventInput) => Promise<void>;
+  /** 通常作成・編集の保存ボタン押下時のコールバック。updateScopeは編集時のみ有効 */
+  onSave: (input: EventInput, updateScope: UpdateScope) => Promise<void>;
   /** 複数日付一括作成のコールバック */
   onSaveMultiple: (input: MultipleEventInput) => Promise<void>;
   /** 繰り返し作成のコールバック */
@@ -75,7 +78,8 @@ const DAY_OF_WEEK_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 /**
  * 予定作成・編集モーダルコンポーネント。
  * 新規作成時は「通常」「複数日付」「繰り返し」の3モードを切り替えられる。
- * 編集時は通常フォームのみ表示する
+ * 編集時は通常フォームのみ表示する。
+ * 繰り返しグループに属する予定の編集時は「この予定のみ変更」「繰り返し全て変更」を選択できる
  */
 function EventModal({
   open,
@@ -90,8 +94,10 @@ function EventModal({
 }: EventModalProps) {
   const isEditMode = event !== null;
   const isOwner = isEditMode ? event.created_by === currentUsername : true;
+  const isRepeatGroup = isEditMode && event.repeat_group_id !== null;
 
   const [createMode, setCreateMode] = useState<CreateMode>('single');
+  const [updateScope, setUpdateScope] = useState<UpdateScope>('single');
 
   // 通常フォームの状態
   const [formValues, setFormValues] = useState<EventFormValues>({
@@ -106,8 +112,8 @@ function EventModal({
   const [multipleValues, setMultipleValues] = useState<MultipleEventFormValues>({
     title: '',
     description: '',
-    duration_minutes: '60',
     start_times: [''],
+    end_times: [''],
   });
   const [multipleErrors, setMultipleErrors] = useState<MultipleEventValidationErrors>({});
 
@@ -115,8 +121,8 @@ function EventModal({
   const [repeatValues, setRepeatValues] = useState<RepeatEventFormValues>({
     title: '',
     description: '',
-    duration_minutes: '60',
     start_at: '',
+    end_at: '',
     repeat_type: 'weekly',
     interval: '1',
     days_of_week: [],
@@ -134,6 +140,7 @@ function EventModal({
   useEffect(() => {
     if (!open) return;
     setCreateMode('single');
+    setUpdateScope('single');
     setErrors({});
     setMultipleErrors({});
     setRepeatErrors({});
@@ -148,6 +155,7 @@ function EventModal({
         end_at: toDatetimeLocalValue(event.end_at),
       });
     } else {
+      const defaultStart = initialStart ? toDatetimeLocalValue(initialStart) : '';
       const defaultEnd = initialStart
         ? (() => {
             const d = new Date(initialStart);
@@ -155,7 +163,6 @@ function EventModal({
             return toDatetimeLocalValue(d.toISOString());
           })()
         : '';
-      const defaultStart = initialStart ? toDatetimeLocalValue(initialStart) : '';
       setFormValues({
         title: '',
         description: '',
@@ -165,14 +172,14 @@ function EventModal({
       setMultipleValues({
         title: '',
         description: '',
-        duration_minutes: '60',
         start_times: [defaultStart],
+        end_times: [defaultEnd],
       });
       setRepeatValues({
         title: '',
         description: '',
-        duration_minutes: '60',
         start_at: defaultStart,
+        end_at: defaultEnd,
         repeat_type: 'weekly',
         interval: '1',
         days_of_week: [],
@@ -203,7 +210,7 @@ function EventModal({
         start_at: new Date(formValues.start_at).toISOString(),
         end_at: new Date(formValues.end_at).toISOString(),
       };
-      await onSave(input);
+      await onSave(input, updateScope);
       onClose();
     } catch (err) {
       setApiError(err instanceof Error ? err.message : '保存に失敗しました。');
@@ -227,8 +234,8 @@ function EventModal({
       const input: MultipleEventInput = {
         title: multipleValues.title,
         description: multipleValues.description,
-        duration_minutes: Number(multipleValues.duration_minutes),
         start_times: multipleValues.start_times.map((t) => new Date(t).toISOString()),
+        end_times: multipleValues.end_times.map((t) => new Date(t).toISOString()),
       };
       await onSaveMultiple(input);
       onClose();
@@ -254,8 +261,8 @@ function EventModal({
       const input: RepeatEventInput = {
         title: repeatValues.title,
         description: repeatValues.description,
-        duration_minutes: Number(repeatValues.duration_minutes),
         start_at: new Date(repeatValues.start_at).toISOString(),
+        end_at: new Date(repeatValues.end_at).toISOString(),
         repeat: {
           type: repeatValues.repeat_type,
           interval: Number(repeatValues.interval),
@@ -295,30 +302,46 @@ function EventModal({
   }
 
   /**
-   * 複数日付フォームに日時入力欄を追加する
+   * 複数日付フォームに日時入力行を追加する
    */
   function addStartTime(): void {
-    setMultipleValues((prev) => ({ ...prev, start_times: [...prev.start_times, ''] }));
+    setMultipleValues((prev) => ({
+      ...prev,
+      start_times: [...prev.start_times, ''],
+      end_times: [...prev.end_times, ''],
+    }));
   }
 
   /**
-   * 複数日付フォームから指定インデックスの日時入力欄を削除する
+   * 複数日付フォームから指定インデックスの行を削除する
    */
   function removeStartTime(index: number): void {
     setMultipleValues((prev) => ({
       ...prev,
       start_times: prev.start_times.filter((_, i) => i !== index),
+      end_times: prev.end_times.filter((_, i) => i !== index),
     }));
   }
 
   /**
-   * 複数日付フォームの指定インデックスの日時値を更新する
+   * 複数日付フォームの指定インデックスの開始日時値を更新する
    */
   function updateStartTime(index: number, value: string): void {
     setMultipleValues((prev) => {
       const next = [...prev.start_times];
       next[index] = value;
       return { ...prev, start_times: next };
+    });
+  }
+
+  /**
+   * 複数日付フォームの指定インデックスの終了日時値を更新する
+   */
+  function updateEndTime(index: number, value: string): void {
+    setMultipleValues((prev) => {
+      const next = [...prev.end_times];
+      next[index] = value;
+      return { ...prev, end_times: next };
     });
   }
 
@@ -371,6 +394,37 @@ function EventModal({
                   </button>
                 ),
               )}
+            </div>
+          )}
+
+          {/* 繰り返しグループ予定の編集時に変更スコープ選択を表示する */}
+          {isEditMode && isOwner && isRepeatGroup && (
+            <div className="mb-5 p-3 bg-slate-700/50 rounded-lg border border-slate-600">
+              <p className="text-xs text-slate-400 mb-2">変更対象</p>
+              <div className="flex gap-3">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="update-scope"
+                    value="single"
+                    checked={updateScope === 'single'}
+                    onChange={() => setUpdateScope('single')}
+                    className="accent-sky-500"
+                  />
+                  <span className="text-sm text-slate-200">この予定のみ変更</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="update-scope"
+                    value="all"
+                    checked={updateScope === 'all'}
+                    onChange={() => setUpdateScope('all')}
+                    className="accent-sky-500"
+                  />
+                  <span className="text-sm text-slate-200">繰り返し予定を全て変更</span>
+                </label>
+              </div>
             </div>
           )}
 
@@ -467,18 +521,10 @@ function EventModal({
                 maxLength={1000}
                 rows={3}
               />
-              <FormField
-                id="multiple-event-duration"
-                label="予定の長さ（分）"
-                value={multipleValues.duration_minutes}
-                onChange={(v) => setMultipleValues((prev) => ({ ...prev, duration_minutes: v }))}
-                error={multipleErrors.duration_minutes}
-                disabled={submitting}
-              />
 
               <div className="mb-5">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="block text-sm font-medium text-slate-300">開始日時</span>
+                  <span className="block text-sm font-medium text-slate-300">日時</span>
                   <button
                     type="button"
                     onClick={addStartTime}
@@ -488,14 +534,21 @@ function EventModal({
                     + 日時を追加
                   </button>
                 </div>
-                {multipleValues.start_times.map((t, i) => (
-                  <div key={i} className="flex items-center gap-2 mb-2">
-                    <div className="flex-1">
+                {multipleValues.start_times.map((startTime, i) => (
+                  <div key={i} className="flex items-start gap-2 mb-3">
+                    <div className="flex-1 space-y-1">
                       <DateTimeField
                         id={`multiple-start-time-${i}`}
-                        label=""
-                        value={t}
+                        label="開始"
+                        value={startTime}
                         onChange={(v) => updateStartTime(i, v)}
+                        disabled={submitting}
+                      />
+                      <DateTimeField
+                        id={`multiple-end-time-${i}`}
+                        label="終了"
+                        value={multipleValues.end_times[i] ?? ''}
+                        onChange={(v) => updateEndTime(i, v)}
                         disabled={submitting}
                       />
                     </div>
@@ -504,7 +557,7 @@ function EventModal({
                         type="button"
                         onClick={() => removeStartTime(i)}
                         disabled={submitting}
-                        className="mb-5 text-slate-400 hover:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed text-lg leading-none"
+                        className="mt-6 text-slate-400 hover:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed text-lg leading-none"
                         aria-label="削除"
                       >
                         ×
@@ -514,6 +567,9 @@ function EventModal({
                 ))}
                 {multipleErrors.start_times && (
                   <p className="mt-1 text-xs text-red-400">{multipleErrors.start_times}</p>
+                )}
+                {multipleErrors.end_times && (
+                  <p className="mt-1 text-xs text-red-400">{multipleErrors.end_times}</p>
                 )}
               </div>
 
@@ -554,20 +610,20 @@ function EventModal({
                 maxLength={1000}
                 rows={3}
               />
-              <FormField
-                id="repeat-event-duration"
-                label="予定の長さ（分）"
-                value={repeatValues.duration_minutes}
-                onChange={(v) => setRepeatValues((prev) => ({ ...prev, duration_minutes: v }))}
-                error={repeatErrors.duration_minutes}
-                disabled={submitting}
-              />
               <DateTimeField
                 id="repeat-event-start-at"
                 label="最初の開始日時"
                 value={repeatValues.start_at}
                 onChange={(v) => setRepeatValues((prev) => ({ ...prev, start_at: v }))}
                 error={repeatErrors.start_at}
+                disabled={submitting}
+              />
+              <DateTimeField
+                id="repeat-event-end-at"
+                label="最初の終了日時"
+                value={repeatValues.end_at}
+                onChange={(v) => setRepeatValues((prev) => ({ ...prev, end_at: v }))}
+                error={repeatErrors.end_at}
                 disabled={submitting}
               />
 
