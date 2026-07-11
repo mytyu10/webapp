@@ -73,9 +73,9 @@ describe('validateTaskForm', () => {
   });
 
   describe('assignees', () => {
-    it('担当者が空の場合はエラーなし', () => {
+    it('担当者が空の場合はエラーになる', () => {
       const errors = validateTaskForm({ ...validValues, assigneesText: '' });
-      expect(errors.assignees).toBeUndefined();
+      expect(errors.assignees).toBeDefined();
     });
 
     it('担当者が50人以内の場合はエラーなし', () => {

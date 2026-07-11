@@ -5,6 +5,7 @@ import {
   InternalServerErrorException,
   BadRequestException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Event } from '@prisma/client';
 import { EventRepository } from '../repository/event.repository';
 import {
@@ -13,6 +14,7 @@ import {
   CreateRepeatEventDto,
   RepeatType,
   UpdateEventDto,
+  UpdateRepeatGroupEventDto,
   EventResponseDto,
 } from '../dto/event.dto';
 import { MESSAGE } from 'src/common/type/message';
@@ -23,8 +25,8 @@ const CONTEXT = 'EventService';
 /** 繰り返し予定の最大生成件数 */
 const REPEAT_MAX_COUNT = 100;
 
-/** 分をミリ秒に変換する係数 */
-const MINUTES_TO_MS = 60 * 1000;
+/** 予定色のデフォルト値 */
+const DEFAULT_EVENT_COLOR = 'cyan';
 
 @Injectable()
 export class EventService {
@@ -69,6 +71,7 @@ export class EventService {
         description: dto.description ?? '',
         start_at: new Date(dto.start_at),
         end_at: new Date(dto.end_at),
+        color: dto.color ?? DEFAULT_EVENT_COLOR,
         created_by: createdBy,
       });
       this.logger.log(CONTEXT, `予定作成完了: id=${event.id}`);
@@ -80,8 +83,8 @@ export class EventService {
   }
 
   /**
-   * 複数の開始日時を指定して同じ内容の予定を一括作成する。
-   * end_at = start_at + duration_minutes として各イベントの終了日時を算出する
+   * 複数の開始日時と終了日時を指定して同じタイトル・説明の予定を一括作成する。
+   * start_times と end_times は同件数である必要がある
    */
   async createMultiple(
     dto: CreateMultipleEventsDto,
@@ -96,23 +99,26 @@ export class EventService {
       throw new BadRequestException(MESSAGE.EVENT.START_TIMES_REQUIRED);
     }
 
+    if (dto.start_times.length !== dto.end_times.length) {
+      throw new BadRequestException(
+        MESSAGE.EVENT.START_END_TIMES_LENGTH_MISMATCH,
+      );
+    }
+
     if (dto.start_times.length > REPEAT_MAX_COUNT) {
       throw new BadRequestException(MESSAGE.EVENT.REPEAT_LIMIT_EXCEEDED);
     }
 
     try {
-      const durationMs = dto.duration_minutes * MINUTES_TO_MS;
-      const data = dto.start_times.map((startTimeStr) => {
-        const startAt = new Date(startTimeStr);
-        const endAt = new Date(startAt.getTime() + durationMs);
-        return {
-          title: dto.title,
-          description: dto.description ?? '',
-          start_at: startAt,
-          end_at: endAt,
-          created_by: createdBy,
-        };
-      });
+      const color = dto.color ?? DEFAULT_EVENT_COLOR;
+      const data = dto.start_times.map((startTimeStr, index) => ({
+        title: dto.title,
+        description: dto.description ?? '',
+        start_at: new Date(startTimeStr),
+        end_at: new Date(dto.end_times[index]),
+        color,
+        created_by: createdBy,
+      }));
 
       const events = await this.eventRepository.createMany(data);
       this.logger.log(CONTEXT, `複数予定作成完了: ${events.length}件`);
@@ -127,7 +133,8 @@ export class EventService {
 
   /**
    * 繰り返しルールに基づいて予定を一括作成する。
-   * repeat.type に応じて開始日時を展開し、最大100件を上限とする。
+   * end_at - start_at の差分ミリ秒を保持し、各繰り返し日の end_at を算出する。
+   * 同一グループの繰り返し予定には同じ repeat_group_id（UUID）を付与する。
    * - daily: interval 日ごとに繰り返す。days_of_week は無視する
    * - weekly: interval 週ごとに繰り返す。days_of_week が指定された場合はその曜日のみ対象とする
    * - monthly: interval ヶ月ごとに繰り返す。月末補正（例: 31日 → その月の末日）を行う。days_of_week は無視する
@@ -152,7 +159,12 @@ export class EventService {
     }
 
     try {
-      const durationMs = dto.duration_minutes * MINUTES_TO_MS;
+      const baseStart = new Date(dto.start_at);
+      const baseEnd = new Date(dto.end_at);
+      const durationMs = baseEnd.getTime() - baseStart.getTime();
+      const repeatGroupId = randomUUID();
+      const color = dto.color ?? DEFAULT_EVENT_COLOR;
+
       const data = startTimes.map((startAt) => {
         const endAt = new Date(startAt.getTime() + durationMs);
         return {
@@ -160,12 +172,17 @@ export class EventService {
           description: dto.description ?? '',
           start_at: startAt,
           end_at: endAt,
+          color,
+          repeat_group_id: repeatGroupId,
           created_by: createdBy,
         };
       });
 
       const events = await this.eventRepository.createMany(data);
-      this.logger.log(CONTEXT, `繰り返し予定作成完了: ${events.length}件`);
+      this.logger.log(
+        CONTEXT,
+        `繰り返し予定作成完了: ${events.length}件, groupId=${repeatGroupId}`,
+      );
       return events.map((e) => this.toResponseDto(e));
     } catch (error) {
       this.logger.error(CONTEXT, `繰り返し予定作成失敗: ${String(error)}`);
@@ -369,12 +386,88 @@ export class EventService {
         description: dto.description,
         start_at: dto.start_at ? new Date(dto.start_at) : undefined,
         end_at: dto.end_at ? new Date(dto.end_at) : undefined,
+        color: dto.color,
       });
       this.logger.log(CONTEXT, `予定更新完了: id=${id}`);
       return this.toResponseDto(event);
     } catch (error) {
       this.logger.error(CONTEXT, `予定更新失敗: id=${id} - ${String(error)}`);
       throw new InternalServerErrorException(MESSAGE.EVENT.UPDATE_FAILED);
+    }
+  }
+
+  /**
+   * 繰り返しグループに属する全予定を一括更新する。
+   * グループ内の全件の created_by が requestUsername と一致することを確認してから更新する。
+   * title / description / color は全件に同じ値を適用する。
+   * start_diff_ms / end_diff_ms が指定された場合は各予定の start_at / end_at にそれぞれ加算する
+   */
+  async updateRepeatGroup(
+    repeatGroupId: string,
+    dto: UpdateRepeatGroupEventDto,
+    requestUsername: string,
+  ): Promise<EventResponseDto[]> {
+    this.logger.log(
+      CONTEXT,
+      `繰り返しグループ更新開始: groupId=${repeatGroupId}`,
+    );
+
+    const group = await this.eventRepository.findByRepeatGroupId(repeatGroupId);
+    if (group.length === 0) {
+      this.logger.warn(
+        CONTEXT,
+        `繰り返しグループが見つかりません: groupId=${repeatGroupId}`,
+      );
+      throw new NotFoundException(MESSAGE.EVENT.REPEAT_GROUP_NOT_FOUND);
+    }
+
+    // 全件の作成者が requestUsername と一致することを確認する
+    const hasUnauthorized = group.some((e) => e.created_by !== requestUsername);
+    if (hasUnauthorized) {
+      this.logger.warn(
+        CONTEXT,
+        `繰り返しグループ更新権限なし: groupId=${repeatGroupId}, user=${requestUsername}`,
+      );
+      throw new ForbiddenException(MESSAGE.EVENT.REPEAT_GROUP_FORBIDDEN);
+    }
+
+    try {
+      const updates = group.map((event) => {
+        const newStartAt =
+          dto.start_diff_ms !== undefined && dto.start_diff_ms !== 0
+            ? new Date(event.start_at.getTime() + dto.start_diff_ms)
+            : undefined;
+        const newEndAt =
+          dto.end_diff_ms !== undefined && dto.end_diff_ms !== 0
+            ? new Date(event.end_at.getTime() + dto.end_diff_ms)
+            : undefined;
+
+        return {
+          id: event.id,
+          data: {
+            ...(dto.title !== undefined && { title: dto.title }),
+            ...(dto.description !== undefined && {
+              description: dto.description,
+            }),
+            ...(newStartAt !== undefined && { start_at: newStartAt }),
+            ...(newEndAt !== undefined && { end_at: newEndAt }),
+            ...(dto.color !== undefined && { color: dto.color }),
+          },
+        };
+      });
+
+      const updatedEvents = await this.eventRepository.updateMany(updates);
+      this.logger.log(
+        CONTEXT,
+        `繰り返しグループ更新完了: groupId=${repeatGroupId}, 件数=${updatedEvents.length}`,
+      );
+      return updatedEvents.map((e) => this.toResponseDto(e));
+    } catch (error) {
+      this.logger.error(
+        CONTEXT,
+        `繰り返しグループ更新失敗: groupId=${repeatGroupId} - ${String(error)}`,
+      );
+      throw new InternalServerErrorException(MESSAGE.EVENT.UPDATE_GROUP_FAILED);
     }
   }
 
@@ -417,6 +510,8 @@ export class EventService {
       description: event.description,
       start_at: event.start_at.toISOString(),
       end_at: event.end_at.toISOString(),
+      color: event.color,
+      repeat_group_id: event.repeat_group_id,
       created_by: event.created_by,
       created_at: event.created_at.toISOString(),
       updated_at: event.updated_at.toISOString(),

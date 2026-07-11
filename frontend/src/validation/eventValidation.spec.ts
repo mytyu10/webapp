@@ -16,6 +16,7 @@ describe('validateEventForm', () => {
     description: '',
     start_at: '2026-06-01T10:00',
     end_at: '2026-06-01T11:00',
+    color: 'cyan',
   };
 
   it('正常な入力はエラーなし', () => {
@@ -60,8 +61,9 @@ describe('validateMultipleEventForm', () => {
   const validValues = {
     title: 'ミーティング',
     description: '',
-    duration_minutes: '60',
     start_times: ['2026-06-01T10:00', '2026-06-02T10:00'],
+    end_times: ['2026-06-01T11:00', '2026-06-02T11:00'],
+    color: 'cyan',
   };
 
   it('正常な入力はエラーなし', () => {
@@ -74,37 +76,42 @@ describe('validateMultipleEventForm', () => {
     expect(errors.title).toBeDefined();
   });
 
-  it('duration_minutes が空はエラーになる', () => {
-    const errors = validateMultipleEventForm({ ...validValues, duration_minutes: '' });
-    expect(errors.duration_minutes).toBeDefined();
-  });
-
-  it('duration_minutes が0以下はエラーになる', () => {
-    const errors = validateMultipleEventForm({ ...validValues, duration_minutes: '0' });
-    expect(errors.duration_minutes).toBeDefined();
-  });
-
-  it('duration_minutes が1440超はエラーになる', () => {
-    const errors = validateMultipleEventForm({ ...validValues, duration_minutes: '1441' });
-    expect(errors.duration_minutes).toBeDefined();
-  });
-
   it('start_times が空配列はエラーになる', () => {
-    const errors = validateMultipleEventForm({ ...validValues, start_times: [] });
+    const errors = validateMultipleEventForm({ ...validValues, start_times: [], end_times: [] });
     expect(errors.start_times).toBeDefined();
   });
 
   it('start_times に空文字が含まれるはエラーになる', () => {
-    const errors = validateMultipleEventForm({ ...validValues, start_times: ['2026-06-01T10:00', ''] });
+    const errors = validateMultipleEventForm({
+      ...validValues,
+      start_times: ['2026-06-01T10:00', ''],
+      end_times: ['2026-06-01T11:00', ''],
+    });
     expect(errors.start_times).toBeDefined();
   });
 
   it('start_times が100件超はエラーになる', () => {
+    const startTimes = Array.from({ length: 101 }, (_, i) => `2026-06-${String(i % 28 + 1).padStart(2, '0')}T10:00`);
+    const endTimes = Array.from({ length: 101 }, (_, i) => `2026-06-${String(i % 28 + 1).padStart(2, '0')}T11:00`);
+    const errors = validateMultipleEventForm({ ...validValues, start_times: startTimes, end_times: endTimes });
+    expect(errors.start_times).toBeDefined();
+  });
+
+  it('end_times に空文字が含まれるはエラーになる', () => {
     const errors = validateMultipleEventForm({
       ...validValues,
-      start_times: Array.from({ length: 101 }, (_, i) => `2026-06-${String(i + 1).padStart(2, '0')}T10:00`),
+      end_times: ['2026-06-01T11:00', ''],
     });
-    expect(errors.start_times).toBeDefined();
+    expect(errors.end_times).toBeDefined();
+  });
+
+  it('終了日時が開始日時以前はエラーになる', () => {
+    const errors = validateMultipleEventForm({
+      ...validValues,
+      start_times: ['2026-06-01T10:00'],
+      end_times: ['2026-06-01T09:00'],
+    });
+    expect(errors.end_times).toBeDefined();
   });
 });
 
@@ -115,14 +122,15 @@ describe('validateRepeatEventForm', () => {
   const validValuesEndDate = {
     title: '週次会議',
     description: '',
-    duration_minutes: '60',
     start_at: '2026-06-01T10:00',
+    end_at: '2026-06-01T11:00',
     repeat_type: 'weekly' as const,
     interval: '1',
     days_of_week: [],
     end_condition_type: 'end_date' as const,
     end_date: '2026-07-01T10:00',
     count: '',
+    color: 'cyan',
   };
 
   const validValuesCount = {
@@ -147,14 +155,23 @@ describe('validateRepeatEventForm', () => {
     expect(errors.title).toBeDefined();
   });
 
-  it('duration_minutes が空はエラーになる', () => {
-    const errors = validateRepeatEventForm({ ...validValuesCount, duration_minutes: '' });
-    expect(errors.duration_minutes).toBeDefined();
-  });
-
   it('start_at 未入力はエラーになる', () => {
     const errors = validateRepeatEventForm({ ...validValuesCount, start_at: '' });
     expect(errors.start_at).toBeDefined();
+  });
+
+  it('end_at 未入力はエラーになる', () => {
+    const errors = validateRepeatEventForm({ ...validValuesCount, end_at: '' });
+    expect(errors.end_at).toBeDefined();
+  });
+
+  it('end_at が start_at 以前はエラーになる', () => {
+    const errors = validateRepeatEventForm({
+      ...validValuesCount,
+      start_at: '2026-06-01T10:00',
+      end_at: '2026-06-01T09:00',
+    });
+    expect(errors.end_at).toBeDefined();
   });
 
   it('end_condition_type=end_date で end_date 未入力はエラーになる', () => {

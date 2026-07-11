@@ -25,6 +25,16 @@ export class EventRepository {
   }
 
   /**
+   * 指定された繰り返しグループIDに属する全予定を開始日時の昇順で取得する
+   */
+  async findByRepeatGroupId(repeatGroupId: string): Promise<Event[]> {
+    return this.prisma.event.findMany({
+      where: { repeat_group_id: repeatGroupId },
+      orderBy: { start_at: 'asc' },
+    });
+  }
+
+  /**
    * 予定を作成する。Prismaの生成する型（EventUncheckedCreateInput）を使用して型の乖離を防ぐ
    */
   async create(data: Prisma.EventUncheckedCreateInput): Promise<Event> {
@@ -52,6 +62,7 @@ export class EventRepository {
       description?: string;
       start_at?: Date;
       end_at?: Date;
+      color?: string;
     },
   ): Promise<Event> {
     return this.prisma.event.update({
@@ -63,8 +74,43 @@ export class EventRepository {
         }),
         ...(data.start_at !== undefined && { start_at: data.start_at }),
         ...(data.end_at !== undefined && { end_at: data.end_at }),
+        ...(data.color !== undefined && { color: data.color }),
       },
     });
+  }
+
+  /**
+   * 複数の予定を一括更新する。
+   * $transaction + 個別 update で全件を更新する
+   */
+  async updateMany(
+    updates: Array<{
+      id: number;
+      data: {
+        title?: string;
+        description?: string;
+        start_at?: Date;
+        end_at?: Date;
+        color?: string;
+      };
+    }>,
+  ): Promise<Event[]> {
+    return this.prisma.$transaction(
+      updates.map(({ id, data }) =>
+        this.prisma.event.update({
+          where: { id },
+          data: {
+            ...(data.title !== undefined && { title: data.title }),
+            ...(data.description !== undefined && {
+              description: data.description,
+            }),
+            ...(data.start_at !== undefined && { start_at: data.start_at }),
+            ...(data.end_at !== undefined && { end_at: data.end_at }),
+            ...(data.color !== undefined && { color: data.color }),
+          },
+        }),
+      ),
+    );
   }
 
   /**

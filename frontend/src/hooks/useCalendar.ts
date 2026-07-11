@@ -5,11 +5,13 @@ import {
   EventInput,
   MultipleEventInput,
   RepeatEventInput,
+  UpdateRepeatGroupInput,
   fetchEvents,
   createEvent,
   createMultipleEvents,
   createRepeatEvent,
   updateEvent,
+  updateRepeatGroupEvent,
   deleteEvent,
 } from '../api/eventApi';
 import { fetchTasks, Task } from '../api/taskApi';
@@ -45,6 +47,8 @@ export interface UseCalendarReturn {
   handleCreateRepeatEvent: (input: RepeatEventInput) => Promise<void>;
   /** 予定を更新する */
   handleUpdateEvent: (id: number, input: Partial<EventInput>) => Promise<void>;
+  /** 繰り返しグループの全予定を一括更新する */
+  handleUpdateRepeatGroupEvent: (groupId: string, input: UpdateRepeatGroupInput) => Promise<void>;
   /** 予定を削除する */
   handleDeleteEvent: (id: number) => Promise<void>;
   /** 一覧を再読み込みする */
@@ -53,6 +57,30 @@ export interface UseCalendarReturn {
 
 /** タスクイベントの表示時間（ミリ秒）。FullCalendarで視認できる高さを確保するために1時間分を設定する */
 const TASK_EVENT_DURATION_MS = 60 * 60 * 1000;
+
+/**
+ * 予定の色識別子から FullCalendar 用の背景色・テキスト色を返す定数マップ。
+ * アプリのダークテーマ（slate ベース）に合わせた6色。
+ * 識別子が未知の場合はデフォルトのシアンを使用する
+ */
+const EVENT_COLOR_MAP: Record<string, { bg: string; text: string }> = {
+  cyan:    { bg: '#0e7490', text: '#cffafe' },
+  indigo:  { bg: '#4338ca', text: '#e0e7ff' },
+  emerald: { bg: '#047857', text: '#d1fae5' },
+  violet:  { bg: '#6d28d9', text: '#ede9fe' },
+  rose:    { bg: '#be123c', text: '#ffe4e6' },
+  amber:   { bg: '#b45309', text: '#fef3c7' },
+};
+
+const DEFAULT_EVENT_COLOR = EVENT_COLOR_MAP['cyan'];
+
+/**
+ * 色識別子から FullCalendar 用の色情報を取得する。
+ * 未知の識別子の場合はデフォルトのシアンを返す
+ */
+function resolveEventColor(color: string): { bg: string; text: string } {
+  return EVENT_COLOR_MAP[color] ?? DEFAULT_EVENT_COLOR;
+}
 
 /**
  * タスクをFullCalendar用EventInputへ変換する。
@@ -86,17 +114,19 @@ function taskToEventInput(task: Task): FullCalendarEventInput {
 }
 
 /**
- * カレンダー予定をFullCalendar用EventInputへ変換する
+ * カレンダー予定をFullCalendar用EventInputへ変換する。
+ * event.color をもとに背景色・テキスト色を決定する
  */
 function calendarEventToEventInput(event: CalendarEvent): FullCalendarEventInput {
+  const { bg, text } = resolveEventColor(event.color);
   return {
     id: `event-${event.id}`,
     title: event.title,
     start: event.start_at,
     end: event.end_at,
-    backgroundColor: '#0e7490',
-    borderColor: '#0e7490',
-    textColor: '#cffafe',
+    backgroundColor: bg,
+    borderColor: bg,
+    textColor: text,
     extendedProps: {
       type: 'event' as const,
       eventId: event.id,
@@ -188,7 +218,7 @@ export function useCalendar(): UseCalendarReturn {
   }, []);
 
   /**
-   * 複数の開始日時を指定して同じ内容の予定を一括作成する。
+   * 複数の開始日時と終了日時を指定して同じ内容の予定を一括作成する。
    * 作成後はローカルステートに全件追加する
    */
   const handleCreateMultipleEvents = useCallback(async (input: MultipleEventInput): Promise<void> => {
@@ -241,6 +271,30 @@ export function useCalendar(): UseCalendarReturn {
   );
 
   /**
+   * 繰り返しグループの全予定を一括更新する。
+   * 更新後はローカルステートの該当グループの全予定をサーバーレスポンスで置き換える
+   */
+  const handleUpdateRepeatGroupEvent = useCallback(
+    async (groupId: string, input: UpdateRepeatGroupInput): Promise<void> => {
+      logger.info(CONTEXT, `繰り返しグループ更新実行: groupId=${groupId}`);
+      try {
+        const updated = await updateRepeatGroupEvent(groupId, input);
+        const updatedIds = new Set(updated.map((e) => e.id));
+        setEvents((prev) => [
+          ...prev.filter((e) => !updatedIds.has(e.id)),
+          ...updated,
+        ]);
+        logger.info(CONTEXT, `繰り返しグループ更新完了: groupId=${groupId}, 件数=${updated.length}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '繰り返し予定の更新に失敗しました。';
+        logger.warn(CONTEXT, `繰り返しグループ更新失敗: groupId=${groupId} - ${message}`);
+        throw new Error(message);
+      }
+    },
+    [],
+  );
+
+  /**
    * 予定を削除する。削除後はローカルステートから除去する
    */
   const handleDeleteEvent = useCallback(async (id: number): Promise<void> => {
@@ -268,6 +322,7 @@ export function useCalendar(): UseCalendarReturn {
     handleCreateMultipleEvents,
     handleCreateRepeatEvent,
     handleUpdateEvent,
+    handleUpdateRepeatGroupEvent,
     handleDeleteEvent,
     reload,
   };

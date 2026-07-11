@@ -11,28 +11,34 @@ export interface EventFormValues {
   description: string;
   start_at: string;
   end_at: string;
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber） */
+  color: string;
 }
 
 /** 複数日付フォームのバリデーションエラー型 */
 export interface MultipleEventValidationErrors {
   title?: string;
-  duration_minutes?: string;
   start_times?: string;
+  end_times?: string;
 }
 
 /** 複数日付フォームの入力値型 */
 export interface MultipleEventFormValues {
   title: string;
   description: string;
-  duration_minutes: string;
+  /** 開始日時の配列（datetime-local形式） */
   start_times: string[];
+  /** 終了日時の配列（datetime-local形式）。start_times と同件数 */
+  end_times: string[];
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber） */
+  color: string;
 }
 
 /** 繰り返しフォームのバリデーションエラー型 */
 export interface RepeatEventValidationErrors {
   title?: string;
-  duration_minutes?: string;
   start_at?: string;
+  end_at?: string;
   end_condition?: string;
 }
 
@@ -40,8 +46,10 @@ export interface RepeatEventValidationErrors {
 export interface RepeatEventFormValues {
   title: string;
   description: string;
-  duration_minutes: string;
+  /** 繰り返しの最初の開始日時（datetime-local形式） */
   start_at: string;
+  /** 繰り返しの最初の終了日時（datetime-local形式） */
+  end_at: string;
   repeat_type: 'daily' | 'weekly' | 'monthly';
   interval: string;
   days_of_week: number[];
@@ -49,6 +57,8 @@ export interface RepeatEventFormValues {
   end_condition_type: 'end_date' | 'count';
   end_date: string;
   count: string;
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber） */
+  color: string;
 }
 
 /** タイトルの最大文字数 */
@@ -105,19 +115,23 @@ export function validateMultipleEventForm(
     errors.title = `タイトルは${TITLE_MAX_LENGTH}文字以内で入力してください`;
   }
 
-  const durationNum = Number(values.duration_minutes);
-  if (!values.duration_minutes || isNaN(durationNum) || durationNum <= 0) {
-    errors.duration_minutes = '予定の長さは1以上の数値で入力してください';
-  } else if (durationNum > 1440) {
-    errors.duration_minutes = '予定の長さは1440分（24時間）以内で入力してください';
-  }
-
   if (values.start_times.length === 0) {
     errors.start_times = '開始日時を1つ以上追加してください';
   } else if (values.start_times.some((t) => !t)) {
     errors.start_times = '空の開始日時があります。入力するか削除してください';
   } else if (values.start_times.length > REPEAT_MAX_COUNT) {
     errors.start_times = `開始日時は${REPEAT_MAX_COUNT}件以内で指定してください`;
+  }
+
+  if (values.end_times.some((t) => !t)) {
+    errors.end_times = '空の終了日時があります。入力してください';
+  } else {
+    const hasInvalidRange = values.start_times.some(
+      (start, i) => values.end_times[i] && values.end_times[i] <= start,
+    );
+    if (hasInvalidRange) {
+      errors.end_times = '終了日時は対応する開始日時より後に設定してください';
+    }
   }
 
   return errors;
@@ -145,15 +159,14 @@ export function validateRepeatEventForm(
     errors.title = `タイトルは${TITLE_MAX_LENGTH}文字以内で入力してください`;
   }
 
-  const durationNum = Number(values.duration_minutes);
-  if (!values.duration_minutes || isNaN(durationNum) || durationNum <= 0) {
-    errors.duration_minutes = '予定の長さは1以上の数値で入力してください';
-  } else if (durationNum > 1440) {
-    errors.duration_minutes = '予定の長さは1440分（24時間）以内で入力してください';
-  }
-
   if (!values.start_at) {
     errors.start_at = '開始日時を入力してください';
+  }
+
+  if (!values.end_at) {
+    errors.end_at = '終了日時を入力してください';
+  } else if (values.start_at && values.end_at <= values.start_at) {
+    errors.end_at = '終了日時は開始日時より後に設定してください';
   }
 
   if (values.end_condition_type === 'end_date') {

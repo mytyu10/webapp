@@ -19,6 +19,7 @@ import {
   CreateMultipleEventsDto,
   CreateRepeatEventDto,
   UpdateEventDto,
+  UpdateRepeatGroupEventDto,
 } from '../dto/event.dto';
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
 import { HttpStatus } from 'src/common/type/status.enum';
@@ -128,6 +129,35 @@ export class EventController {
     return response
       .status(HttpStatus.CREATED)
       .json({ message: MESSAGE.EVENT.CREATE_SUCCESS, events });
+  }
+
+  /**
+   * 繰り返しグループ全件更新エンドポイント（作成者のみ）。
+   * 固定パスルートのため :id より前に定義する
+   */
+  @Patch('repeat-group/:groupId')
+  async updateRepeatGroup(
+    @Param('groupId') groupId: string,
+    @Body() dto: UpdateRepeatGroupEventDto,
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(
+      CONTEXT,
+      `繰り返しグループ更新リクエスト: groupId=${groupId}`,
+    );
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
+    const events = await this.eventService.updateRepeatGroup(
+      groupId,
+      dto,
+      requestUser.username,
+    );
+    return response
+      .status(HttpStatus.OK)
+      .json({ message: MESSAGE.EVENT.UPDATE_GROUP_SUCCESS, events });
   }
 
   /**

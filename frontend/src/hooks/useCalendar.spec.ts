@@ -16,6 +16,8 @@ const mockEvent: eventApi.CalendarEvent = {
   description: '週次定例',
   start_at: '2026-05-04T10:00:00.000Z',
   end_at: '2026-05-04T11:00:00.000Z',
+  color: 'cyan',
+  repeat_group_id: null,
   created_by: 'testuser',
   created_at: '2026-05-01T00:00:00.000Z',
   updated_at: '2026-05-01T00:00:00.000Z',
@@ -400,10 +402,13 @@ describe('useCalendar', () => {
       await act(async () => {
         await result.current.handleCreateMultipleEvents({
           title: 'ミーティング',
-          duration_minutes: 60,
           start_times: [
             '2026-06-01T10:00:00.000Z',
             '2026-06-02T10:00:00.000Z',
+          ],
+          end_times: [
+            '2026-06-01T11:00:00.000Z',
+            '2026-06-02T11:00:00.000Z',
           ],
         });
       });
@@ -424,8 +429,8 @@ describe('useCalendar', () => {
         act(async () => {
           await result.current.handleCreateMultipleEvents({
             title: 'ミーティング',
-            duration_minutes: 60,
             start_times: ['2026-06-01T10:00:00.000Z'],
+            end_times: ['2026-06-01T11:00:00.000Z'],
           });
         }),
       ).rejects.toThrow('複数作成失敗');
@@ -447,8 +452,8 @@ describe('useCalendar', () => {
       await act(async () => {
         await result.current.handleCreateRepeatEvent({
           title: '週次ミーティング',
-          duration_minutes: 60,
           start_at: '2026-06-01T10:00:00.000Z',
+          end_at: '2026-06-01T11:00:00.000Z',
           repeat: { type: 'weekly', interval: 1, count: 3 },
         });
       });
@@ -469,8 +474,8 @@ describe('useCalendar', () => {
         act(async () => {
           await result.current.handleCreateRepeatEvent({
             title: '週次ミーティング',
-            duration_minutes: 60,
             start_at: '2026-06-01T10:00:00.000Z',
+            end_at: '2026-06-01T11:00:00.000Z',
             repeat: { type: 'weekly', interval: 1, count: 3 },
           });
         }),
