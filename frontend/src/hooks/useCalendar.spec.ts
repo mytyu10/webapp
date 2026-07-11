@@ -16,6 +16,7 @@ const mockEvent: eventApi.CalendarEvent = {
   description: '週次定例',
   start_at: '2026-05-04T10:00:00.000Z',
   end_at: '2026-05-04T11:00:00.000Z',
+  color: 'cyan',
   repeat_group_id: null,
   created_by: 'testuser',
   created_at: '2026-05-01T00:00:00.000Z',

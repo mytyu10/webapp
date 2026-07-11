@@ -59,6 +59,30 @@ export interface UseCalendarReturn {
 const TASK_EVENT_DURATION_MS = 60 * 60 * 1000;
 
 /**
+ * 予定の色識別子から FullCalendar 用の背景色・テキスト色を返す定数マップ。
+ * アプリのダークテーマ（slate ベース）に合わせた6色。
+ * 識別子が未知の場合はデフォルトのシアンを使用する
+ */
+const EVENT_COLOR_MAP: Record<string, { bg: string; text: string }> = {
+  cyan:    { bg: '#0e7490', text: '#cffafe' },
+  indigo:  { bg: '#4338ca', text: '#e0e7ff' },
+  emerald: { bg: '#047857', text: '#d1fae5' },
+  violet:  { bg: '#6d28d9', text: '#ede9fe' },
+  rose:    { bg: '#be123c', text: '#ffe4e6' },
+  amber:   { bg: '#b45309', text: '#fef3c7' },
+};
+
+const DEFAULT_EVENT_COLOR = EVENT_COLOR_MAP['cyan'];
+
+/**
+ * 色識別子から FullCalendar 用の色情報を取得する。
+ * 未知の識別子の場合はデフォルトのシアンを返す
+ */
+function resolveEventColor(color: string): { bg: string; text: string } {
+  return EVENT_COLOR_MAP[color] ?? DEFAULT_EVENT_COLOR;
+}
+
+/**
  * タスクをFullCalendar用EventInputへ変換する。
  * due_date-1時間をstart、due_dateをendに設定して期限がイベントの終了時刻となるようにする。
  * 日表示（timeGridDay）ビュー専用として呼び出し側でフィルターする
@@ -90,17 +114,19 @@ function taskToEventInput(task: Task): FullCalendarEventInput {
 }
 
 /**
- * カレンダー予定をFullCalendar用EventInputへ変換する
+ * カレンダー予定をFullCalendar用EventInputへ変換する。
+ * event.color をもとに背景色・テキスト色を決定する
  */
 function calendarEventToEventInput(event: CalendarEvent): FullCalendarEventInput {
+  const { bg, text } = resolveEventColor(event.color);
   return {
     id: `event-${event.id}`,
     title: event.title,
     start: event.start_at,
     end: event.end_at,
-    backgroundColor: '#0e7490',
-    borderColor: '#0e7490',
-    textColor: '#cffafe',
+    backgroundColor: bg,
+    borderColor: bg,
+    textColor: text,
     extendedProps: {
       type: 'event' as const,
       eventId: event.id,

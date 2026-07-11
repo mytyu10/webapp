@@ -25,6 +25,9 @@ const CONTEXT = 'EventService';
 /** 繰り返し予定の最大生成件数 */
 const REPEAT_MAX_COUNT = 100;
 
+/** 予定色のデフォルト値 */
+const DEFAULT_EVENT_COLOR = 'cyan';
+
 @Injectable()
 export class EventService {
   constructor(
@@ -68,6 +71,7 @@ export class EventService {
         description: dto.description ?? '',
         start_at: new Date(dto.start_at),
         end_at: new Date(dto.end_at),
+        color: dto.color ?? DEFAULT_EVENT_COLOR,
         created_by: createdBy,
       });
       this.logger.log(CONTEXT, `予定作成完了: id=${event.id}`);
@@ -106,11 +110,13 @@ export class EventService {
     }
 
     try {
+      const color = dto.color ?? DEFAULT_EVENT_COLOR;
       const data = dto.start_times.map((startTimeStr, index) => ({
         title: dto.title,
         description: dto.description ?? '',
         start_at: new Date(startTimeStr),
         end_at: new Date(dto.end_times[index]),
+        color,
         created_by: createdBy,
       }));
 
@@ -157,6 +163,7 @@ export class EventService {
       const baseEnd = new Date(dto.end_at);
       const durationMs = baseEnd.getTime() - baseStart.getTime();
       const repeatGroupId = randomUUID();
+      const color = dto.color ?? DEFAULT_EVENT_COLOR;
 
       const data = startTimes.map((startAt) => {
         const endAt = new Date(startAt.getTime() + durationMs);
@@ -165,6 +172,7 @@ export class EventService {
           description: dto.description ?? '',
           start_at: startAt,
           end_at: endAt,
+          color,
           repeat_group_id: repeatGroupId,
           created_by: createdBy,
         };
@@ -378,6 +386,7 @@ export class EventService {
         description: dto.description,
         start_at: dto.start_at ? new Date(dto.start_at) : undefined,
         end_at: dto.end_at ? new Date(dto.end_at) : undefined,
+        color: dto.color,
       });
       this.logger.log(CONTEXT, `予定更新完了: id=${id}`);
       return this.toResponseDto(event);
@@ -390,7 +399,7 @@ export class EventService {
   /**
    * 繰り返しグループに属する全予定を一括更新する。
    * グループ内の全件の created_by が requestUsername と一致することを確認してから更新する。
-   * title / description は全件に同じ値を適用する。
+   * title / description / color は全件に同じ値を適用する。
    * start_diff_ms / end_diff_ms が指定された場合は各予定の start_at / end_at にそれぞれ加算する
    */
   async updateRepeatGroup(
@@ -442,6 +451,7 @@ export class EventService {
             }),
             ...(newStartAt !== undefined && { start_at: newStartAt }),
             ...(newEndAt !== undefined && { end_at: newEndAt }),
+            ...(dto.color !== undefined && { color: dto.color }),
           },
         };
       });
@@ -500,6 +510,7 @@ export class EventService {
       description: event.description,
       start_at: event.start_at.toISOString(),
       end_at: event.end_at.toISOString(),
+      color: event.color,
       repeat_group_id: event.repeat_group_id,
       created_by: event.created_by,
       created_at: event.created_at.toISOString(),

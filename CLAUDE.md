@@ -58,9 +58,9 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/tasks/dto/task.dto.ts` — CreateTaskDto / UpdateTaskDto（is_completed含む） / TaskResponseDto（is_completed・closed_by・notifications含む） / Priority型 / CreateNotificationDto / NotificationResponseDto
 - `src/line/line-notification.service.ts` — `@Cron(CronExpression.EVERY_MINUTE)` で毎分実行するCronジョブ。未送信かつ `notify_at <= 現在時刻` の通知を取得し、担当者（LINE連携済みのみ）に LINE Messaging API でプッシュ通知を送信。全担当者処理後に `is_sent=true` にマーク。送信失敗時は `is_sent` を更新せず次回再試行
 - `src/events/controller/` — REST endpoints (`GET /events`, `GET /events/:id`, `POST /events`, `POST /events/multiple`, `POST /events/repeat`, `PATCH /events/repeat-group/:groupId`, `PATCH /events/:id`, `DELETE /events/:id`) — JwtAuthGuard適用済み。`POST /events/multiple` は複数日付一括作成、`POST /events/repeat` は繰り返しルール一括作成、`PATCH /events/repeat-group/:groupId` は繰り返しグループ全件一括更新（ルート衝突回避のため `:id` より前に定義）
-- `src/events/service/` — 予定のビジネスロジック（`event.service.ts`）。単件作成（`create`）・複数日付一括作成（`createMultiple`）・繰り返し一括作成（`createRepeat`）・単件更新（`update`）・繰り返しグループ全件更新（`updateRepeatGroup`）・削除。繰り返し展開は daily/weekly/monthly の3タイプ対応。monthly は月末補正あり。最大生成件数100件制限。`createRepeat` は全件に同一 `repeat_group_id`（UUID）を付与する。`updateRepeatGroup` はグループ全件の `created_by` を確認してから `start_diff_ms`/`end_diff_ms` で各日時をシフト更新する
-- `src/events/repository/` — Prisma CRUD（findAll/findById/create/createMany/update/updateMany/delete/findByRepeatGroupId）。`createMany`・`updateMany` は SQLite の制約回避のため `$transaction` + 個別操作配列で実装。`findByRepeatGroupId` は `repeat_group_id` で絞り込み `start_at` 昇順で返す
-- `src/events/dto/event.dto.ts` — CreateEventDto / CreateMultipleEventsDto（start_times配列・end_times配列。件数一致必須） / CreateRepeatEventDto（end_at・RepeatRuleDto含む） / UpdateEventDto / UpdateRepeatGroupEventDto（title?・description?・start_diff_ms?・end_diff_ms? のオプション項目） / EventResponseDto（repeat_group_id含む） / RepeatType enum（daily/weekly/monthly）
+- `src/events/service/` — 予定のビジネスロジック（`event.service.ts`）。単件作成（`create`）・複数日付一括作成（`createMultiple`）・繰り返し一括作成（`createRepeat`）・単件更新（`update`）・繰り返しグループ全件更新（`updateRepeatGroup`）・削除。繰り返し展開は daily/weekly/monthly の3タイプ対応。monthly は月末補正あり。最大生成件数100件制限。`createRepeat` は全件に同一 `repeat_group_id`（UUID）を付与する。`updateRepeatGroup` はグループ全件の `created_by` を確認してから `start_diff_ms`/`end_diff_ms` で各日時をシフト更新する。全作成・更新メソッドで `color` フィールドを処理する（未指定時はデフォルト `cyan`）
+- `src/events/repository/` — Prisma CRUD（findAll/findById/create/createMany/update/updateMany/delete/findByRepeatGroupId）。`createMany`・`updateMany` は SQLite の制約回避のため `$transaction` + 個別操作配列で実装。`findByRepeatGroupId` は `repeat_group_id` で絞り込み `start_at` 昇順で返す。`update`/`updateMany` は `color` フィールドをサポート
+- `src/events/dto/event.dto.ts` — CreateEventDto / CreateMultipleEventsDto（start_times配列・end_times配列。件数一致必須） / CreateRepeatEventDto（end_at・RepeatRuleDto含む） / UpdateEventDto / UpdateRepeatGroupEventDto（title?・description?・start_diff_ms?・end_diff_ms?・color? のオプション項目） / EventResponseDto（repeat_group_id・color含む） / RepeatType enum（daily/weekly/monthly）。全 DTO に `color?: string`（@IsOptional・@IsString）を追加
 - - `src/links/controller/` — REST endpoints (`GET /links`, `POST /links`, `PATCH /links/:id`, `DELETE /links/:id`) — JwtAuthGuard適用済み
 - `src/links/service/` — リンク/フォルダのビジネスロジック。ツリー構築（Map を使ったフラット→ツリー変換）・LINK を親にできない制約チェック・作成者チェック
 - `src/links/repository/` — Prisma CRUD（findAll/findById/create/update/delete）。order昇順・created_at昇順でソート
@@ -86,7 +86,7 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 
 **リンク集フロー**: JwtAuthGuard → Controller → Service（ツリー構築・親フォルダ検証・作成者チェック）→ Repository → Prisma。LINK タイプは子を持てない末端要素。FOLDER タイプのみ children を持つ。削除は作成者のみ可能。FOLDER 削除時は Cascade で配下の全子孫も削除される。
 
-**カレンダー予定フロー**: JwtAuthGuard → Controller → Service → Repository → Prisma。単件作成（`POST /events`）・複数日付一括作成（`POST /events/multiple`）・繰り返し一括作成（`POST /events/repeat`）の3パターンをサポート。複数・繰り返しは Service 内で日付展開後に `$transaction` で一括 INSERT。更新・削除は作成者のみ可能。繰り返しグループ全件更新（`PATCH /events/repeat-group/:groupId`）は `start_diff_ms`/`end_diff_ms` で全件の日時をシフトする。
+**カレンダー予定フロー**: JwtAuthGuard → Controller → Service → Repository → Prisma。単件作成（`POST /events`）・複数日付一括作成（`POST /events/multiple`）・繰り返し一括作成（`POST /events/repeat`）の3パターンをサポート。複数・繰り返しは Service 内で日付展開後に `$transaction` で一括 INSERT。更新・削除は作成者のみ可能。繰り返しグループ全件更新（`PATCH /events/repeat-group/:groupId`）は `start_diff_ms`/`end_diff_ms` で全件の日時をシフトする。予定には `color` フィールドがあり、作成・更新時に色識別子（cyan/indigo/emerald/violet/rose/amber）を指定できる。未指定時は `cyan`。
 
 ### Frontend (React + CRA)
 
@@ -101,14 +101,14 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/pages/TaskDetailPage.tsx` — タスク詳細・完了/未完了ボタン・完了スタイル（緑枠・バナー・取り消し線）・`closed_by`表示・子タスク一覧・子タスク作成ボタン。編集ボタンは全ユーザーに表示。直リンク（`/tasks/:id`）対応のため引き続き存在する
 - `src/pages/LinkListPage.tsx` — リンク集一覧ページ。エクスプローラー風ツリー表示。`LinkTreeNode` コンポーネントで再帰レンダリング。フォルダクリックで展開/折りたたみ。リンククリックで別タブを開く。追加ボタンで `LinkFormModal` を開く。削除は作成者のみ表示。フォルダ削除時に「配下の全リンク・フォルダも削除されます」という警告を表示する
 - `src/api/taskApi.ts` — タスクAPI通信（`fetchTasks`, `fetchTask`, `fetchCategories`, `createTask`, `updateTask`, `toggleTaskCompletion`, `deleteTask`, `getCurrentUsername`, `fetchNotifications`, `addNotification`, `deleteNotification`, `fetchMe`）。`TaskNotification` インターフェース・`AccountMe` インターフェース・`Task.notifications?: TaskNotification[]` フィールドを含む
-- `src/api/eventApi.ts` — カレンダー予定API通信（`fetchEvents`, `createEvent`, `createMultipleEvents`, `createRepeatEvent`, `updateEvent`, `updateRepeatGroupEvent`, `deleteEvent`）。`CalendarEvent`（repeat_group_id含む）・`EventInput`・`MultipleEventInput`（end_times配列）・`RepeatEventInput`（end_at）・`UpdateRepeatGroupInput`・`RepeatRule`・`RepeatType` インターフェースを定義
+- `src/api/eventApi.ts` — カレンダー予定API通信（`fetchEvents`, `createEvent`, `createMultipleEvents`, `createRepeatEvent`, `updateEvent`, `updateRepeatGroupEvent`, `deleteEvent`）。`CalendarEvent`（repeat_group_id・color含む）・`EventInput`（color?含む）・`MultipleEventInput`（end_times配列・color?含む）・`RepeatEventInput`（end_at・color?含む）・`UpdateRepeatGroupInput`（color?含む）・`RepeatRule`・`RepeatType` インターフェースを定義
 - - `src/api/linkApi.ts` — リンク集API通信（`fetchLinks`, `createLink`, `updateLink`, `deleteLink`）。`LinkItem` インターフェース（children: LinkItem[] を含む再帰型）・`LinkItemInput` インターフェース・`LinkItemType`（"FOLDER" | "LINK"）を定義
 - `src/hooks/useTaskList.ts` — タスク一覧・削除・カテゴリフィルタリング・階層ツリー構築（incompleteTrees/completedTrees）フック。`togglingIds`（PATCH処理中のタスクID集合）と `awaitToggle`（PATCH完了を外から待てる関数）を提供する
 - `src/hooks/useTaskDetail.ts` — タスク詳細取得・完了切り替えフック
 - `src/hooks/useTaskForm.ts` — タスクフォーム（作成/編集/子タスク作成モード対応）フック。`notifications: string[]`（datetime-local形式）状態を管理し、`addNotificationDatetime`・`removeNotificationDatetime` を提供。フォーム送信後に通知日時を `addNotification` API へ順次送信する。編集モード時は既存通知を datetime-local 形式に変換して初期値として読み込む
 - `src/hooks/useLinkList.ts` — リンク集一覧取得・フォルダ展開/折りたたみ状態管理（expandedIds: Set<number>）・削除処理・リロードを提供するフック
 - `src/hooks/useLinkForm.ts` — リンク/フォルダ作成・編集フォームを管理するフック。editItem 指定で編集モード。type が FOLDER に変更されたら url をクリアする
-- `src/hooks/useCalendar.ts` — カレンダー予定・タスク表示・ビュー切り替えを管理するフック。タスクのカレンダー表示は日表示（timeGridDay）のみ。`taskToEventInput` でタスクをFullCalendar用EventInputに変換する際、`start = due_date - 1時間`・`end = due_date` に設定し、期限がイベントの終了時刻になるようにする。`handleCreateMultipleEvents`（複数日付一括作成）・`handleCreateRepeatEvent`（繰り返し一括作成）を提供し、作成後はローカルステートに全件追加する。`handleUpdateRepeatGroupEvent`（繰り返しグループ全件更新）を提供し、更新後は Set で更新済み ID を特定しローカルステートを置換する
+- `src/hooks/useCalendar.ts` — カレンダー予定・タスク表示・ビュー切り替えを管理するフック。タスクのカレンダー表示は日表示（timeGridDay）のみ。`taskToEventInput` でタスクをFullCalendar用EventInputに変換する際、`start = due_date - 1時間`・`end = due_date` に設定し、期限がイベントの終了時刻になるようにする。`handleCreateMultipleEvents`（複数日付一括作成）・`handleCreateRepeatEvent`（繰り返し一括作成）を提供し、作成後はローカルステートに全件追加する。`handleUpdateRepeatGroupEvent`（繰り返しグループ全件更新）を提供し、更新後は Set で更新済み ID を特定しローカルステートを置換する。`EVENT_COLOR_MAP`（色識別子→bg/text色マップ）と `resolveEventColor` で `calendarEventToEventInput` の背景色・テキスト色を一元管理する
 - `src/hooks/useIsMobile.ts` — 画面幅が640px未満かどうかをリアクティブに返すカスタムフック。`window.resize` イベントで追従する
 - `src/validation/taskValidation.ts` — タスクフォームバリデーション（priority/category含む）。担当者は1人以上必須
 - `src/validation/linkValidation.ts` — リンク/フォルダフォームバリデーション。title必須。type="LINK" の場合は url も必須
@@ -118,8 +118,8 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/components/TextAreaField.tsx` — textareaラッパー共通コンポーネント
 - `src/components/DateTimeField.tsx` — datetime-local入力ラッパー共通コンポーネント
 - `src/components/SelectField.tsx` — selectラッパー共通コンポーネント
-- `src/components/EventModal.tsx` — 予定作成・編集モーダル。新規作成時は「通常」「複数日付」「繰り返し」の3モードをタブで切り替えられる。編集時は通常フォームのみ表示。繰り返しグループ予定の編集時は「この予定のみ変更」「繰り返し予定を全て変更」のスコープ選択ラジオボタンを表示する。`onSave` コールバックは `(input: EventInput, updateScope: UpdateScope) => Promise<void>` シグネチャ。複数日付モードは `DateTimeField` の開始・終了ペアをリストで追加・削除可能（`start_times`/`end_times` を同期して管理）。繰り返しモードは最初の開始日時・終了日時・繰り返しタイプ（毎日/毎週/毎月）・間隔・曜日（毎週のみ）・終了条件（終了日 or 回数）を設定可能
-- `src/validation/eventValidation.ts` — カレンダー予定フォームのバリデーション。`validateEventForm`（通常）・`validateMultipleEventForm`（複数日付: 各ペアで end_time > start_time を検証）・`validateRepeatEventForm`（繰り返し: end_at > start_at を検証）の3種類を提供。`MultipleEventFormValues` は `start_times`/`end_times` 配列、`RepeatEventFormValues` は `end_at` を持つ
+- `src/components/EventModal.tsx` — 予定作成・編集モーダル。新規作成時は「通常」「複数日付」「繰り返し」の3モードをタブで切り替えられる。編集時は通常フォームのみ表示。繰り返しグループ予定の編集時は「この予定のみ変更」「繰り返し予定を全て変更」のスコープ選択ラジオボタンを表示する。`onSave` コールバックは `(input: EventInput, updateScope: UpdateScope) => Promise<void>` シグネチャ。複数日付モードは `DateTimeField` の開始・終了ペアをリストで追加・削除可能（`start_times`/`end_times` を同期して管理）。繰り返しモードは最初の開始日時・終了日時・繰り返しタイプ（毎日/毎週/毎月）・間隔・曜日（毎週のみ）・終了条件（終了日 or 回数）を設定可能。全 3 モードに `ColorPicker` コンポーネントを配置し、6色（cyan/indigo/emerald/violet/rose/amber）からカラー選択できる。`EVENT_COLORS` 定数をエクスポートして色定義を一元管理する
+- `src/validation/eventValidation.ts` — カレンダー予定フォームのバリデーション。`validateEventForm`（通常）・`validateMultipleEventForm`（複数日付: 各ペアで end_time > start_time を検証）・`validateRepeatEventForm`（繰り返し: end_at > start_at を検証）の3種類を提供。`MultipleEventFormValues` は `start_times`/`end_times` 配列、`RepeatEventFormValues` は `end_at` を持つ。全フォーム値型に `color: string` フィールドを含む
 - - `src/components/CancelButton.tsx` — キャンセルボタン共通コンポーネント
 
 API base URL is built from env vars: `REACT_APP_API_SCHEME`, `REACT_APP_API_HOST`, `REACT_APP_API_PORT`.
@@ -195,6 +195,7 @@ model Event {
   description     String   @default("")
   start_at        DateTime
   end_at          DateTime
+  color           String   @default("cyan")  // 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）
   repeat_group_id String?             // 繰り返しグループID（UUID）。繰り返し作成時に同一グループで共有
   created_by      String
   created_at      DateTime @default(now())

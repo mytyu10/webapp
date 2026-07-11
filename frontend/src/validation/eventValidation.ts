@@ -11,6 +11,8 @@ export interface EventFormValues {
   description: string;
   start_at: string;
   end_at: string;
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber） */
+  color: string;
 }
 
 /** 複数日付フォームのバリデーションエラー型 */
@@ -28,6 +30,8 @@ export interface MultipleEventFormValues {
   start_times: string[];
   /** 終了日時の配列（datetime-local形式）。start_times と同件数 */
   end_times: string[];
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber） */
+  color: string;
 }
 
 /** 繰り返しフォームのバリデーションエラー型 */
@@ -53,6 +57,8 @@ export interface RepeatEventFormValues {
   end_condition_type: 'end_date' | 'count';
   end_date: string;
   count: string;
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber） */
+  color: string;
 }
 
 /** タイトルの最大文字数 */

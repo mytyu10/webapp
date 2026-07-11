@@ -16,6 +16,7 @@ describe('validateEventForm', () => {
     description: '',
     start_at: '2026-06-01T10:00',
     end_at: '2026-06-01T11:00',
+    color: 'cyan',
   };
 
   it('正常な入力はエラーなし', () => {
@@ -62,6 +63,7 @@ describe('validateMultipleEventForm', () => {
     description: '',
     start_times: ['2026-06-01T10:00', '2026-06-02T10:00'],
     end_times: ['2026-06-01T11:00', '2026-06-02T11:00'],
+    color: 'cyan',
   };
 
   it('正常な入力はエラーなし', () => {
@@ -128,6 +130,7 @@ describe('validateRepeatEventForm', () => {
     end_condition_type: 'end_date' as const,
     end_date: '2026-07-01T10:00',
     count: '',
+    color: 'cyan',
   };
 
   const validValuesCount = {

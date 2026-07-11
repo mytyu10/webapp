@@ -13,6 +13,7 @@ export interface CalendarEvent {
   description: string;
   start_at: string;
   end_at: string;
+  color: string;
   repeat_group_id: string | null;
   created_by: string;
   created_at: string;
@@ -25,6 +26,8 @@ export interface EventInput {
   description?: string;
   start_at: string;
   end_at: string;
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は cyan */
+  color?: string;
 }
 
 /** 繰り返しタイプ */
@@ -55,6 +58,8 @@ export interface MultipleEventInput {
   start_times: string[];
   /** 終了日時の配列（ISO8601形式）。start_times と同件数必須 */
   end_times: string[];
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は cyan */
+  color?: string;
 }
 
 /** 繰り返し予定作成リクエスト型 */
@@ -70,6 +75,8 @@ export interface RepeatEventInput {
   end_at: string;
   /** 繰り返しルール */
   repeat: RepeatRule;
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は cyan */
+  color?: string;
 }
 
 /** 繰り返しグループ全件更新リクエスト型 */
@@ -80,6 +87,8 @@ export interface UpdateRepeatGroupInput {
   start_diff_ms?: number;
   /** 終了日時の差分（ミリ秒）。各予定の end_at に加算してシフトする */
   end_diff_ms?: number;
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は変更なし */
+  color?: string;
 }
 
 /**

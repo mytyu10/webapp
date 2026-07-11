@@ -81,6 +81,11 @@ export class CreateEventDto {
   /** 終了日時（ISO8601形式） */
   @IsDateString({}, { message: '正しい日時形式で入力してください' })
   end_at: string;
+
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は cyan */
+  @IsString()
+  @IsOptional()
+  color?: string;
 }
 
 /** 複数日付一括作成リクエストDTO */
@@ -117,6 +122,11 @@ export class CreateMultipleEventsDto {
     { each: true, message: '終了日時は正しい日時形式で入力してください' },
   )
   end_times: string[];
+
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は cyan */
+  @IsString()
+  @IsOptional()
+  color?: string;
 }
 
 /** 繰り返し予定作成リクエストDTO */
@@ -148,6 +158,11 @@ export class CreateRepeatEventDto {
   @ValidateNested()
   @Type(() => RepeatRuleDto)
   repeat: RepeatRuleDto;
+
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は cyan */
+  @IsString()
+  @IsOptional()
+  color?: string;
 }
 
 /** 予定更新リクエストDTO */
@@ -174,6 +189,11 @@ export class UpdateEventDto {
   @IsDateString({}, { message: '正しい日時形式で入力してください' })
   @IsOptional()
   end_at?: string;
+
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は変更なし */
+  @IsString()
+  @IsOptional()
+  color?: string;
 }
 
 /** 繰り返しグループ全件更新リクエストDTO */
@@ -206,6 +226,11 @@ export class UpdateRepeatGroupEventDto {
   @IsInt({ message: '終了日時の差分は整数で指定してください' })
   @IsOptional()
   end_diff_ms?: number;
+
+  /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は変更なし */
+  @IsString()
+  @IsOptional()
+  color?: string;
 }
 
 /** 予定レスポンスDTO */
@@ -215,6 +240,7 @@ export interface EventResponseDto {
   description: string;
   start_at: string;
   end_at: string;
+  color: string;
   repeat_group_id: string | null;
   created_by: string;
   created_at: string;

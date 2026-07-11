@@ -29,6 +29,28 @@ type CreateMode = 'single' | 'multiple' | 'repeat';
 /** 繰り返し予定編集時のスコープ選択 */
 type UpdateScope = 'single' | 'all';
 
+/**
+ * 予定に選択できる色の定義。
+ * アプリのダークテーマ（slate ベース）に合わせた6色
+ */
+export const EVENT_COLORS: Array<{
+  /** 色識別子（APIへ送信する値） */
+  id: string;
+  /** 表示ラベル */
+  label: string;
+  /** カラーパレット上の背景色（Tailwind bg-* クラス） */
+  bgClass: string;
+  /** カラーパレット上の選択リング色（Tailwind ring-* クラス） */
+  ringClass: string;
+}> = [
+  { id: 'cyan',    label: 'シアン',     bgClass: 'bg-cyan-700',    ringClass: 'ring-cyan-400' },
+  { id: 'indigo',  label: 'インディゴ', bgClass: 'bg-indigo-700',  ringClass: 'ring-indigo-400' },
+  { id: 'emerald', label: 'エメラルド', bgClass: 'bg-emerald-700', ringClass: 'ring-emerald-400' },
+  { id: 'violet',  label: 'バイオレット', bgClass: 'bg-violet-700', ringClass: 'ring-violet-400' },
+  { id: 'rose',    label: 'ローズ',     bgClass: 'bg-rose-700',    ringClass: 'ring-rose-400' },
+  { id: 'amber',   label: 'アンバー',   bgClass: 'bg-amber-700',   ringClass: 'ring-amber-400' },
+];
+
 /** EventModalのprops型 */
 interface EventModalProps {
   /** モーダルの表示状態 */
@@ -75,6 +97,47 @@ const END_CONDITION_OPTIONS = [
 /** 曜日ラベル（0=日曜〜6=土曜） */
 const DAY_OF_WEEK_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
+/** デフォルトの色識別子 */
+const DEFAULT_COLOR = 'cyan';
+
+/**
+ * 色選択パレットコンポーネント。
+ * 6色のボタンを横並びで表示し、選択中の色にリングを表示する
+ */
+function ColorPicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (color: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="mb-5">
+      <span className="block text-sm font-medium text-slate-300 mb-1.5">色</span>
+      <div className="flex gap-2 flex-wrap">
+        {EVENT_COLORS.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => onChange(c.id)}
+            disabled={disabled}
+            title={c.label}
+            aria-label={c.label}
+            aria-pressed={value === c.id}
+            className={`w-8 h-8 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed ${c.bgClass} ${
+              value === c.id
+                ? `ring-2 ring-offset-2 ring-offset-slate-800 ${c.ringClass} scale-110`
+                : 'hover:scale-105'
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /**
  * 予定作成・編集モーダルコンポーネント。
  * 新規作成時は「通常」「複数日付」「繰り返し」の3モードを切り替えられる。
@@ -105,6 +168,7 @@ function EventModal({
     description: '',
     start_at: '',
     end_at: '',
+    color: DEFAULT_COLOR,
   });
   const [errors, setErrors] = useState<EventValidationErrors>({});
 
@@ -114,6 +178,7 @@ function EventModal({
     description: '',
     start_times: [''],
     end_times: [''],
+    color: DEFAULT_COLOR,
   });
   const [multipleErrors, setMultipleErrors] = useState<MultipleEventValidationErrors>({});
 
@@ -129,6 +194,7 @@ function EventModal({
     end_condition_type: 'count',
     end_date: '',
     count: '4',
+    color: DEFAULT_COLOR,
   });
   const [repeatErrors, setRepeatErrors] = useState<RepeatEventValidationErrors>({});
 
@@ -153,6 +219,7 @@ function EventModal({
         description: event.description,
         start_at: toDatetimeLocalValue(event.start_at),
         end_at: toDatetimeLocalValue(event.end_at),
+        color: event.color ?? DEFAULT_COLOR,
       });
     } else {
       const defaultStart = initialStart ? toDatetimeLocalValue(initialStart) : '';
@@ -168,12 +235,14 @@ function EventModal({
         description: '',
         start_at: defaultStart,
         end_at: defaultEnd,
+        color: DEFAULT_COLOR,
       });
       setMultipleValues({
         title: '',
         description: '',
         start_times: [defaultStart],
         end_times: [defaultEnd],
+        color: DEFAULT_COLOR,
       });
       setRepeatValues({
         title: '',
@@ -186,6 +255,7 @@ function EventModal({
         end_condition_type: 'count',
         end_date: '',
         count: '4',
+        color: DEFAULT_COLOR,
       });
     }
   }, [open, event, initialStart]);
@@ -209,6 +279,7 @@ function EventModal({
         description: formValues.description,
         start_at: new Date(formValues.start_at).toISOString(),
         end_at: new Date(formValues.end_at).toISOString(),
+        color: formValues.color,
       };
       await onSave(input, updateScope);
       onClose();
@@ -236,6 +307,7 @@ function EventModal({
         description: multipleValues.description,
         start_times: multipleValues.start_times.map((t) => new Date(t).toISOString()),
         end_times: multipleValues.end_times.map((t) => new Date(t).toISOString()),
+        color: multipleValues.color,
       };
       await onSaveMultiple(input);
       onClose();
@@ -273,6 +345,7 @@ function EventModal({
             ? { end_date: new Date(repeatValues.end_date).toISOString() }
             : { count: Number(repeatValues.count) }),
         },
+        color: repeatValues.color,
       };
       await onSaveRepeat(input);
       onClose();
@@ -471,6 +544,11 @@ function EventModal({
                 error={errors.end_at}
                 disabled={submitting || (isEditMode && !isOwner)}
               />
+              <ColorPicker
+                value={formValues.color}
+                onChange={(c) => setFormValues((prev) => ({ ...prev, color: c }))}
+                disabled={submitting || (isEditMode && !isOwner)}
+              />
 
               <div className="flex justify-between items-center mt-6">
                 <div className="flex gap-2">
@@ -572,6 +650,12 @@ function EventModal({
                   <p className="mt-1 text-xs text-red-400">{multipleErrors.end_times}</p>
                 )}
               </div>
+
+              <ColorPicker
+                value={multipleValues.color}
+                onChange={(c) => setMultipleValues((prev) => ({ ...prev, color: c }))}
+                disabled={submitting}
+              />
 
               <div className="flex justify-end gap-2 mt-6">
                 <CancelButton
@@ -708,6 +792,12 @@ function EventModal({
                   disabled={submitting}
                 />
               )}
+
+              <ColorPicker
+                value={repeatValues.color}
+                onChange={(c) => setRepeatValues((prev) => ({ ...prev, color: c }))}
+                disabled={submitting}
+              />
 
               <div className="flex justify-end gap-2 mt-6">
                 <CancelButton

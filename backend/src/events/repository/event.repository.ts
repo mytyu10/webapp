@@ -62,6 +62,7 @@ export class EventRepository {
       description?: string;
       start_at?: Date;
       end_at?: Date;
+      color?: string;
     },
   ): Promise<Event> {
     return this.prisma.event.update({
@@ -73,6 +74,7 @@ export class EventRepository {
         }),
         ...(data.start_at !== undefined && { start_at: data.start_at }),
         ...(data.end_at !== undefined && { end_at: data.end_at }),
+        ...(data.color !== undefined && { color: data.color }),
       },
     });
   }
@@ -89,6 +91,7 @@ export class EventRepository {
         description?: string;
         start_at?: Date;
         end_at?: Date;
+        color?: string;
       };
     }>,
   ): Promise<Event[]> {
@@ -103,6 +106,7 @@ export class EventRepository {
             }),
             ...(data.start_at !== undefined && { start_at: data.start_at }),
             ...(data.end_at !== undefined && { end_at: data.end_at }),
+            ...(data.color !== undefined && { color: data.color }),
           },
         }),
       ),
