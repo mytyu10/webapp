@@ -44,10 +44,22 @@ describe('EventRepository', () => {
   // findAll
   // ────────────────────────────────────────────────
   describe('findAll', () => {
+    it('prisma.event.findMany が where: { created_by: username } を含む引数で呼ばれる', async () => {
+      mockPrismaService.event.findMany.mockResolvedValue([mockEvent]);
+
+      await repository.findAll('testuser');
+
+      expect(mockPrismaService.event.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { created_by: 'testuser' },
+        }),
+      );
+    });
+
     it('prisma.event.findMany が orderBy: { start_at: "asc" } で呼ばれる', async () => {
       mockPrismaService.event.findMany.mockResolvedValue([mockEvent]);
 
-      await repository.findAll();
+      await repository.findAll('testuser');
 
       expect(mockPrismaService.event.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -59,7 +71,7 @@ describe('EventRepository', () => {
     it('予定一覧を返す', async () => {
       mockPrismaService.event.findMany.mockResolvedValue([mockEvent]);
 
-      const result = await repository.findAll();
+      const result = await repository.findAll('testuser');
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe(1);
@@ -69,7 +81,7 @@ describe('EventRepository', () => {
     it('予定が存在しない場合は空配列を返す', async () => {
       mockPrismaService.event.findMany.mockResolvedValue([]);
 
-      const result = await repository.findAll();
+      const result = await repository.findAll('testuser');
 
       expect(result).toHaveLength(0);
     });

@@ -31,13 +31,13 @@ export class LinkService {
   ) {}
 
   /**
-   * 全リンク/フォルダをツリー構造で取得する。
+   * 指定ユーザーが作成者であるリンク/フォルダをツリー構造で取得する。
    * parent_id が null の要素をルートとして配置し、FOLDER の children に配下要素を再帰的に格納する。
    * LINK の children は常に空配列とする
    */
-  async findAll(): Promise<LinkItemResponseDto[]> {
-    this.logger.log(CONTEXT, 'リンク一覧取得開始');
-    const all = await this.linkRepository.findAll();
+  async findAll(username: string): Promise<LinkItemResponseDto[]> {
+    this.logger.log(CONTEXT, `リンク一覧取得開始: user=${username}`);
+    const all = await this.linkRepository.findAll(username);
 
     /** フラット配列を Map に変換してツリー構築に使用する */
     const map = new Map<number, LinkItemResponseDto>();

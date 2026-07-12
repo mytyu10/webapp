@@ -18,11 +18,14 @@ export class TaskRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * 全タスクを担当者・子タスク・通知情報込みで取得する。子タスクは一覧に含めない
+   * 指定ユーザーが作成者または担当者であるタスクを担当者・子タスク・通知情報込みで取得する。子タスクは一覧に含めない
    */
-  async findAll(): Promise<TaskWithRelations[]> {
+  async findAll(username: string): Promise<TaskWithRelations[]> {
     return this.prisma.task.findMany({
-      where: { parent_id: null },
+      where: {
+        parent_id: null,
+        OR: [{ created_by: username }, { assignees: { some: { username } } }],
+      },
       include: {
         assignees: true,
         notifications: { orderBy: { notify_at: 'asc' } },
@@ -160,11 +163,14 @@ export class TaskRepository {
   }
 
   /**
-   * 全タスクから設定されているカテゴリ一覧を重複なしで取得する
+   * 指定ユーザーが作成者または担当者であるタスクから設定されているカテゴリ一覧を重複なしで取得する
    */
-  async findAllCategories(): Promise<string[]> {
+  async findAllCategories(username: string): Promise<string[]> {
     const tasks = await this.prisma.task.findMany({
-      where: { category: { not: null } },
+      where: {
+        category: { not: null },
+        OR: [{ created_by: username }, { assignees: { some: { username } } }],
+      },
       select: { category: true },
       distinct: ['category'],
       orderBy: { category: 'asc' },

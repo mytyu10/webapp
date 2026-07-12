@@ -36,11 +36,19 @@ export class LinkController {
 
   /**
    * リンク/フォルダ一覧取得エンドポイント（ツリー構造で返す）
+   * ログインユーザーが作成者であるリンク/フォルダのみ返す
    */
   @Get()
-  async findAll(@Res() response: Response): Promise<Response> {
+  async findAll(
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<Response> {
     this.logger.log(CONTEXT, 'リンク一覧取得リクエスト');
-    const links = await this.linkService.findAll();
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
+    const links = await this.linkService.findAll(requestUser.username);
     return response.status(HttpStatus.OK).json(links);
   }
 

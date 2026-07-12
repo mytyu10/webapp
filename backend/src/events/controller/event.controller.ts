@@ -42,11 +42,19 @@ export class EventController {
 
   /**
    * 予定一覧取得エンドポイント
+   * ログインユーザーが作成者である予定のみ返す
    */
   @Get()
-  async findAll(@Res() response: Response): Promise<Response> {
+  async findAll(
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<Response> {
     this.logger.log(CONTEXT, '予定一覧取得リクエスト');
-    const events = await this.eventService.findAll();
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
+    const events = await this.eventService.findAll(requestUser.username);
     return response.status(HttpStatus.OK).json(events);
   }
 

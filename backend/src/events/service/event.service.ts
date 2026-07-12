@@ -36,11 +36,11 @@ export class EventService {
   ) {}
 
   /**
-   * 全予定を取得する
+   * 指定ユーザーが作成者である予定一覧を取得する
    */
-  async findAll(): Promise<EventResponseDto[]> {
-    this.logger.log(CONTEXT, '予定一覧取得開始');
-    const events = await this.eventRepository.findAll();
+  async findAll(username: string): Promise<EventResponseDto[]> {
+    this.logger.log(CONTEXT, `予定一覧取得開始: user=${username}`);
+    const events = await this.eventRepository.findAll(username);
     return events.map((e) => this.toResponseDto(e));
   }
 

@@ -42,21 +42,39 @@ export class TaskController {
 
   /**
    * カテゴリ一覧取得エンドポイント（`/tasks/:id` より先に定義して衝突を防ぐ）
+   * ログインユーザーが作成者または担当者であるタスクのカテゴリのみ返す
    */
   @Get('categories')
-  async getCategories(@Res() response: Response): Promise<Response> {
+  async getCategories(
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<Response> {
     this.logger.log(CONTEXT, 'カテゴリ一覧取得リクエスト');
-    const categories = await this.taskService.findAllCategories();
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
+    const categories = await this.taskService.findAllCategories(
+      requestUser.username,
+    );
     return response.status(HttpStatus.OK).json(categories);
   }
 
   /**
    * タスク一覧取得エンドポイント
+   * ログインユーザーが作成者または担当者であるタスクのみ返す
    */
   @Get()
-  async findAll(@Res() response: Response): Promise<Response> {
+  async findAll(
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<Response> {
     this.logger.log(CONTEXT, 'タスク一覧取得リクエスト');
-    const tasks = await this.taskService.findAll();
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
+    const tasks = await this.taskService.findAll(requestUser.username);
     return response.status(HttpStatus.OK).json(tasks);
   }
 

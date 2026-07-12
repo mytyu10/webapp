@@ -52,18 +52,18 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/accounts/service/` — business logic（ログイン・登録・LINE OAuth フロー・ログインユーザー情報取得）
 - `src/accounts/repository/` — Prisma queries（`updateLineUserId` で LINE User ID を保存）
 - `src/accounts/dto/account.dto.ts` — validation DTOs (class-validator)。`LineCallbackQueryDto`（OAuthコード受取）・`AccountMeResponseDto`（LINE連携状態含む）を定義
-- `src/tasks/controller/` — REST endpoints (`GET /tasks`, `GET /tasks/categories`, `GET /tasks/:id`, `POST /tasks`, `PATCH /tasks/:id`, `DELETE /tasks/:id`, `POST /tasks/:id/notifications`, `GET /tasks/:id/notifications`, `DELETE /tasks/:id/notifications/:notificationId`) — JwtAuthGuard適用済み
-- `src/tasks/service/` — タスクのビジネスロジック（`task.service.ts`）・バッチ更新処理（`task-queue.service.ts`: 100msウィンドウ内のリクエストをバッファリングして順次処理）・通知CRUD（`task-notification.service.ts`）
-- `src/tasks/repository/` — Prisma CRUD・カテゴリ取得（is_completed・closed_by・notifications フィールド対応）。`task-notification.repository.ts` で通知の作成・取得・削除・送信対象抽出・送信済みマークを提供
+- `src/tasks/controller/` — REST endpoints (`GET /tasks`, `GET /tasks/categories`, `GET /tasks/:id`, `POST /tasks`, `PATCH /tasks/:id`, `DELETE /tasks/:id`, `POST /tasks/:id/notifications`, `GET /tasks/:id/notifications`, `DELETE /tasks/:id/notifications/:notificationId`) — JwtAuthGuard適用済み。`GET /tasks` と `GET /tasks/categories` は `req.user.username` をサービスに渡してログインユーザーのタスクのみ取得する
+- `src/tasks/service/` — タスクのビジネスロジック（`task.service.ts`）・バッチ更新処理（`task-queue.service.ts`: 100msウィンドウ内のリクエストをバッファリングして順次処理）・通知CRUD（`task-notification.service.ts`）。`findAll(username)` / `findAllCategories(username)` はユーザー名をリポジトリに伝播する
+- `src/tasks/repository/` — Prisma CRUD・カテゴリ取得（is_completed・closed_by・notifications フィールド対応）。`task-notification.repository.ts` で通知の作成・取得・削除・送信対象抽出・送信済みマークを提供。`findAll(username)` は `created_by = username` OR `assignees に username が含まれる` 条件でフィルタリングする。`findAllCategories(username)` も同様の OR 条件でユーザーのタスクに紐付くカテゴリのみ返す
 - `src/tasks/dto/task.dto.ts` — CreateTaskDto / UpdateTaskDto（is_completed含む） / TaskResponseDto（is_completed・closed_by・notifications含む） / Priority型 / CreateNotificationDto / NotificationResponseDto
 - `src/line/line-notification.service.ts` — `@Cron(CronExpression.EVERY_MINUTE)` で毎分実行するCronジョブ。未送信かつ `notify_at <= 現在時刻` の通知を取得し、担当者（LINE連携済みのみ）に LINE Messaging API でプッシュ通知を送信。全担当者処理後に `is_sent=true` にマーク。送信失敗時は `is_sent` を更新せず次回再試行
-- `src/events/controller/` — REST endpoints (`GET /events`, `GET /events/:id`, `POST /events`, `POST /events/multiple`, `POST /events/repeat`, `PATCH /events/repeat-group/:groupId`, `PATCH /events/:id`, `DELETE /events/:id`) — JwtAuthGuard適用済み。`POST /events/multiple` は複数日付一括作成、`POST /events/repeat` は繰り返しルール一括作成、`PATCH /events/repeat-group/:groupId` は繰り返しグループ全件一括更新（ルート衝突回避のため `:id` より前に定義）
-- `src/events/service/` — 予定のビジネスロジック（`event.service.ts`）。単件作成（`create`）・複数日付一括作成（`createMultiple`）・繰り返し一括作成（`createRepeat`）・単件更新（`update`）・繰り返しグループ全件更新（`updateRepeatGroup`）・削除。繰り返し展開は daily/weekly/monthly の3タイプ対応。monthly は月末補正あり。最大生成件数100件制限。`createRepeat` は全件に同一 `repeat_group_id`（UUID）を付与する。`updateRepeatGroup` はグループ全件の `created_by` を確認してから `start_diff_ms`/`end_diff_ms` で各日時をシフト更新する。全作成・更新メソッドで `color` フィールドを処理する（未指定時はデフォルト `cyan`）
-- `src/events/repository/` — Prisma CRUD（findAll/findById/create/createMany/update/updateMany/delete/findByRepeatGroupId）。`createMany`・`updateMany` は SQLite の制約回避のため `$transaction` + 個別操作配列で実装。`findByRepeatGroupId` は `repeat_group_id` で絞り込み `start_at` 昇順で返す。`update`/`updateMany` は `color` フィールドをサポート
+- `src/events/controller/` — REST endpoints (`GET /events`, `GET /events/:id`, `POST /events`, `POST /events/multiple`, `POST /events/repeat`, `PATCH /events/repeat-group/:groupId`, `PATCH /events/:id`, `DELETE /events/:id`) — JwtAuthGuard適用済み。`POST /events/multiple` は複数日付一括作成、`POST /events/repeat` は繰り返しルール一括作成、`PATCH /events/repeat-group/:groupId` は繰り返しグループ全件一括更新（ルート衝突回避のため `:id` より前に定義）。`GET /events` は `req.user.username` をサービスに渡してログインユーザーの予定のみ取得する
+- `src/events/service/` — 予定のビジネスロジック（`event.service.ts`）。単件作成（`create`）・複数日付一括作成（`createMultiple`）・繰り返し一括作成（`createRepeat`）・単件更新（`update`）・繰り返しグループ全件更新（`updateRepeatGroup`）・削除。繰り返し展開は daily/weekly/monthly の3タイプ対応。monthly は月末補正あり。最大生成件数100件制限。`createRepeat` は全件に同一 `repeat_group_id`（UUID）を付与する。`updateRepeatGroup` はグループ全件の `created_by` を確認してから `start_diff_ms`/`end_diff_ms` で各日時をシフト更新する。全作成・更新メソッドで `color` フィールドを処理する（未指定時はデフォルト `cyan`）。`findAll(username)` はユーザー名をリポジトリに伝播する
+- `src/events/repository/` — Prisma CRUD（findAll/findById/create/createMany/update/updateMany/delete/findByRepeatGroupId）。`createMany`・`updateMany` は SQLite の制約回避のため `$transaction` + 個別操作配列で実装。`findByRepeatGroupId` は `repeat_group_id` で絞り込み `start_at` 昇順で返す。`update`/`updateMany` は `color` フィールドをサポート。`findAll(username)` は `where: { created_by: username }` でログインユーザーの予定のみ返す
 - `src/events/dto/event.dto.ts` — CreateEventDto / CreateMultipleEventsDto（start_times配列・end_times配列。件数一致必須） / CreateRepeatEventDto（end_at・RepeatRuleDto含む） / UpdateEventDto / UpdateRepeatGroupEventDto（title?・description?・start_diff_ms?・end_diff_ms?・color? のオプション項目） / EventResponseDto（repeat_group_id・color含む） / RepeatType enum（daily/weekly/monthly）。全 DTO に `color?: string`（@IsOptional・@IsString）を追加
-- - `src/links/controller/` — REST endpoints (`GET /links`, `POST /links`, `PATCH /links/:id`, `DELETE /links/:id`) — JwtAuthGuard適用済み
-- `src/links/service/` — リンク/フォルダのビジネスロジック。ツリー構築（Map を使ったフラット→ツリー変換）・LINK を親にできない制約チェック・作成者チェック
-- `src/links/repository/` — Prisma CRUD（findAll/findById/create/update/delete）。order昇順・created_at昇順でソート
+- - `src/links/controller/` — REST endpoints (`GET /links`, `POST /links`, `PATCH /links/:id`, `DELETE /links/:id`) — JwtAuthGuard適用済み。`GET /links` は `req.user.username` をサービスに渡してログインユーザーのリンクのみ取得する
+- `src/links/service/` — リンク/フォルダのビジネスロジック。ツリー構築（Map を使ったフラット→ツリー変換）・LINK を親にできない制約チェック・作成者チェック。`findAll(username)` はユーザー名をリポジトリに伝播する
+- `src/links/repository/` — Prisma CRUD（findAll/findById/create/update/delete）。order昇順・created_at昇順でソート。`findAll(username)` は `where: { created_by: username }` でログインユーザーのリンク/フォルダのみ返す
 - `src/links/dto/link.dto.ts` — CreateLinkItemDto / UpdateLinkItemDto / LinkItemResponseDto（children: LinkItemResponseDto[]）/ LinkItemType型（"FOLDER" | "LINK"）
 - `src/jwt/jwt.service.ts` — JWT creation (1h expiry, secret from `JWT_SECRET` env)
 - `src/jwt/jwt-auth.guard.ts` — JwtAuthGuard（Bearerトークン検証）。検証成功時に `request.user` へ `JwtPayload` をセット
@@ -78,15 +78,15 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 
 **Login flow**: DTO validation → SHA256 hash password → query DB by username → compare hashes → issue JWT.
 
-**Task flow**: JwtAuthGuard → Controller → Service → Repository → Prisma.
+**Task flow**: JwtAuthGuard → Controller（`req.user.username` 抽出）→ Service → Repository（`username` でフィルタリング）→ Prisma。
 
 **LINE OAuth flow**: `GET /accounts/line/login`（JwtAuthGuard適用）→ LINE認証画面へリダイレクト → LINE から `GET /accounts/line/callback?code=...`（JwtAuthGuard適用）→ コード→トークン交換（axios POST）→ LINE Profile API でUser ID取得（axios GET）→ Account に `line_user_id` を保存 → フロントエンドの `/line-callback?status=success|error` へリダイレクト。
 
 **LINE通知フロー**: Cron毎分 → `findPendingNotifications`（is_sent=false かつ notify_at <= 現在時刻）→ 担当者ごとに line_user_id を確認 → LINE Messaging API push → `markAsSent`。
 
-**リンク集フロー**: JwtAuthGuard → Controller → Service（ツリー構築・親フォルダ検証・作成者チェック）→ Repository → Prisma。LINK タイプは子を持てない末端要素。FOLDER タイプのみ children を持つ。削除は作成者のみ可能。FOLDER 削除時は Cascade で配下の全子孫も削除される。
+**リンク集フロー**: JwtAuthGuard → Controller（`req.user.username` 抽出）→ Service（`username` を伝播）→ Repository（`created_by = username` でフィルタリング）→ Prisma。LINK タイプは子を持てない末端要素。FOLDER タイプのみ children を持つ。削除は作成者のみ可能。FOLDER 削除時は Cascade で配下の全子孫も削除される。
 
-**カレンダー予定フロー**: JwtAuthGuard → Controller → Service → Repository → Prisma。単件作成（`POST /events`）・複数日付一括作成（`POST /events/multiple`）・繰り返し一括作成（`POST /events/repeat`）の3パターンをサポート。複数・繰り返しは Service 内で日付展開後に `$transaction` で一括 INSERT。更新・削除は作成者のみ可能。繰り返しグループ全件更新（`PATCH /events/repeat-group/:groupId`）は `start_diff_ms`/`end_diff_ms` で全件の日時をシフトする。予定には `color` フィールドがあり、作成・更新時に色識別子（cyan/indigo/emerald/violet/rose/amber）を指定できる。未指定時は `cyan`。
+**カレンダー予定フロー**: JwtAuthGuard → Controller（`GET /events` では `req.user.username` 抽出）→ Service → Repository（`findAll` は `created_by = username` でフィルタリング）→ Prisma。単件作成（`POST /events`）・複数日付一括作成（`POST /events/multiple`）・繰り返し一括作成（`POST /events/repeat`）の3パターンをサポート。複数・繰り返しは Service 内で日付展開後に `$transaction` で一括 INSERT。更新・削除は作成者のみ可能。繰り返しグループ全件更新（`PATCH /events/repeat-group/:groupId`）は `start_diff_ms`/`end_diff_ms` で全件の日時をシフトする。予定には `color` フィールドがあり、作成・更新時に色識別子（cyan/indigo/emerald/violet/rose/amber）を指定できる。未指定時は `cyan`。
 
 ### Frontend (React + CRA)
 

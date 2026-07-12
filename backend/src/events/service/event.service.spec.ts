@@ -64,7 +64,7 @@ describe('EventService', () => {
     it('予定一覧を EventResponseDto の配列で返す', async () => {
       mockEventRepository.findAll.mockResolvedValue([mockEvent]);
 
-      const result = await service.findAll();
+      const result = await service.findAll('testuser');
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe(1);
@@ -74,7 +74,7 @@ describe('EventService', () => {
     it('予定が存在しない場合は空配列を返す', async () => {
       mockEventRepository.findAll.mockResolvedValue([]);
 
-      const result = await service.findAll();
+      const result = await service.findAll('testuser');
 
       expect(result).toHaveLength(0);
     });
@@ -82,7 +82,7 @@ describe('EventService', () => {
     it('start_at / end_at が ISO 文字列に変換される', async () => {
       mockEventRepository.findAll.mockResolvedValue([mockEvent]);
 
-      const result = await service.findAll();
+      const result = await service.findAll('testuser');
 
       expect(typeof result[0].start_at).toBe('string');
       expect(typeof result[0].end_at).toBe('string');
@@ -108,7 +108,9 @@ describe('EventService', () => {
       mockEventRepository.findById.mockResolvedValue(null);
 
       await expect(service.findById(999)).rejects.toThrow(NotFoundException);
-      await expect(service.findById(999)).rejects.toThrow(MESSAGE.EVENT.NOT_FOUND);
+      await expect(service.findById(999)).rejects.toThrow(
+        MESSAGE.EVENT.NOT_FOUND,
+      );
     });
   });
 
@@ -141,7 +143,11 @@ describe('EventService', () => {
 
       await expect(
         service.create(
-          { title: '予定', start_at: '2026-06-01T10:00:00.000Z', end_at: '2026-06-01T11:00:00.000Z' },
+          {
+            title: '予定',
+            start_at: '2026-06-01T10:00:00.000Z',
+            end_at: '2026-06-01T11:00:00.000Z',
+          },
           'testuser',
         ),
       ).rejects.toThrow(InternalServerErrorException);
@@ -187,7 +193,9 @@ describe('EventService', () => {
     });
 
     it('各行の end_at が対応する end_times の値になる', async () => {
-      mockEventRepository.createMany.mockResolvedValue([makeMultipleEvent(1, 0)]);
+      mockEventRepository.createMany.mockResolvedValue([
+        makeMultipleEvent(1, 0),
+      ]);
 
       const dto = {
         title: '複数予定',
@@ -235,7 +243,8 @@ describe('EventService', () => {
     it('start_times が100件超の場合 BadRequestException をスローする', async () => {
       const times = Array.from(
         { length: 101 },
-        (_, i) => `2026-06-${String((i % 28) + 1).padStart(2, '0')}T10:00:00.000Z`,
+        (_, i) =>
+          `2026-06-${String((i % 28) + 1).padStart(2, '0')}T10:00:00.000Z`,
       );
       const dto = {
         title: '複数予定',
@@ -330,7 +339,9 @@ describe('EventService', () => {
 
         await service.createRepeat(dto, 'testuser');
 
-        const callArg = mockEventRepository.createMany.mock.calls[0][0] as Array<{ repeat_group_id: string }>;
+        const callArg = (
+          mockEventRepository.createMany.mock.calls as unknown[][][]
+        )[0][0] as Array<{ repeat_group_id: string }>;
         expect(callArg[0].repeat_group_id).toBeDefined();
         expect(callArg[0].repeat_group_id).toBe(callArg[1].repeat_group_id);
       });
@@ -351,9 +362,13 @@ describe('EventService', () => {
 
         await service.createRepeat(dto, 'testuser');
 
-        const callArg = mockEventRepository.createMany.mock.calls[0][0] as Array<{ start_at: Date; end_at: Date }>;
-        const durationMs0 = callArg[0].end_at.getTime() - callArg[0].start_at.getTime();
-        const durationMs1 = callArg[1].end_at.getTime() - callArg[1].start_at.getTime();
+        const callArg = (
+          mockEventRepository.createMany.mock.calls as unknown[][][]
+        )[0][0] as Array<{ start_at: Date; end_at: Date }>;
+        const durationMs0 =
+          callArg[0].end_at.getTime() - callArg[0].start_at.getTime();
+        const durationMs1 =
+          callArg[1].end_at.getTime() - callArg[1].start_at.getTime();
         expect(durationMs0).toBe(90 * 60 * 1000);
         expect(durationMs1).toBe(90 * 60 * 1000);
       });
@@ -700,7 +715,9 @@ describe('EventService', () => {
 
     it('グループの全件を更新して EventResponseDto[] を返す', async () => {
       mockEventRepository.findByRepeatGroupId.mockResolvedValue(groupEvents);
-      mockEventRepository.updateMany.mockResolvedValue(groupEvents.map((e) => ({ ...e, title: '更新後タイトル' })));
+      mockEventRepository.updateMany.mockResolvedValue(
+        groupEvents.map((e) => ({ ...e, title: '更新後タイトル' })),
+      );
 
       const result = await service.updateRepeatGroup(
         groupId,
@@ -750,7 +767,11 @@ describe('EventService', () => {
         'testuser',
       );
 
-      const callArg = mockEventRepository.updateMany.mock.calls[0][0] as Array<{ id: number; data: { start_at?: Date } }>;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const callArg = mockEventRepository.updateMany.mock.calls[0][0] as Array<{
+        id: number;
+        data: { start_at?: Date };
+      }>;
       expect(callArg[0].data.start_at?.getTime()).toBe(
         groupEvents[0].start_at.getTime() + diffMs,
       );
