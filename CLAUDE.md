@@ -69,7 +69,9 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/chat/service/` — チャットのビジネスロジック（`chat.service.ts`）。`findConversation`（2ユーザー間メッセージ取得）・`sendMessage`（メッセージ送信）・`findContacts`（やり取り済み相手取得）・`findAllUsers`（全ユーザー取得、自分を除く）
 - `src/chat/repository/` — Prisma CRUD（`findConversation`: OR条件で双方向メッセージ取得・`create`: メッセージ保存・`findContacts`: sent+received を Union して重複排除）
 - `src/chat/dto/chat.dto.ts` — CreateChatMessageDto（to_user・content）/ ChatMessageResponseDto / ChatContactResponseDto
-- `src/chat/chat.module.ts` — チャットモジュール。AccountsModule をインポートして AccountRepository を DI で利用
+- `src/chat/gateway/chat.gateway.ts` — WebSocket Gateway（namespace `/chat`）。接続時に JWT を検証して無効なら切断。各ユーザーは `user:<username>` ルームに自動参加。`send_message` イベント受信時に ChatService 経由で DB に保存し、送信者・受信者両方のルームに `receive_message` をemit する。`WsJwtGuard` を `@UseGuards` で適用
+- `src/chat/gateway/ws-jwt.guard.ts` — WebSocket 用 JWT ガード。`client.handshake.auth.token` からトークンを検証し、`client.data.user` に JwtPayload をセットする
+- `src/chat/chat.module.ts` — チャットモジュール。REST API（ChatController）と WebSocket Gateway（ChatGateway）の両方を提供。AccountsModule をインポートして AccountRepository を DI で利用
 - `src/jwt/jwt.service.ts` — JWT creation (1h expiry, secret from `JWT_SECRET` env)
 - `src/jwt/jwt-auth.guard.ts` — JwtAuthGuard（Bearerトークン検証）。検証成功時に `request.user` へ `JwtPayload` をセット
 - `src/types/express.d.ts` — Express `Request` 型拡張（`request.user?: JwtPayload`）
@@ -93,7 +95,7 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 
 **カレンダー予定フロー**: JwtAuthGuard → Controller（`GET /events` では `req.user.username` 抽出）→ Service → Repository（`findAll` は `created_by = username` でフィルタリング）→ Prisma。単件作成（`POST /events`）・複数日付一括作成（`POST /events/multiple`）・繰り返し一括作成（`POST /events/repeat`）の3パターンをサポート。複数・繰り返しは Service 内で日付展開後に `$transaction` で一括 INSERT。更新・削除は作成者のみ可能。繰り返しグループ全件更新（`PATCH /events/repeat-group/:groupId`）は `start_diff_ms`/`end_diff_ms` で全件の日時をシフトする。予定には `color` フィールドがあり、作成・更新時に色識別子（cyan/indigo/emerald/violet/rose/amber）を指定できる。未指定時は `cyan`。
 
-**チャットフロー**: JwtAuthGuard → Controller（`req.user.username` 抽出）→ Service → Repository → Prisma。メッセージ一覧はフロントエンドが3秒間隔でポーリングして取得する（WebSocket非使用）。`GET /chat/users` で全ユーザー一覧（自分を除く）を取得してチャット相手を選択する。
+**チャットフロー**: 初期メッセージロードは REST API（`GET /chat/messages`）で取得。以降のリアルタイム送受信は WebSocket（Socket.io）で行う。送信: クライアントが `send_message` イベントを emit → ChatGateway が ChatService 経由で DB に保存 → 送信者・受信者両方の `user:<username>` ルームに `receive_message` をemit → クライアントがリアルタイム受信。接続時に `handshake.auth.token` で JWT 認証し、無効なら即切断。`GET /chat/users` で全ユーザー一覧を取得してチャット相手を選択する（REST）。
 
 ### Frontend (React + CRA)
 
@@ -111,14 +113,15 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/api/taskApi.ts` — タスクAPI通信（`fetchTasks`, `fetchTask`, `fetchCategories`, `createTask`, `updateTask`, `toggleTaskCompletion`, `deleteTask`, `getCurrentUsername`, `fetchNotifications`, `addNotification`, `deleteNotification`, `fetchMe`）。`TaskNotification` インターフェース・`AccountMe` インターフェース・`Task.notifications?: TaskNotification[]` フィールドを含む
 - `src/api/eventApi.ts` — カレンダー予定API通信（`fetchEvents`, `createEvent`, `createMultipleEvents`, `createRepeatEvent`, `updateEvent`, `updateRepeatGroupEvent`, `deleteEvent`）。`CalendarEvent`（repeat_group_id・color含む）・`EventInput`（color?含む）・`MultipleEventInput`（end_times配列・color?含む）・`RepeatEventInput`（end_at・color?含む）・`UpdateRepeatGroupInput`（color?含む）・`RepeatRule`・`RepeatType` インターフェースを定義
 - - `src/api/linkApi.ts` — リンク集API通信（`fetchLinks`, `createLink`, `updateLink`, `deleteLink`）。`LinkItem` インターフェース（children: LinkItem[] を含む再帰型）・`LinkItemInput` インターフェース・`LinkItemType`（"FOLDER" | "LINK"）を定義
-- `src/api/chatApi.ts` — チャットAPI通信（`fetchContacts`, `fetchAllUsers`, `fetchMessages`, `sendMessage`）。`ChatMessage`・`ChatContact` インターフェースを定義
+- `src/api/chatApi.ts` — チャットAPI通信（`fetchContacts`, `fetchAllUsers`, `fetchMessages`, `sendMessage`）。`ChatMessage`・`ChatContact` インターフェースを定義。`fetchMessages` は初期履歴取得（REST）用、`sendMessage` はREST用として残存（WebSocket移行後も後方互換のために保持）
+- `src/socket/chatSocket.ts` — チャット用 Socket.io ソケット生成モジュール。`createChatSocket()` でシングルトンソケットを生成し、JWT を `auth: { token }` に付与して `/chat` namespace に接続する。`autoConnect: false` で接続タイミングを `useChat` フックから制御する
 - `src/hooks/useTaskList.ts` — タスク一覧・削除・カテゴリフィルタリング・階層ツリー構築（incompleteTrees/completedTrees）フック。`togglingIds`（PATCH処理中のタスクID集合）と `awaitToggle`（PATCH完了を外から待てる関数）を提供する
 - `src/hooks/useTaskDetail.ts` — タスク詳細取得・完了切り替えフック
 - `src/hooks/useTaskForm.ts` — タスクフォーム（作成/編集/子タスク作成モード対応）フック。`notifications: string[]`（datetime-local形式）状態を管理し、`addNotificationDatetime`・`removeNotificationDatetime` を提供。フォーム送信後に通知日時を `addNotification` API へ順次送信する。編集モード時は既存通知を datetime-local 形式に変換して初期値として読み込む。作成・編集・子タスク作成のいずれの場合も送信後は `/tasks` へ遷移する
 - `src/hooks/useLinkList.ts` — リンク集一覧取得・フォルダ展開/折りたたみ状態管理（expandedIds: Set<number>）・削除処理・リロードを提供するフック
 - `src/hooks/useLinkForm.ts` — リンク/フォルダ作成・編集フォームを管理するフック。editItem 指定で編集モード。type が FOLDER に変更されたら url をクリアする
 - `src/hooks/useCalendar.ts` — カレンダー予定・タスク表示・ビュー切り替えを管理するフック。タスクのカレンダー表示は日表示（timeGridDay）のみ。`taskToEventInput` でタスクをFullCalendar用EventInputに変換する際、`start = due_date - 1時間`・`end = due_date` に設定し、期限がイベントの終了時刻になるようにする。`handleCreateMultipleEvents`（複数日付一括作成）・`handleCreateRepeatEvent`（繰り返し一括作成）を提供し、作成後はローカルステートに全件追加する。`handleUpdateRepeatGroupEvent`（繰り返しグループ全件更新）を提供し、更新後は Set で更新済み ID を特定しローカルステートを置換する。`EVENT_COLOR_MAP`（色識別子→bg/text色マップ）と `resolveEventColor` で `calendarEventToEventInput` の背景色・テキスト色を一元管理する
-- `src/hooks/useChat.ts` — チャット相手選択・メッセージ一覧・ポーリング（3秒間隔）・メッセージ送信を管理するフック。`pollingTimerRef` で setInterval を管理し、selectedUser 変更時にタイマーをクリア・再設定する。送信後に `fetchContacts` で連絡先一覧を更新する
+- `src/hooks/useChat.ts` — チャット機能を管理するカスタムフック。Socket.io によるリアルタイムメッセージ受受信（`receive_message` イベント）・メッセージ送信（`send_message` emit）・過去メッセージ初期ロード（REST API）・連絡先一覧（REST API）を管理する。`socketRef` でソケットインスタンスを保持し、`selectedUserRef` でイベントリスナー内のクロージャ問題を回避する。コンポーネントアンマウント時に `socket.disconnect()` で切断する
 - `src/hooks/useIsMobile.ts` — 画面幅が640px未満かどうかをリアクティブに返すカスタムフック。`window.resize` イベントで追従する
 - `src/validation/taskValidation.ts` — タスクフォームバリデーション（priority/category含む）。担当者は1人以上必須
 - `src/validation/linkValidation.ts` — リンク/フォルダフォームバリデーション。title必須。type="LINK" の場合は url も必須

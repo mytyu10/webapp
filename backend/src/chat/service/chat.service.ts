@@ -89,17 +89,20 @@ export class ChatService {
       return contacts.map((c) => ({ username: c }));
     } catch (err: unknown) {
       this.logger.error(CONTEXT, `チャット相手一覧取得失敗: ${String(err)}`);
-      throw new InternalServerErrorException(MESSAGE.CHAT.CONTACTS_FETCH_FAILED);
+      throw new InternalServerErrorException(
+        MESSAGE.CHAT.CONTACTS_FETCH_FAILED,
+      );
     }
   }
 
   /**
    * 全ユーザー一覧を取得する（チャット相手選択用）
    */
-  async findAllUsers(
-    currentUser: string,
-  ): Promise<ChatContactResponseDto[]> {
-    this.logger.log(CONTEXT, `全ユーザー一覧取得開始: currentUser=${currentUser}`);
+  async findAllUsers(currentUser: string): Promise<ChatContactResponseDto[]> {
+    this.logger.log(
+      CONTEXT,
+      `全ユーザー一覧取得開始: currentUser=${currentUser}`,
+    );
     try {
       const accounts = await this.accountRepository.findAll();
       return accounts

@@ -1,19 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import type { Socket } from 'socket.io-client';
 import {
   fetchContacts,
   fetchAllUsers,
   fetchMessages,
-  sendMessage,
   ChatMessage,
   ChatContact,
 } from '../api/chatApi';
 import { getCurrentUsername } from '../api/taskApi';
+import { createChatSocket } from '../socket/chatSocket';
 import { logger } from '../logger';
 
 const CONTEXT = 'useChat';
-
-/** ポーリング間隔（ミリ秒） */
-const POLLING_INTERVAL_MS = 3000;
 
 /** useChat フックの戻り値型 */
 interface UseChatReturn {
@@ -46,8 +44,9 @@ interface UseChatReturn {
 /**
  * チャット機能を管理するカスタムフック。
  * - 相手ユーザー選択
- * - メッセージ一覧のポーリング（3秒間隔）
- * - メッセージ送信
+ * - Socket.io によるリアルタイムメッセージ受信
+ * - メッセージ送信（WebSocket 経由）
+ * - 初期メッセージ一覧は REST API で取得
  */
 export function useChat(): UseChatReturn {
   const [contacts, setContacts] = useState<ChatContact[]>([]);
@@ -60,8 +59,62 @@ export function useChat(): UseChatReturn {
   const [error, setError] = useState('');
   const currentUser = getCurrentUsername();
 
-  /** ポーリング用タイマーIDを保持する ref */
-  const pollingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** Socket.io インスタンスを保持する ref */
+  const socketRef = useRef<Socket | null>(null);
+  /** 選択中のチャット相手を ref でも保持する（イベントリスナー内で参照するため） */
+  const selectedUserRef = useRef<string | null>(null);
+
+  /**
+   * Socket.io の接続を初期化し、リアルタイムメッセージ受信を設定する
+   */
+  useEffect(() => {
+    logger.info(CONTEXT, 'WebSocket 接続開始');
+    const socket = createChatSocket();
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      logger.info(CONTEXT, `WebSocket 接続成功: socketId=${socket.id}`);
+    });
+
+    socket.on('connect_error', (err: Error) => {
+      logger.warn(CONTEXT, `WebSocket 接続エラー: ${err.message}`);
+      setError('チャットサーバーへの接続に失敗しました。');
+    });
+
+    socket.on('disconnect', (reason: string) => {
+      logger.info(CONTEXT, `WebSocket 切断: reason=${reason}`);
+    });
+
+    /**
+     * サーバーから receive_message イベントを受信したときのハンドラ
+     * 現在選択中のチャット相手のメッセージのみ表示する
+     */
+    socket.on('receive_message', (msg: ChatMessage) => {
+      const partner = selectedUserRef.current;
+      const isMine = msg.from_user === currentUser;
+      const isFromPartner = msg.from_user === partner;
+      const isToPartner = msg.to_user === partner;
+
+      // 現在選択中の相手との会話のメッセージのみ追加する
+      if (partner && (isMine ? isToPartner : isFromPartner)) {
+        logger.info(
+          CONTEXT,
+          `receive_message: id=${msg.id}, from=${msg.from_user}, to=${msg.to_user}`,
+        );
+        setMessages((prev) => [...prev, msg]);
+      }
+    });
+
+    socket.connect();
+
+    return () => {
+      logger.info(CONTEXT, 'WebSocket 切断（クリーンアップ）');
+      socket.disconnect();
+      socketRef.current = null;
+    };
+    // currentUser は初期化時に確定しているため依存配列から除外する
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * 連絡先一覧と全ユーザー一覧を初期ロードする
@@ -88,7 +141,8 @@ export function useChat(): UseChatReturn {
         }
       } catch (err) {
         if (!cancelled) {
-          const message = err instanceof Error ? err.message : 'データの取得に失敗しました。';
+          const message =
+            err instanceof Error ? err.message : 'データの取得に失敗しました。';
           logger.warn(CONTEXT, `初期データ読み込み失敗: ${message}`);
           setError(message);
         }
@@ -105,14 +159,10 @@ export function useChat(): UseChatReturn {
   }, []);
 
   /**
-   * 選択ユーザーが変わったときにメッセージ一覧をポーリングする
+   * 選択ユーザーが変わったときに過去メッセージを REST API で取得する
    */
   useEffect(() => {
-    /** 既存のポーリングタイマーをクリアする */
-    if (pollingTimerRef.current !== null) {
-      clearInterval(pollingTimerRef.current);
-      pollingTimerRef.current = null;
-    }
+    selectedUserRef.current = selectedUser;
 
     if (!selectedUser) {
       setMessages([]);
@@ -124,35 +174,26 @@ export function useChat(): UseChatReturn {
     async function loadMessages(): Promise<void> {
       if (!selectedUser) return;
       try {
-        logger.info(CONTEXT, `メッセージ読み込み: with=${selectedUser}`);
+        logger.info(CONTEXT, `過去メッセージ読み込み: with=${selectedUser}`);
         const data = await fetchMessages(selectedUser);
         if (!cancelled) {
           setMessages(data);
+          logger.info(CONTEXT, `過去メッセージ読み込み完了: count=${data.length}`);
         }
       } catch (err) {
         if (!cancelled) {
           logger.warn(
             CONTEXT,
-            `メッセージ読み込み失敗: ${err instanceof Error ? err.message : '不明なエラー'}`,
+            `過去メッセージ読み込み失敗: ${err instanceof Error ? err.message : '不明なエラー'}`,
           );
         }
       }
     }
 
-    /** 初回即時実行 */
     void loadMessages();
-
-    /** ポーリング設定 */
-    pollingTimerRef.current = setInterval(() => {
-      void loadMessages();
-    }, POLLING_INTERVAL_MS);
 
     return () => {
       cancelled = true;
-      if (pollingTimerRef.current !== null) {
-        clearInterval(pollingTimerRef.current);
-        pollingTimerRef.current = null;
-      }
     };
   }, [selectedUser]);
 
@@ -167,16 +208,24 @@ export function useChat(): UseChatReturn {
   }, []);
 
   /**
-   * メッセージを送信する。送信後はメッセージ一覧をリロードし、連絡先も更新する
+   * メッセージを WebSocket で送信する。
+   * 送信後は fetchContacts で連絡先一覧を更新する
    */
   const handleSend = useCallback(async (): Promise<void> => {
     if (!selectedUser || !inputContent.trim()) return;
+    const socket = socketRef.current;
+    if (!socket || !socket.connected) {
+      setError('チャットサーバーに接続されていません。');
+      return;
+    }
 
     setSending(true);
     try {
-      logger.info(CONTEXT, `メッセージ送信: to=${selectedUser}`);
-      const newMessage = await sendMessage(selectedUser, inputContent.trim());
-      setMessages((prev) => [...prev, newMessage]);
+      logger.info(CONTEXT, `メッセージ送信（WebSocket）: to=${selectedUser}`);
+      socket.emit('send_message', {
+        to_user: selectedUser,
+        content: inputContent.trim(),
+      });
       setInputContent('');
       logger.info(CONTEXT, 'メッセージ送信完了');
 
@@ -184,7 +233,8 @@ export function useChat(): UseChatReturn {
       const updatedContacts = await fetchContacts();
       setContacts(updatedContacts);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'メッセージの送信に失敗しました。';
+      const message =
+        err instanceof Error ? err.message : 'メッセージの送信に失敗しました。';
       logger.warn(CONTEXT, `メッセージ送信失敗: ${message}`);
       setError(message);
     } finally {
