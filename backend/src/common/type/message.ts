@@ -73,4 +73,11 @@ export const MESSAGE = {
     URL_REQUIRED: 'リンクタイプにはURLが必須です',
     PARENT_NOT_FOUND: '指定された親フォルダが見つかりません',
   },
+  CHAT: {
+    SEND_SUCCESS: 'メッセージを送信しました',
+    SEND_FAILED: 'メッセージの送信に失敗しました',
+    FETCH_FAILED: 'メッセージの取得に失敗しました',
+    CONTACTS_FETCH_FAILED: 'チャット相手一覧の取得に失敗しました',
+    USERS_FETCH_FAILED: 'ユーザー一覧の取得に失敗しました',
+  },
 };

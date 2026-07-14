@@ -7,6 +7,7 @@ import TaskFormPage from './pages/TaskFormPage';
 import CalendarPage from './pages/CalendarPage';
 import LineCallbackPage from './pages/LineCallbackPage';
 import LinkListPage from './pages/LinkListPage';
+import ChatPage from './pages/ChatPage';
 import PrivateRoute from './components/PrivateRoute';
 import SidebarLayout from './components/SidebarLayout';
 
@@ -28,6 +29,7 @@ function App() {
             <Route path="/tasks/new" element={<TaskFormPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/links" element={<LinkListPage />} />
+            <Route path="/chat" element={<ChatPage />} />
           </Route>
         </Route>
       </Routes>

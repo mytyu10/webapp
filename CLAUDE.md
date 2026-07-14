@@ -50,7 +50,7 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 
 - `src/accounts/controller/` — REST endpoints (`POST /accounts/login`, `POST /accounts/regist`, `GET /accounts/me`, `GET /accounts/line/login`, `GET /accounts/line/callback`)
 - `src/accounts/service/` — business logic（ログイン・登録・LINE OAuth フロー・ログインユーザー情報取得）
-- `src/accounts/repository/` — Prisma queries（`updateLineUserId` で LINE User ID を保存）
+- `src/accounts/repository/` — Prisma queries（`updateLineUserId` で LINE User ID を保存。`findAll()` で全ユーザー一覧取得）
 - `src/accounts/dto/account.dto.ts` — validation DTOs (class-validator)。`LineCallbackQueryDto`（OAuthコード受取）・`AccountMeResponseDto`（LINE連携状態含む）を定義
 - `src/tasks/controller/` — REST endpoints (`GET /tasks`, `GET /tasks/categories`, `GET /tasks/:id`, `POST /tasks`, `PATCH /tasks/:id`, `DELETE /tasks/:id`, `POST /tasks/:id/notifications`, `GET /tasks/:id/notifications`, `DELETE /tasks/:id/notifications/:notificationId`) — JwtAuthGuard適用済み。`GET /tasks` と `GET /tasks/categories` は `req.user.username` をサービスに渡してログインユーザーのタスクのみ取得する
 - `src/tasks/service/` — タスクのビジネスロジック（`task.service.ts`）・バッチ更新処理（`task-queue.service.ts`: 100msウィンドウ内のリクエストをバッファリングして順次処理）・通知CRUD（`task-notification.service.ts`）。`findAll(username)` / `findAllCategories(username)` はユーザー名をリポジトリに伝播する
@@ -65,16 +65,21 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/links/service/` — リンク/フォルダのビジネスロジック。ツリー構築（Map を使ったフラット→ツリー変換）・LINK を親にできない制約チェック・作成者チェック。`findAll(username)` はユーザー名をリポジトリに伝播する
 - `src/links/repository/` — Prisma CRUD（findAll/findById/create/update/delete）。order昇順・created_at昇順でソート。`findAll(username)` は `where: { created_by: username }` でログインユーザーのリンク/フォルダのみ返す
 - `src/links/dto/link.dto.ts` — CreateLinkItemDto / UpdateLinkItemDto / LinkItemResponseDto（children: LinkItemResponseDto[]）/ LinkItemType型（"FOLDER" | "LINK"）
+- `src/chat/controller/` — REST endpoints (`GET /chat/contacts`, `GET /chat/users`, `GET /chat/messages?with=<username>`, `POST /chat/messages`) — JwtAuthGuard適用済み。`GET /chat/contacts` はやり取り済み相手一覧、`GET /chat/users` は全ユーザー一覧（自分を除く）、`GET /chat/messages` は2ユーザー間のメッセージ一覧、`POST /chat/messages` はメッセージ送信
+- `src/chat/service/` — チャットのビジネスロジック（`chat.service.ts`）。`findConversation`（2ユーザー間メッセージ取得）・`sendMessage`（メッセージ送信）・`findContacts`（やり取り済み相手取得）・`findAllUsers`（全ユーザー取得、自分を除く）
+- `src/chat/repository/` — Prisma CRUD（`findConversation`: OR条件で双方向メッセージ取得・`create`: メッセージ保存・`findContacts`: sent+received を Union して重複排除）
+- `src/chat/dto/chat.dto.ts` — CreateChatMessageDto（to_user・content）/ ChatMessageResponseDto / ChatContactResponseDto
+- `src/chat/chat.module.ts` — チャットモジュール。AccountsModule をインポートして AccountRepository を DI で利用
 - `src/jwt/jwt.service.ts` — JWT creation (1h expiry, secret from `JWT_SECRET` env)
 - `src/jwt/jwt-auth.guard.ts` — JwtAuthGuard（Bearerトークン検証）。検証成功時に `request.user` へ `JwtPayload` をセット
 - `src/types/express.d.ts` — Express `Request` 型拡張（`request.user?: JwtPayload`）
 - `src/prisma/prisma.service.ts` — Prisma client singleton
 - `src/common/service/hash.service.ts` — SHA256 password hashing
 - `src/common/service/logger.service.ts` — ロガーサービス
-- `src/common/type/message.ts` — Japanese message constants (centralised)。`AUTH`（LINE OAuth関連含む）・`NOTIFICATION`（通知CRUD・LINE送信失敗）・`LINK`（リンク集CRUD・権限エラー）セクションを含む
+- `src/common/type/message.ts` — Japanese message constants (centralised)。`AUTH`（LINE OAuth関連含む）・`NOTIFICATION`（通知CRUD・LINE送信失敗）・`LINK`（リンク集CRUD・権限エラー）・`CHAT`（チャット送受信・ユーザー取得）セクションを含む
 - `src/common/type/status.enum.ts` — HTTP status enums
 
-`AppModule` imports `ScheduleModule.forRoot()`（Cronジョブ有効化）・`CommonModule`・`AccountsModule`・`TaskModule`・`EventsModule`・`LinkModule`。`LineNotificationService` は `AppModule` の providers に登録し、`TaskModule` エクスポートの `TaskNotificationRepository` と `CommonModule` エクスポートの `LoggerService` を DI で受け取る。重複登録なし。
+`AppModule` imports `ScheduleModule.forRoot()`（Cronジョブ有効化）・`CommonModule`・`AccountsModule`・`TaskModule`・`EventsModule`・`LinkModule`・`ChatModule`。`LineNotificationService` は `AppModule` の providers に登録し、`TaskModule` エクスポートの `TaskNotificationRepository` と `CommonModule` エクスポートの `LoggerService` を DI で受け取る。重複登録なし。`AccountsModule` は `AccountRepository` をエクスポートして `ChatModule` からの DI を可能にする。
 
 **Login flow**: DTO validation → SHA256 hash password → query DB by username → compare hashes → issue JWT.
 
@@ -88,11 +93,13 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 
 **カレンダー予定フロー**: JwtAuthGuard → Controller（`GET /events` では `req.user.username` 抽出）→ Service → Repository（`findAll` は `created_by = username` でフィルタリング）→ Prisma。単件作成（`POST /events`）・複数日付一括作成（`POST /events/multiple`）・繰り返し一括作成（`POST /events/repeat`）の3パターンをサポート。複数・繰り返しは Service 内で日付展開後に `$transaction` で一括 INSERT。更新・削除は作成者のみ可能。繰り返しグループ全件更新（`PATCH /events/repeat-group/:groupId`）は `start_diff_ms`/`end_diff_ms` で全件の日時をシフトする。予定には `color` フィールドがあり、作成・更新時に色識別子（cyan/indigo/emerald/violet/rose/amber）を指定できる。未指定時は `cyan`。
 
+**チャットフロー**: JwtAuthGuard → Controller（`req.user.username` 抽出）→ Service → Repository → Prisma。メッセージ一覧はフロントエンドが3秒間隔でポーリングして取得する（WebSocket非使用）。`GET /chat/users` で全ユーザー一覧（自分を除く）を取得してチャット相手を選択する。
+
 ### Frontend (React + CRA)
 
-- `src/App.tsx` — router: `/` → `HomePage`（タスク一覧へリダイレクト）, `/login` → `LoginPage`, `/tasks` → `TaskListPage`, `/tasks/new` → `TaskFormPage`, `/calendar` → `CalendarPage`, `/links` → `LinkListPage`, `/line-callback` → `LineCallbackPage`（PrivateRoute外・LINE OAuthコールバック用）
+- `src/App.tsx` — router: `/` → `HomePage`（タスク一覧へリダイレクト）, `/login` → `LoginPage`, `/tasks` → `TaskListPage`, `/tasks/new` → `TaskFormPage`, `/calendar` → `CalendarPage`, `/links` → `LinkListPage`, `/chat` → `ChatPage`, `/line-callback` → `LineCallbackPage`（PrivateRoute外・LINE OAuthコールバック用）
 - `src/components/PrivateRoute.tsx` — JWT存在チェック + exp有効期限検証。無効時は`/login`へリダイレクト
-- `src/components/Sidebar.tsx` — サイドバーコンポーネント（タスク管理・カレンダー・リンク集リンク・ログアウト・LINE連携状態表示）。NAV_LINKSに `/tasks`・`/calendar`・`/links` を定義。`isOpen: boolean` プロパティを受け取り、`isOpen=false` のとき PC では `sm:w-0 overflow-hidden` で非表示になる（モバイルは常に表示）
+- `src/components/Sidebar.tsx` — サイドバーコンポーネント（タスク管理・カレンダー・リンク集・チャットリンク・ログアウト・LINE連携状態表示）。NAV_LINKSに `/tasks`・`/calendar`・`/links`・`/chat` を定義。`isOpen: boolean` プロパティを受け取り、`isOpen=false` のとき PC では `sm:w-0 overflow-hidden` で非表示になる（モバイルは常に表示）
 - `src/components/SidebarLayout.tsx` — サイドバー付きレイアウト（Outlet使用）。`isSidebarOpen` ステートを管理し、PCのみ表示されるトグルボタン（`◀`/`▶`）でサイドバーの開閉ができる。ボタンは `fixed top-1/2` で画面縦中央に固定し、`left` をサイドバー幅（240px）に連動させる
 - `src/pages/LoginPage.tsx` — login form, posts to backend `/accounts/login`, stores JWT in `localStorage`
 - `src/pages/LineCallbackPage.tsx` — LINE OAuth完了後のコールバックページ。クエリパラメータ `status=success` で成功メッセージ＋カウントダウン後タスク一覧へ遷移。`status=error` でエラーメッセージ＋戻るボタン。PrivateRoute外に配置（LINE OAuthから直接リダイレクトされるため）
@@ -100,15 +107,18 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/pages/TaskFormPage.tsx` — タスク作成・編集・子タスク作成（URLクエリ`parent_id`で切り替え）。通知日時を複数追加できる UI を提供（`DateTimeField` + 追加ボタン + 削除ボタン付きリスト）
 - `src/pages/TaskDetailPage.tsx` — タスク詳細・完了/未完了ボタン・完了スタイル（緑枠・バナー・取り消し線）・`closed_by`表示・子タスク一覧・子タスク作成ボタン。編集ボタンは全ユーザーに表示。直リンク（`/tasks/:id`）対応のため引き続き存在する
 - `src/pages/LinkListPage.tsx` — リンク集一覧ページ。エクスプローラー風ツリー表示。`LinkTreeNode` コンポーネントで再帰レンダリング。フォルダクリックで展開/折りたたみ。リンククリックで別タブを開く。追加ボタンで `LinkFormModal` を開く。削除は作成者のみ表示。フォルダ削除時に「配下の全リンク・フォルダも削除されます」という警告を表示する
+- `src/pages/ChatPage.tsx` — チャット画面。左ペイン: ユーザーリスト（最近の会話 + 未会話ユーザー）、右ペイン: メッセージ一覧（自分のメッセージは右寄せ・空色バブル、相手は左寄せ・slate バブル）+ 入力欄。Enter で送信・Shift+Enter で改行。メッセージ更新時に末尾へ自動スクロール
 - `src/api/taskApi.ts` — タスクAPI通信（`fetchTasks`, `fetchTask`, `fetchCategories`, `createTask`, `updateTask`, `toggleTaskCompletion`, `deleteTask`, `getCurrentUsername`, `fetchNotifications`, `addNotification`, `deleteNotification`, `fetchMe`）。`TaskNotification` インターフェース・`AccountMe` インターフェース・`Task.notifications?: TaskNotification[]` フィールドを含む
 - `src/api/eventApi.ts` — カレンダー予定API通信（`fetchEvents`, `createEvent`, `createMultipleEvents`, `createRepeatEvent`, `updateEvent`, `updateRepeatGroupEvent`, `deleteEvent`）。`CalendarEvent`（repeat_group_id・color含む）・`EventInput`（color?含む）・`MultipleEventInput`（end_times配列・color?含む）・`RepeatEventInput`（end_at・color?含む）・`UpdateRepeatGroupInput`（color?含む）・`RepeatRule`・`RepeatType` インターフェースを定義
 - - `src/api/linkApi.ts` — リンク集API通信（`fetchLinks`, `createLink`, `updateLink`, `deleteLink`）。`LinkItem` インターフェース（children: LinkItem[] を含む再帰型）・`LinkItemInput` インターフェース・`LinkItemType`（"FOLDER" | "LINK"）を定義
+- `src/api/chatApi.ts` — チャットAPI通信（`fetchContacts`, `fetchAllUsers`, `fetchMessages`, `sendMessage`）。`ChatMessage`・`ChatContact` インターフェースを定義
 - `src/hooks/useTaskList.ts` — タスク一覧・削除・カテゴリフィルタリング・階層ツリー構築（incompleteTrees/completedTrees）フック。`togglingIds`（PATCH処理中のタスクID集合）と `awaitToggle`（PATCH完了を外から待てる関数）を提供する
 - `src/hooks/useTaskDetail.ts` — タスク詳細取得・完了切り替えフック
 - `src/hooks/useTaskForm.ts` — タスクフォーム（作成/編集/子タスク作成モード対応）フック。`notifications: string[]`（datetime-local形式）状態を管理し、`addNotificationDatetime`・`removeNotificationDatetime` を提供。フォーム送信後に通知日時を `addNotification` API へ順次送信する。編集モード時は既存通知を datetime-local 形式に変換して初期値として読み込む。作成・編集・子タスク作成のいずれの場合も送信後は `/tasks` へ遷移する
 - `src/hooks/useLinkList.ts` — リンク集一覧取得・フォルダ展開/折りたたみ状態管理（expandedIds: Set<number>）・削除処理・リロードを提供するフック
 - `src/hooks/useLinkForm.ts` — リンク/フォルダ作成・編集フォームを管理するフック。editItem 指定で編集モード。type が FOLDER に変更されたら url をクリアする
 - `src/hooks/useCalendar.ts` — カレンダー予定・タスク表示・ビュー切り替えを管理するフック。タスクのカレンダー表示は日表示（timeGridDay）のみ。`taskToEventInput` でタスクをFullCalendar用EventInputに変換する際、`start = due_date - 1時間`・`end = due_date` に設定し、期限がイベントの終了時刻になるようにする。`handleCreateMultipleEvents`（複数日付一括作成）・`handleCreateRepeatEvent`（繰り返し一括作成）を提供し、作成後はローカルステートに全件追加する。`handleUpdateRepeatGroupEvent`（繰り返しグループ全件更新）を提供し、更新後は Set で更新済み ID を特定しローカルステートを置換する。`EVENT_COLOR_MAP`（色識別子→bg/text色マップ）と `resolveEventColor` で `calendarEventToEventInput` の背景色・テキスト色を一元管理する
+- `src/hooks/useChat.ts` — チャット相手選択・メッセージ一覧・ポーリング（3秒間隔）・メッセージ送信を管理するフック。`pollingTimerRef` で setInterval を管理し、selectedUser 変更時にタイマーをクリア・再設定する。送信後に `fetchContacts` で連絡先一覧を更新する
 - `src/hooks/useIsMobile.ts` — 画面幅が640px未満かどうかをリアクティブに返すカスタムフック。`window.resize` イベントで追従する
 - `src/validation/taskValidation.ts` — タスクフォームバリデーション（priority/category含む）。担当者は1人以上必須
 - `src/validation/linkValidation.ts` — リンク/フォルダフォームバリデーション。title必須。type="LINK" の場合は url も必須
@@ -143,13 +153,15 @@ Prisma config file: `backend/prisma.config.ts` (uses dotenv, loads `prisma/schem
 
 ```prisma
 model Account {
-  username        String         @id
-  hashed_password String
-  line_user_id    String?
-  task_assignees  TaskAssignee[]
-  created_tasks   Task[]         @relation("TaskCreator")
-  created_events  Event[]        @relation("EventCreator")
-  created_links   LinkItem[]     @relation("LinkCreator")
+  username          String         @id
+  hashed_password   String
+  line_user_id      String?
+  task_assignees    TaskAssignee[]
+  created_tasks     Task[]         @relation("TaskCreator")
+  created_events    Event[]        @relation("EventCreator")
+  created_links     LinkItem[]     @relation("LinkCreator")
+  sent_messages     ChatMessage[]  @relation("ChatSender")
+  received_messages ChatMessage[]  @relation("ChatReceiver")
 }
 
 model Task {
@@ -217,6 +229,16 @@ model LinkItem {
   creator     Account    @relation("LinkCreator", fields: [created_by], references: [username])
   parent      LinkItem?  @relation("LinkChildren", fields: [parent_id], references: [id], onDelete: Cascade)
   children    LinkItem[] @relation("LinkChildren")
+}
+
+model ChatMessage {
+  id         Int      @id @default(autoincrement())
+  from_user  String
+  to_user    String
+  content    String
+  created_at DateTime @default(now())
+  sender     Account  @relation("ChatSender",   fields: [from_user], references: [username])
+  receiver   Account  @relation("ChatReceiver", fields: [to_user],   references: [username])
 }
 ```
 

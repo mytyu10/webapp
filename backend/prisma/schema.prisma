@@ -7,13 +7,15 @@ datasource db {
 }
 
 model Account {
-  username        String         @id
-  hashed_password String
-  line_user_id    String?
-  task_assignees  TaskAssignee[]
-  created_tasks   Task[]         @relation("TaskCreator")
-  created_events  Event[]        @relation("EventCreator")
-  created_links   LinkItem[]     @relation("LinkCreator")
+  username          String         @id
+  hashed_password   String
+  line_user_id      String?
+  task_assignees    TaskAssignee[]
+  created_tasks     Task[]         @relation("TaskCreator")
+  created_events    Event[]        @relation("EventCreator")
+  created_links     LinkItem[]     @relation("LinkCreator")
+  sent_messages     ChatMessage[]  @relation("ChatSender")
+  received_messages ChatMessage[]  @relation("ChatReceiver")
 }
 
 model Task {
@@ -81,4 +83,14 @@ model LinkItem {
   creator     Account    @relation("LinkCreator", fields: [created_by], references: [username])
   parent      LinkItem?  @relation("LinkChildren", fields: [parent_id], references: [id], onDelete: Cascade)
   children    LinkItem[] @relation("LinkChildren")
+}
+
+model ChatMessage {
+  id         Int      @id @default(autoincrement())
+  from_user  String
+  to_user    String
+  content    String
+  created_at DateTime @default(now())
+  sender     Account  @relation("ChatSender",   fields: [from_user], references: [username])
+  receiver   Account  @relation("ChatReceiver", fields: [to_user],   references: [username])
 }

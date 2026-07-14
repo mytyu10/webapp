@@ -8,6 +8,7 @@ import { EventsModule } from './events/events.module';
 import { CommonModule } from './common/common.module';
 import { LineNotificationService } from './line/line-notification.service';
 import { LinkModule } from './links/link.module';
+import { ChatModule } from './chat/chat.module';
 
 /**
  * アプリケーションルートモジュール
@@ -23,6 +24,7 @@ import { LinkModule } from './links/link.module';
     TaskModule,
     EventsModule,
     LinkModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [AppService, LineNotificationService],

@@ -18,6 +18,7 @@ const NAV_LINKS = [
   { to: '/tasks', label: 'タスク管理' },
   { to: '/calendar', label: 'カレンダー' },
   { to: '/links', label: 'リンク集' },
+  { to: '/chat', label: 'チャット' },
 ] as const;
 
 interface SidebarProps {

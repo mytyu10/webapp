@@ -9,6 +9,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 
 /**
  * アカウント管理モジュール
+ * AccountRepository を exports に追加して ChatModule からの DI を可能にする
  */
 @Module({
   controllers: [AccountsController],
@@ -20,5 +21,6 @@ import { PrismaService } from 'src/prisma/prisma.service';
     PrismaService,
     LoggerService,
   ],
+  exports: [AccountRepository],
 })
 export class AccountsModule {}

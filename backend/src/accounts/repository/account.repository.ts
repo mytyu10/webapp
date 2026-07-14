@@ -16,6 +16,15 @@ export class AccountRepository {
   }
 
   /**
+   * 全アカウント一覧を取得する（username 昇順）
+   */
+  async findAll(): Promise<Account[]> {
+    return this.prisma.account.findMany({
+      orderBy: { username: 'asc' },
+    });
+  }
+
+  /**
    * 新規アカウントを作成する
    */
   async createUser(data: Prisma.AccountCreateInput): Promise<Account> {
