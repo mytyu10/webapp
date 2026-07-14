@@ -52,7 +52,7 @@ function ChatPage() {
   const newUsers = getNewUsers();
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100">
+    <div className="flex h-full bg-slate-950 text-slate-100">
       {/* 左ペイン: ユーザーリスト */}
       <aside className="w-56 sm:w-64 flex-shrink-0 bg-slate-900 border-r border-slate-700 flex flex-col">
         <div className="px-4 py-4 border-b border-slate-700">

@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ブラウザウィンドウ全体の縦スクロールバーを除去する。
+   各ページ・コンポーネント内部の overflow-y-auto は引き続き機能する。 */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+}
+
 /* FullCalendar dark theme overrides (scoped to .calendar-wrapper) */
 .calendar-wrapper {
   --fc-today-bg-color: rgba(56, 189, 248, 0.06);
