@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  backend:
+    name: Backend (lint / build / test / e2e)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      JWT_SECRET: test-secret-for-ci
+      DATABASE_URL: file:./test.db
+      LINE_LOGIN_CHANNEL_ID: dummy
+      LINE_LOGIN_CHANNEL_SECRET: dummy
+      LINE_MESSAGING_CHANNEL_ID: dummy
+      LINE_MESSAGING_CHANNEL_ACCESS_TOKEN: dummy
+      FRONTEND_URL: http://localhost:3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Apply Prisma migrations (for E2E)
+        run: npx prisma migrate deploy
+
+      - name: E2E tests
+        run: npm run test:e2e
+
+  frontend:
+    name: Frontend (build / test)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test -- --watchAll=false --ci

@@ -43,6 +43,17 @@ npx prisma studio             # DB GUI
 npx prisma generate           # regenerate Prisma client
 ```
 
+### CI/CD (GitHub Actions)
+
+ワークフローファイル: `.github/workflows/ci.yml`
+
+- **トリガー**: `push`（全ブランチ）、`pull_request`（main/develop）
+- **backend ジョブ**: lint → build → unit test → prisma migrate deploy → E2E test
+- **frontend ジョブ**: build → test（`--watchAll=false --ci`）
+- **Node.js**: 20
+- E2E テスト用 env（`DATABASE_URL=file:./test.db`）は GitHub Actions の `env:` で設定。SQLite を使うためサービス不要
+
+
 ## Architecture
 
 ### Backend (NestJS)
