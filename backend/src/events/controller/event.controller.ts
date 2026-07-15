@@ -22,6 +22,8 @@ import {
   UpdateRepeatGroupEventDto,
 } from '../dto/event.dto';
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
+import { OwnershipGuard } from 'src/common/guards/ownership.guard';
+import { CheckOwnership } from 'src/common/decorators/check-ownership.decorator';
 import { HttpStatus } from 'src/common/type/status.enum';
 import { MESSAGE } from 'src/common/type/message';
 import { LoggerService } from 'src/common/service/logger.service';
@@ -141,7 +143,8 @@ export class EventController {
 
   /**
    * 繰り返しグループ全件更新エンドポイント（作成者のみ）。
-   * 固定パスルートのため :id より前に定義する
+   * 固定パスルートのため :id より前に定義する。
+   * グループ全件の created_by チェックはサービス層で行う
    */
   @Patch('repeat-group/:groupId')
   async updateRepeatGroup(
@@ -169,9 +172,11 @@ export class EventController {
   }
 
   /**
-   * 予定更新エンドポイント（作成者のみ）
+   * 予定更新エンドポイント（作成者のみ、OwnershipGuard で認可）
    */
   @Patch(':id')
+  @CheckOwnership('event')
+  @UseGuards(OwnershipGuard)
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateEventDto,
@@ -183,16 +188,18 @@ export class EventController {
     if (!requestUser) {
       throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
     }
-    const event = await this.eventService.update(id, dto, requestUser.username);
+    const event = await this.eventService.update(id, dto);
     return response
       .status(HttpStatus.OK)
       .json({ message: MESSAGE.EVENT.UPDATE_SUCCESS, event });
   }
 
   /**
-   * 予定削除エンドポイント（作成者のみ）
+   * 予定削除エンドポイント（作成者のみ、OwnershipGuard で認可）
    */
   @Delete(':id')
+  @CheckOwnership('event')
+  @UseGuards(OwnershipGuard)
   async remove(
     @Param('id', ParseIntPipe) id: number,
     @Req() req: Request,
@@ -203,7 +210,7 @@ export class EventController {
     if (!requestUser) {
       throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
     }
-    await this.eventService.remove(id, requestUser.username);
+    await this.eventService.remove(id);
     return response
       .status(HttpStatus.OK)
       .json({ message: MESSAGE.EVENT.DELETE_SUCCESS });

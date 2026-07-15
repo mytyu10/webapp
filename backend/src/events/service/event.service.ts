@@ -357,27 +357,16 @@ export class EventService {
   }
 
   /**
-   * 予定を更新する。作成者のみ操作可能。存在しない場合は404、権限なしの場合は403例外をスローする
+   * 予定を更新する。認可チェックは OwnershipGuard が担当する。
+   * 存在しない場合は404例外をスローする
    */
-  async update(
-    id: number,
-    dto: UpdateEventDto,
-    requestUsername: string,
-  ): Promise<EventResponseDto> {
+  async update(id: number, dto: UpdateEventDto): Promise<EventResponseDto> {
     this.logger.log(CONTEXT, `予定更新開始: id=${id}`);
 
     const existing = await this.eventRepository.findById(id);
     if (!existing) {
       this.logger.warn(CONTEXT, `予定が見つかりません: id=${id}`);
       throw new NotFoundException(MESSAGE.EVENT.NOT_FOUND);
-    }
-
-    if (existing.created_by !== requestUsername) {
-      this.logger.warn(
-        CONTEXT,
-        `予定更新権限なし: id=${id}, user=${requestUsername}`,
-      );
-      throw new ForbiddenException(MESSAGE.EVENT.FORBIDDEN);
     }
 
     try {
@@ -472,23 +461,16 @@ export class EventService {
   }
 
   /**
-   * 予定を削除する。作成者のみ操作可能。存在しない場合は404、権限なしの場合は403例外をスローする
+   * 予定を削除する。認可チェックは OwnershipGuard が担当する。
+   * 存在しない場合は404例外をスローする
    */
-  async remove(id: number, requestUsername: string): Promise<void> {
+  async remove(id: number): Promise<void> {
     this.logger.log(CONTEXT, `予定削除開始: id=${id}`);
 
     const existing = await this.eventRepository.findById(id);
     if (!existing) {
       this.logger.warn(CONTEXT, `予定が見つかりません: id=${id}`);
       throw new NotFoundException(MESSAGE.EVENT.NOT_FOUND);
-    }
-
-    if (existing.created_by !== requestUsername) {
-      this.logger.warn(
-        CONTEXT,
-        `予定削除権限なし: id=${id}, user=${requestUsername}`,
-      );
-      throw new ForbiddenException(MESSAGE.EVENT.FORBIDDEN);
     }
 
     try {

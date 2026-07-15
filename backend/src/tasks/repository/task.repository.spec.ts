@@ -50,7 +50,7 @@ describe('TaskRepository', () => {
   });
 
   describe('findAll', () => {
-    it('prisma.task.findMany が parent_id: null と OR 条件（created_by または assignees）を含む引数で呼ばれる', async () => {
+    it('prisma.task.findMany が parent_id: null と OR 条件（created_by・assignees・permissions）を含む引数で呼ばれる', async () => {
       mockPrismaService.task.findMany.mockResolvedValue([
         mockTaskWithRelations,
       ]);
@@ -64,6 +64,7 @@ describe('TaskRepository', () => {
             OR: [
               { created_by: 'testuser' },
               { assignees: { some: { username: 'testuser' } } },
+              { permissions: { some: { username: 'testuser' } } },
             ],
           },
         }),
@@ -126,7 +127,7 @@ describe('TaskRepository', () => {
   });
 
   describe('findAllCategories', () => {
-    it('prisma.task.findMany が OR 条件（created_by または assignees）を含む引数で呼ばれる', async () => {
+    it('prisma.task.findMany が OR 条件（created_by・assignees・permissions）を含む引数で呼ばれる', async () => {
       mockPrismaService.task.findMany.mockResolvedValue([]);
 
       await repository.findAllCategories('testuser');
@@ -138,6 +139,7 @@ describe('TaskRepository', () => {
             OR: [
               { created_by: 'testuser' },
               { assignees: { some: { username: 'testuser' } } },
+              { permissions: { some: { username: 'testuser' } } },
             ],
           }),
         }),

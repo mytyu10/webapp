@@ -9,7 +9,15 @@ import {
   PRIORITY_LABELS,
   PRIORITY_BADGE_CLASSES,
 } from '../api/taskApi';
+import {
+  fetchTaskPermissions,
+  addTaskPermission,
+  deleteTaskPermission,
+  Permission,
+  PermissionInput,
+} from '../api/permissionApi';
 import { validateTaskForm, parseAssignees, TaskFormValues, TaskFormErrors } from '../validation/taskValidation';
+import PermissionModal from './PermissionModal';
 import { logger } from '../logger';
 
 const CONTEXT = 'TaskDetailPanel';
@@ -54,10 +62,11 @@ const ERROR_CLASS = 'mt-1 text-xs text-red-400';
  * タスク詳細サイドパネルコンポーネント
  * タスク一覧画面の右側に表示するサイドパネル。
  * タスクデータは useTaskList と共有した props で受け取り、独自の API 呼び出しは行わない。
- * 編集・削除・子タスク作成のアクションを提供する。
+ * 編集・削除・子タスク作成・権限共有のアクションを提供する。
  * 「編集する」ボタン押下でパネル内にインライン編集フォームを表示する。
  * スマホ（isMobile=true）時は「← 一覧へ戻る」ボタンを表示し、閉じるボタンを拡大する。
  * 通知一覧を表示し、各通知に削除ボタンを提供する。
+ * 作成者のみ「共有」ボタンを表示し、PermissionModal で権限管理を行う。
  */
 function TaskDetailPanel({
   task,
@@ -87,10 +96,16 @@ function TaskDetailPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [deletingNotificationId, setDeletingNotificationId] = useState<number | null>(null);
 
+  /** 権限モーダルの表示状態 */
+  const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
+  /** タスクの現在の権限一覧 */
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+
   useEffect(() => {
     setIsEditing(false);
     setEditErrors({});
     setSaveError('');
+    setIsPermissionModalOpen(false);
   }, [task?.id]);
 
   function startEdit(): void {
@@ -157,8 +172,54 @@ function TaskDetailPanel({
     }
   }
 
+  /**
+   * 権限モーダルを開く（権限一覧を取得してから表示する）
+   */
+  async function handleOpenPermissionModal(): Promise<void> {
+    if (!task) return;
+    try {
+      const perms = await fetchTaskPermissions(task.id);
+      setPermissions(perms);
+      setIsPermissionModalOpen(true);
+    } catch (err) {
+      logger.warn(CONTEXT, `権限一覧取得失敗: ${err instanceof Error ? err.message : '不明なエラー'}`);
+    }
+  }
+
+  /**
+   * 権限を付与してローカルステートを更新する
+   */
+  async function handleAddPermission(input: PermissionInput): Promise<void> {
+    if (!task) return;
+    const added = await addTaskPermission(task.id, input);
+    setPermissions((prev) => {
+      const filtered = prev.filter((p) => p.username !== added.username);
+      return [...filtered, added];
+    });
+  }
+
+  /**
+   * 権限を削除してローカルステートを更新する
+   */
+  async function handleRemovePermission(username: string): Promise<void> {
+    if (!task) return;
+    await deleteTaskPermission(task.id, username);
+    setPermissions((prev) => prev.filter((p) => p.username !== username));
+  }
+
   return (
     <div className="w-full bg-slate-800 border-l border-slate-600 flex flex-col h-full overflow-y-auto">
+      {/* 権限モーダル */}
+      {isPermissionModalOpen && (
+        <PermissionModal
+          title={`「${task?.title ?? ''}」の共有設定`}
+          permissions={permissions}
+          onAdd={handleAddPermission}
+          onRemove={handleRemovePermission}
+          onClose={() => setIsPermissionModalOpen(false)}
+        />
+      )}
+
       {/* パネルヘッダー */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-600 sticky top-0 bg-slate-800 z-10">
         <div className="flex items-center gap-3">
@@ -516,6 +577,17 @@ function TaskDetailPanel({
                   >
                     子タスクを作成
                   </button>
+                  {/* 作成者のみ共有ボタンを表示する */}
+                  {isOwner && (
+                    <button
+                      type="button"
+                      onClick={() => void handleOpenPermissionModal()}
+                      disabled={isToggling}
+                      className="px-4 py-2 bg-violet-700 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-md transition-colors"
+                    >
+                      共有
+                    </button>
+                  )}
                   {isOwner && (
                     <button
                       type="button"

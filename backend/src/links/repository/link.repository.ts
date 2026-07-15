@@ -11,11 +11,14 @@ export class LinkRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * 指定ユーザーが作成者であるリンク/フォルダをフラット配列で取得する。order 昇順でソートする
+   * 指定ユーザーが作成者・権限付与済み（LinkPermission）であるリンク/フォルダをフラット配列で取得する。
+   * order 昇順でソートする
    */
   async findAll(username: string): Promise<LinkItemRecord[]> {
     return this.prisma.linkItem.findMany({
-      where: { created_by: username },
+      where: {
+        OR: [{ created_by: username }, { permissions: { some: { username } } }],
+      },
       orderBy: [{ order: 'asc' }, { created_at: 'asc' }],
     });
   }

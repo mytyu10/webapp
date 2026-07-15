@@ -7,15 +7,17 @@ datasource db {
 }
 
 model Account {
-  username          String         @id
-  hashed_password   String
-  line_user_id      String?
-  task_assignees    TaskAssignee[]
-  created_tasks     Task[]         @relation("TaskCreator")
-  created_events    Event[]        @relation("EventCreator")
-  created_links     LinkItem[]     @relation("LinkCreator")
-  sent_messages     ChatMessage[]  @relation("ChatSender")
-  received_messages ChatMessage[]  @relation("ChatReceiver")
+  username           String           @id
+  hashed_password    String
+  line_user_id       String?
+  task_assignees     TaskAssignee[]
+  created_tasks      Task[]           @relation("TaskCreator")
+  created_events     Event[]          @relation("EventCreator")
+  created_links      LinkItem[]       @relation("LinkCreator")
+  sent_messages      ChatMessage[]    @relation("ChatSender")
+  received_messages  ChatMessage[]    @relation("ChatReceiver")
+  task_permissions   TaskPermission[]
+  link_permissions   LinkPermission[]
 }
 
 model Task {
@@ -33,6 +35,7 @@ model Task {
   closed_by     String?
   assignees     TaskAssignee[]
   notifications TaskNotification[]
+  permissions   TaskPermission[]
   creator       Account            @relation("TaskCreator", fields: [created_by], references: [username])
   parent        Task?              @relation("TaskChildren", fields: [parent_id], references: [id])
   children      Task[]             @relation("TaskChildren")
@@ -60,6 +63,17 @@ model TaskNotification {
   task      Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
 }
 
+model TaskPermission {
+  task_id    Int
+  username   String
+  permission String   // "READ" | "WRITE"
+  task       Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  account    Account  @relation(fields: [username], references: [username], onDelete: Cascade)
+
+  @@id([task_id, username])
+  @@index([username])
+}
+
 model Event {
   id              Int      @id @default(autoincrement())
   title           String
@@ -78,22 +92,34 @@ model Event {
 }
 
 model LinkItem {
-  id          Int        @id @default(autoincrement())
-  title       String
-  url         String?
-  description String     @default("")
-  type        String
-  parent_id   Int?
-  order       Int        @default(0)
-  created_by  String
-  created_at  DateTime   @default(now())
-  updated_at  DateTime   @updatedAt
-  creator     Account    @relation("LinkCreator", fields: [created_by], references: [username])
-  parent      LinkItem?  @relation("LinkChildren", fields: [parent_id], references: [id], onDelete: Cascade)
-  children    LinkItem[] @relation("LinkChildren")
+  id           Int              @id @default(autoincrement())
+  title        String
+  url          String?
+  description  String           @default("")
+  type         String
+  parent_id    Int?
+  order        Int              @default(0)
+  created_by   String
+  created_at   DateTime         @default(now())
+  updated_at   DateTime         @updatedAt
+  creator      Account          @relation("LinkCreator", fields: [created_by], references: [username])
+  parent       LinkItem?        @relation("LinkChildren", fields: [parent_id], references: [id], onDelete: Cascade)
+  children     LinkItem[]       @relation("LinkChildren")
+  permissions  LinkPermission[]
 
   @@index([created_by])
   @@index([parent_id])
+}
+
+model LinkPermission {
+  link_item_id Int
+  username     String
+  permission   String    // "READ" | "WRITE"
+  link_item    LinkItem  @relation(fields: [link_item_id], references: [id], onDelete: Cascade)
+  account      Account   @relation(fields: [username], references: [username], onDelete: Cascade)
+
+  @@id([link_item_id, username])
+  @@index([username])
 }
 
 model ChatMessage {

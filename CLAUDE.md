@@ -53,18 +53,18 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/accounts/service/` — business logic（ログイン・登録・LINE OAuth フロー・ログインユーザー情報取得）。`login()` は bcrypt で照合し、失敗時は SHA-256 フォールバックで旧形式パスワードを確認して自動移行する
 - `src/accounts/repository/` — Prisma queries（`updateLineUserId` で LINE User ID を保存。`findAll()` で全ユーザー一覧取得。`updateHashedPassword()` で bcrypt 移行時のパスワード更新）
 - `src/accounts/dto/account.dto.ts` — validation DTOs (class-validator)。`LineCallbackQueryDto`（OAuthコード受取）・`AccountMeResponseDto`（LINE連携状態含む）を定義
-- `src/tasks/controller/` — REST endpoints (`GET /tasks`, `GET /tasks/categories`, `GET /tasks/:id`, `POST /tasks`, `PATCH /tasks/:id`, `DELETE /tasks/:id`, `POST /tasks/:id/notifications`, `GET /tasks/:id/notifications`, `DELETE /tasks/:id/notifications/:notificationId`) — JwtAuthGuard適用済み。`GET /tasks` と `GET /tasks/categories` は `req.user.username` をサービスに渡してログインユーザーのタスクのみ取得する
-- `src/tasks/service/` — タスクのビジネスロジック（`task.service.ts`）・バッチ更新処理（`task-queue.service.ts`: 100msウィンドウ内のリクエストをバッファリングして順次処理）・通知CRUD（`task-notification.service.ts`）。`findAll(username)` / `findAllCategories(username)` はユーザー名をリポジトリに伝播する
-- `src/tasks/repository/` — Prisma CRUD・カテゴリ取得（is_completed・closed_by・notifications フィールド対応）。`task-notification.repository.ts` で通知の作成・取得・削除・送信対象抽出・送信済みマークを提供。`findAll(username)` は `created_by = username` OR `assignees に username が含まれる` 条件でフィルタリングする。`findAllCategories(username)` も同様の OR 条件でユーザーのタスクに紐付くカテゴリのみ返す
+- `src/tasks/controller/` — REST endpoints (`GET /tasks`, `GET /tasks/categories`, `GET /tasks/:id`, `POST /tasks`, `PATCH /tasks/:id`, `DELETE /tasks/:id`, `POST /tasks/:id/notifications`, `GET /tasks/:id/notifications`, `DELETE /tasks/:id/notifications/:notificationId`, `GET /tasks/:id/permissions`, `POST /tasks/:id/permissions`, `DELETE /tasks/:id/permissions/:username`) — JwtAuthGuard適用済み。`GET /tasks` と `GET /tasks/categories` は `req.user.username` をサービスに渡してログインユーザーのタスクのみ取得する。`PATCH :id` / `DELETE :id` は `@CheckOwnership('task')` + `OwnershipGuard` で作成者・担当者・WRITE権限保持者のみ許可する
+- `src/tasks/service/` — タスクのビジネスロジック（`task.service.ts`）・バッチ更新処理（`task-queue.service.ts`: 100msウィンドウ内のリクエストをバッファリングして順次処理）・通知CRUD（`task-notification.service.ts`）・権限CRUD（`task-permission.service.ts`: 作成者のみ操作可能）。`findAll(username)` / `findAllCategories(username)` はユーザー名をリポジトリに伝播する
+- `src/tasks/repository/` — Prisma CRUD・カテゴリ取得（is_completed・closed_by・notifications フィールド対応）。`task-notification.repository.ts` で通知の作成・取得・削除・送信対象抽出・送信済みマークを提供。`task-permission.repository.ts` で権限の findAll/findOne/upsert/delete を提供（upsert は権限付与と上書きを兼ねる）。`findAll(username)` は `created_by = username` OR `assignees に username が含まれる` OR `permissions に username が含まれる` の3条件でフィルタリングする。`findAllCategories(username)` も同様の OR 条件でユーザーのタスクに紐付くカテゴリのみ返す
 - `src/tasks/dto/task.dto.ts` — CreateTaskDto / UpdateTaskDto（is_completed含む） / TaskResponseDto（is_completed・closed_by・notifications含む） / Priority型 / CreateNotificationDto / NotificationResponseDto。主要クラスに `@ApiProperty` / `@ApiPropertyOptional` デコレータを追加済み
 - `src/line/line-notification.service.ts` — `@Cron(CronExpression.EVERY_MINUTE)` で毎分実行するCronジョブ。未送信かつ `notify_at <= 現在時刻` の通知を取得し、担当者（LINE連携済みのみ）に LINE Messaging API でプッシュ通知を送信。全担当者処理後に `is_sent=true` にマーク。送信失敗時は `is_sent` を更新せず次回再試行
-- `src/events/controller/` — REST endpoints (`GET /events`, `GET /events/:id`, `POST /events`, `POST /events/multiple`, `POST /events/repeat`, `PATCH /events/repeat-group/:groupId`, `PATCH /events/:id`, `DELETE /events/:id`) — JwtAuthGuard適用済み。`POST /events/multiple` は複数日付一括作成、`POST /events/repeat` は繰り返しルール一括作成、`PATCH /events/repeat-group/:groupId` は繰り返しグループ全件一括更新（ルート衝突回避のため `:id` より前に定義）。`GET /events` は `req.user.username` をサービスに渡してログインユーザーの予定のみ取得する
-- `src/events/service/` — 予定のビジネスロジック（`event.service.ts`）。単件作成（`create`）・複数日付一括作成（`createMultiple`）・繰り返し一括作成（`createRepeat`）・単件更新（`update`）・繰り返しグループ全件更新（`updateRepeatGroup`）・削除。繰り返し展開は daily/weekly/monthly の3タイプ対応。monthly は月末補正あり。最大生成件数100件制限。`createRepeat` は全件に同一 `repeat_group_id`（UUID）を付与する。`updateRepeatGroup` はグループ全件の `created_by` を確認してから `start_diff_ms`/`end_diff_ms` で各日時をシフト更新する。全作成・更新メソッドで `color` フィールドを処理する（未指定時はデフォルト `cyan`）。`findAll(username)` はユーザー名をリポジトリに伝播する
+- `src/events/controller/` — REST endpoints (`GET /events`, `GET /events/:id`, `POST /events`, `POST /events/multiple`, `POST /events/repeat`, `PATCH /events/repeat-group/:groupId`, `PATCH /events/:id`, `DELETE /events/:id`) — JwtAuthGuard適用済み。`POST /events/multiple` は複数日付一括作成、`POST /events/repeat` は繰り返しルール一括作成、`PATCH /events/repeat-group/:groupId` は繰り返しグループ全件一括更新（ルート衝突回避のため `:id` より前に定義）。`GET /events` は `req.user.username` をサービスに渡してログインユーザーの予定のみ取得する。`PATCH :id` / `DELETE :id` は `@CheckOwnership('event')` + `OwnershipGuard` で作成者のみ許可する
+- `src/events/service/` — 予定のビジネスロジック（`event.service.ts`）。単件作成（`create`）・複数日付一括作成（`createMultiple`）・繰り返し一括作成（`createRepeat`）・単件更新（`update(id, dto)`）・繰り返しグループ全件更新（`updateRepeatGroup`）・削除（`remove(id)`）。`update` / `remove` の認可チェックは `OwnershipGuard` が担当するためシグネチャに `requestUsername` なし。`updateRepeatGroup` はグループ全件の `created_by` を確認してから `start_diff_ms`/`end_diff_ms` で各日時をシフト更新する（OwnershipGuard では対処できないためサービス層でチェック）。繰り返し展開は daily/weekly/monthly の3タイプ対応。monthly は月末補正あり。最大生成件数100件制限。`createRepeat` は全件に同一 `repeat_group_id`（UUID）を付与する。全作成・更新メソッドで `color` フィールドを処理する（未指定時はデフォルト `cyan`）。`findAll(username)` はユーザー名をリポジトリに伝播する
 - `src/events/repository/` — Prisma CRUD（findAll/findById/create/createMany/update/updateMany/delete/findByRepeatGroupId）。`createMany`・`updateMany` は SQLite の制約回避のため `$transaction` + 個別操作配列で実装。`findByRepeatGroupId` は `repeat_group_id` で絞り込み `start_at` 昇順で返す。`update`/`updateMany` は `color` フィールドをサポート。`findAll(username)` は `where: { created_by: username }` でログインユーザーの予定のみ返す
 - `src/events/dto/event.dto.ts` — CreateEventDto / CreateMultipleEventsDto（start_times配列・end_times配列。件数一致必須） / CreateRepeatEventDto（end_at・RepeatRuleDto含む） / UpdateEventDto / UpdateRepeatGroupEventDto（title?・description?・start_diff_ms?・end_diff_ms?・color? のオプション項目） / EventResponseDto（repeat_group_id・color含む） / RepeatType enum（daily/weekly/monthly）。全 DTO に `color?: string`（@IsOptional・@IsString）を追加。主要クラスに `@ApiProperty` / `@ApiPropertyOptional` デコレータを追加済み
-- - `src/links/controller/` — REST endpoints (`GET /links`, `POST /links`, `PATCH /links/:id`, `DELETE /links/:id`) — JwtAuthGuard適用済み。`GET /links` は `req.user.username` をサービスに渡してログインユーザーのリンクのみ取得する
-- `src/links/service/` — リンク/フォルダのビジネスロジック。ツリー構築（Map を使ったフラット→ツリー変換）・LINK を親にできない制約チェック・作成者チェック。`findAll(username)` はユーザー名をリポジトリに伝播する
-- `src/links/repository/` — Prisma CRUD（findAll/findById/create/update/delete）。order昇順・created_at昇順でソート。`findAll(username)` は `where: { created_by: username }` でログインユーザーのリンク/フォルダのみ返す
+- `src/links/controller/` — REST endpoints (`GET /links`, `POST /links`, `PATCH /links/:id`, `DELETE /links/:id`, `GET /links/:id/permissions`, `POST /links/:id/permissions`, `DELETE /links/:id/permissions/:username`) — JwtAuthGuard適用済み。`GET /links` は `req.user.username` をサービスに渡してログインユーザーのリンクのみ取得する。`PATCH :id` / `DELETE :id` は `@CheckOwnership('link')` + `OwnershipGuard` で作成者・WRITE権限保持者のみ許可する
+- `src/links/service/` — リンク/フォルダのビジネスロジック（`link.service.ts`）・権限CRUD（`link-permission.service.ts`: 作成者のみ操作可能）。ツリー構築（Map を使ったフラット→ツリー変換）・LINK を親にできない制約チェック。更新・削除の認可チェックは `OwnershipGuard` が担当する。`findAll(username)` はユーザー名をリポジトリに伝播する
+- `src/links/repository/` — Prisma CRUD（findAll/findById/create/update/delete）。order昇順・created_at昇順でソート。`link-permission.repository.ts` で権限の findAll/findOne/upsert/delete を提供。`findAll(username)` は `created_by = username` OR `permissions に username が含まれる` の2条件でフィルタリングする
 - `src/links/dto/link.dto.ts` — CreateLinkItemDto / UpdateLinkItemDto / LinkItemResponseDto（children: LinkItemResponseDto[]）/ LinkItemType型（"FOLDER" | "LINK"）
 - `src/chat/controller/` — REST endpoints (`GET /chat/contacts`, `GET /chat/users`, `GET /chat/messages?with=<username>`, `POST /chat/messages`) — JwtAuthGuard適用済み。`GET /chat/contacts` はやり取り済み相手一覧、`GET /chat/users` は全ユーザー一覧（自分を除く）、`GET /chat/messages` は2ユーザー間のメッセージ一覧、`POST /chat/messages` はメッセージ送信
 - `src/chat/service/` — チャットのビジネスロジック（`chat.service.ts`）。`findConversation`（2ユーザー間メッセージ取得）・`sendMessage`（メッセージ送信）・`findContacts`（やり取り済み相手取得）・`findAllUsers`（全ユーザー取得、自分を除く）
@@ -77,8 +77,11 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/prisma/prisma.service.ts` — Prisma client singleton
 - `src/common/service/hash.service.ts` — bcrypt（rounds=10）によるパスワードハッシュ化。`createHash(value)` → bcrypt ハッシュ（async）、`compareHash(value, hashed)` → bcrypt 照合（async）、`isLegacySha256(value, hashed)` → SHA-256 フォールバック照合（sync、移行期間用）
 - `src/common/service/logger.service.ts` — ロガーサービス
-- `src/common/type/message.ts` — Japanese message constants (centralised)。`AUTH`（LINE OAuth関連含む）・`NOTIFICATION`（通知CRUD・LINE送信失敗）・`LINK`（リンク集CRUD・権限エラー）・`CHAT`（チャット送受信・ユーザー取得）セクションを含む
+- `src/common/type/message.ts` — Japanese message constants (centralised)。`AUTH`（LINE OAuth関連含む）・`NOTIFICATION`（通知CRUD・LINE送信失敗）・`LINK`（リンク集CRUD・権限エラー）・`CHAT`（チャット送受信・ユーザー取得）・`PERMISSION`（権限CRUD・作成者のみ・未存在エラー）セクションを含む
 - `src/common/type/status.enum.ts` — HTTP status enums
+- `src/common/decorators/check-ownership.decorator.ts` — `@CheckOwnership(resource)` デコレータ。`OwnershipResourceType`（'task' | 'link' | 'event'）を SetMetadata でハンドラーに付与する
+- `src/common/guards/ownership.guard.ts` — `OwnershipGuard` (`CanActivate`)。`@CheckOwnership` メタデータを読み込み、リソースタイプに応じてタスク/リンク/予定の所有者チェックを行う。タスク: 作成者 or 担当者 or WRITE権限保持者。リンク: 作成者 or WRITE権限保持者。予定: 作成者のみ。未存在は 404、権限なしは 403
+- `src/permissions/permission.dto.ts` — `CreatePermissionDto`（username・permission: 'READ' | 'WRITE'）/ `PermissionResponseDto` / `PermissionType`（'READ' | 'WRITE'）
 - `src/main.ts` — Swagger（OpenAPI）ドキュメントを `/api/docs` で提供する。`DocumentBuilder` で JWT Bearer 認証を設定し `SwaggerModule.setup()` で公開する
 
 `AppModule` imports `ScheduleModule.forRoot()`（Cronジョブ有効化）・`ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }])`（レートリミット: デフォルト1分20回）・`CommonModule`・`AccountsModule`・`TaskModule`・`EventsModule`・`LinkModule`・`ChatModule`。`LineNotificationService` は `AppModule` の providers に登録し、`TaskModule` エクスポートの `TaskNotificationRepository` と `CommonModule` エクスポートの `LoggerService` を DI で受け取る。`APP_GUARD` として `ThrottlerGuard` をグローバル適用する。`AccountsModule` は `AccountRepository` をエクスポートして `ChatModule` からの DI を可能にする。
@@ -91,9 +94,11 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 
 **LINE通知フロー**: Cron毎分 → `findPendingNotifications`（is_sent=false かつ notify_at <= 現在時刻）→ 担当者ごとに line_user_id を確認 → LINE Messaging API push → `markAsSent`。
 
-**リンク集フロー**: JwtAuthGuard → Controller（`req.user.username` 抽出）→ Service（`username` を伝播）→ Repository（`created_by = username` でフィルタリング）→ Prisma。LINK タイプは子を持てない末端要素。FOLDER タイプのみ children を持つ。削除は作成者のみ可能。FOLDER 削除時は Cascade で配下の全子孫も削除される。
+**リンク集フロー**: JwtAuthGuard → Controller（`req.user.username` 抽出）→ OwnershipGuard（PATCH/DELETE 時のみ: 作成者 or WRITE権限保持者を確認）→ Service（`username` を伝播）→ Repository（`created_by = username` OR `permissions に username` でフィルタリング）→ Prisma。LINK タイプは子を持てない末端要素。FOLDER タイプのみ children を持つ。FOLDER 削除時は Cascade で配下の全子孫も削除される。権限管理（GET/POST/DELETE `/links/:id/permissions`）は作成者のみ実行可能。
 
-**カレンダー予定フロー**: JwtAuthGuard → Controller（`GET /events` では `req.user.username` 抽出）→ Service → Repository（`findAll` は `created_by = username` でフィルタリング）→ Prisma。単件作成（`POST /events`）・複数日付一括作成（`POST /events/multiple`）・繰り返し一括作成（`POST /events/repeat`）の3パターンをサポート。複数・繰り返しは Service 内で日付展開後に `$transaction` で一括 INSERT。更新・削除は作成者のみ可能。繰り返しグループ全件更新（`PATCH /events/repeat-group/:groupId`）は `start_diff_ms`/`end_diff_ms` で全件の日時をシフトする。予定には `color` フィールドがあり、作成・更新時に色識別子（cyan/indigo/emerald/violet/rose/amber）を指定できる。未指定時は `cyan`。
+**カレンダー予定フロー**: JwtAuthGuard → Controller（`GET /events` では `req.user.username` 抽出）→ OwnershipGuard（PATCH/DELETE :id 時のみ: 作成者を確認）→ Service → Repository（`findAll` は `created_by = username` でフィルタリング）→ Prisma。単件作成（`POST /events`）・複数日付一括作成（`POST /events/multiple`）・繰り返し一括作成（`POST /events/repeat`）の3パターンをサポート。複数・繰り返しは Service 内で日付展開後に `$transaction` で一括 INSERT。`PATCH/DELETE :id` の認可チェックは `OwnershipGuard` が担当（`EventService.update(id, dto)` / `remove(id)` に `requestUsername` なし）。`PATCH /events/repeat-group/:groupId` は `updateRepeatGroup` サービス内でグループ全件の `created_by` を確認。繰り返しグループ全件更新（`PATCH /events/repeat-group/:groupId`）は `start_diff_ms`/`end_diff_ms` で全件の日時をシフトする。予定には `color` フィールドがあり、作成・更新時に色識別子（cyan/indigo/emerald/violet/rose/amber）を指定できる。未指定時は `cyan`。
+
+**権限管理フロー（タスク/リンク共通）**: 権限付与は作成者のみ（`TaskPermissionService` / `LinkPermissionService` でサービス層チェック）。権限保持者はリソースの閲覧（READ）・編集（WRITE）が可能。`OwnershipGuard` は PATCH/DELETE 時に作成者・担当者（タスクのみ）・WRITE権限保持者のいずれかであることを DB クエリで確認する。タスク/リンク一覧取得時は `permissions` OR 条件を追加してアクセス可能なリソースをすべて返す。
 
 **チャットフロー**: 全通信は REST API で行う。メッセージ送信は `POST /chat/messages`（REST）。メッセージ一覧は `GET /chat/messages` を3秒ごとにポーリングして自動更新する。`GET /chat/users` で全ユーザー一覧を取得してチャット相手を選択する。WebSocket（Socket.io）は使用しない。
 
@@ -108,11 +113,12 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/pages/TaskListPage.tsx` — タスク一覧・階層表示・カテゴリフィルター・削除確認モーダル・完了セクション折りたたみ。削除は作成者のみ表示・編集は全ユーザー表示。「詳細」ボタン押下時に `awaitToggle` で完了 PATCH の完了を待機してから右側のサイドパネル（`TaskDetailPanel`）を開く（ページ遷移なし・URL変更なし）。パネル表示中は flex 左右分割（左: 一覧、右: 詳細パネル）。スマホ（640px未満）ではパネル開時に一覧を非表示にしてパネルを全画面表示する。`handleDeleteNotification` で通知削除 API を呼び出して `reload()` し `TaskDetailPanel` に `onDeleteNotification` として渡す
 - `src/pages/TaskFormPage.tsx` — タスク作成・編集・子タスク作成（URLクエリ`parent_id`で切り替え）。通知日時を複数追加できる UI を提供（`DateTimeField` + 追加ボタン + 削除ボタン付きリスト）
 - `src/pages/TaskDetailPage.tsx` — タスク詳細・完了/未完了ボタン・完了スタイル（緑枠・バナー・取り消し線）・`closed_by`表示・子タスク一覧・子タスク作成ボタン。編集ボタンは全ユーザーに表示。直リンク（`/tasks/:id`）対応のため引き続き存在する
-- `src/pages/LinkListPage.tsx` — リンク集一覧ページ。エクスプローラー風ツリー表示。`LinkTreeNode` コンポーネントで再帰レンダリング。フォルダクリックで展開/折りたたみ。リンククリックで別タブを開く。追加ボタンで `LinkFormModal` を開く。削除は作成者のみ表示。フォルダ削除時に「配下の全リンク・フォルダも削除されます」という警告を表示する
+- `src/pages/LinkListPage.tsx` — リンク集一覧ページ。エクスプローラー風ツリー表示。`LinkTreeNode` コンポーネントで再帰レンダリング。フォルダクリックで展開/折りたたみ。リンククリックで別タブを開く。追加ボタンで `LinkFormModal` を開く。削除は作成者のみ表示。フォルダ削除時に「配下の全リンク・フォルダも削除されます」という警告を表示する。作成者のみ「共有」ボタンを表示し、クリックで `fetchLinkPermissions` を呼び出して `PermissionModal` を開く（`ModalMode` に `permission` タイプを追加）
 - `src/pages/ChatPage.tsx` — チャット画面。左ペイン: ユーザーリスト（最近の会話 + 未会話ユーザー）、右ペイン: メッセージ一覧（自分のメッセージは右寄せ・空色バブル、相手は左寄せ・slate バブル）+ 入力欄。Enter で送信・Shift+Enter で改行。メッセージ更新時に末尾へ自動スクロール
 - `src/api/taskApi.ts` — タスクAPI通信（`fetchTasks`, `fetchTask`, `fetchCategories`, `createTask`, `updateTask`, `toggleTaskCompletion`, `deleteTask`, `getCurrentUsername`, `fetchNotifications`, `addNotification`, `deleteNotification`, `fetchMe`）。`TaskNotification` インターフェース・`AccountMe` インターフェース・`Task.notifications?: TaskNotification[]` フィールドを含む
 - `src/api/eventApi.ts` — カレンダー予定API通信（`fetchEvents`, `createEvent`, `createMultipleEvents`, `createRepeatEvent`, `updateEvent`, `updateRepeatGroupEvent`, `deleteEvent`）。`CalendarEvent`（repeat_group_id・color含む）・`EventInput`（color?含む）・`MultipleEventInput`（end_times配列・color?含む）・`RepeatEventInput`（end_at・color?含む）・`UpdateRepeatGroupInput`（color?含む）・`RepeatRule`・`RepeatType` インターフェースを定義
-- - `src/api/linkApi.ts` — リンク集API通信（`fetchLinks`, `createLink`, `updateLink`, `deleteLink`）。`LinkItem` インターフェース（children: LinkItem[] を含む再帰型）・`LinkItemInput` インターフェース・`LinkItemType`（"FOLDER" | "LINK"）を定義
+- `src/api/linkApi.ts` — リンク集API通信（`fetchLinks`, `createLink`, `updateLink`, `deleteLink`）。`LinkItem` インターフェース（children: LinkItem[] を含む再帰型）・`LinkItemInput` インターフェース・`LinkItemType`（"FOLDER" | "LINK"）を定義
+- `src/api/permissionApi.ts` — 権限API通信。タスク用（`fetchTaskPermissions`, `addTaskPermission`, `deleteTaskPermission`）とリンク用（`fetchLinkPermissions`, `addLinkPermission`, `deleteLinkPermission`）を提供。`Permission`・`PermissionType`・`PermissionInput` インターフェースを定義
 - `src/api/chatApi.ts` — チャットAPI通信（`fetchContacts`, `fetchAllUsers`, `fetchMessages`, `sendMessage`）。`ChatMessage`・`ChatContact` インターフェースを定義。全通信は REST API で行う
 - `src/hooks/useTaskList.ts` — タスク一覧・削除・カテゴリフィルタリング・階層ツリー構築（incompleteTrees/completedTrees）フック。`togglingIds`（PATCH処理中のタスクID集合）と `awaitToggle`（PATCH完了を外から待てる関数）を提供する
 - `src/hooks/useTaskDetail.ts` — タスク詳細取得・完了切り替えフック
@@ -125,7 +131,8 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/validation/taskValidation.ts` — タスクフォームバリデーション（priority/category含む）。担当者は1人以上必須
 - `src/validation/linkValidation.ts` — リンク/フォルダフォームバリデーション。title必須。type="LINK" の場合は url も必須
 - `src/components/ConfirmModal.tsx` — 削除確認モーダル
-- `src/components/TaskDetailPanel.tsx` — タスク詳細サイドパネル。`task: Task | null` / `isToggling` / `isOwner` / `isMobile` / `onClose` / `onToggleComplete` / `onSelectTask` / `onDeleteClick` / `onUpdate` / `onDeleteNotification` を受け取り、タスクデータを props で表示する（独自 API 呼び出しなし）。スマホ時（`isMobile=true`）は「← 一覧へ戻る」ボタンを表示し PC 向け × ボタンを非表示にする。子タスク・親タスクのリンクは `onSelectTask` 経由でパネル内切り替え（ページ遷移なし）。通知一覧を表示し `onDeleteNotification` コールバックで削除を親に委譲する
+- `src/components/PermissionModal.tsx` — 権限共有モーダル。`GET /chat/users` で全ユーザー一覧を取得し、既に権限付与済みのユーザーを除外してセレクトに表示。READ/WRITE 選択 + 付与ボタン + 既存権限一覧（削除ボタン付き）。タスクとリンク集の両方で共通使用する
+- `src/components/TaskDetailPanel.tsx` — タスク詳細サイドパネル。`task: Task | null` / `isToggling` / `isOwner` / `isMobile` / `onClose` / `onToggleComplete` / `onSelectTask` / `onDeleteClick` / `onUpdate` / `onDeleteNotification` を受け取り、タスクデータを props で表示する（独自 API 呼び出しなし）。スマホ時（`isMobile=true`）は「← 一覧へ戻る」ボタンを表示し PC 向け × ボタンを非表示にする。子タスク・親タスクのリンクは `onSelectTask` 経由でパネル内切り替え（ページ遷移なし）。通知一覧を表示し `onDeleteNotification` コールバックで削除を親に委譲する。作成者のみ「共有」ボタンを表示し、クリックで `fetchTaskPermissions` を呼び出して `PermissionModal` を開く
 - `src/components/LinkFormModal.tsx` — リンク/フォルダ作成・編集フォームモーダル。タイプ選択（編集時は変更不可）・タイトル・URL（LINK タイプのみ）・説明・親フォルダ選択（FOLDER タイプのみ表示）。自分自身と子孫は親フォルダ候補から除外する
 - `src/components/TextAreaField.tsx` — textareaラッパー共通コンポーネント
 - `src/components/DateTimeField.tsx` — datetime-local入力ラッパー共通コンポーネント
@@ -155,15 +162,17 @@ Prisma config file: `backend/prisma.config.ts` (uses dotenv, loads `prisma/schem
 
 ```prisma
 model Account {
-  username          String         @id
+  username          String           @id
   hashed_password   String
   line_user_id      String?
   task_assignees    TaskAssignee[]
-  created_tasks     Task[]         @relation("TaskCreator")
-  created_events    Event[]        @relation("EventCreator")
-  created_links     LinkItem[]     @relation("LinkCreator")
-  sent_messages     ChatMessage[]  @relation("ChatSender")
-  received_messages ChatMessage[]  @relation("ChatReceiver")
+  task_permissions  TaskPermission[]
+  link_permissions  LinkPermission[]
+  created_tasks     Task[]           @relation("TaskCreator")
+  created_events    Event[]          @relation("EventCreator")
+  created_links     LinkItem[]       @relation("LinkCreator")
+  sent_messages     ChatMessage[]    @relation("ChatSender")
+  received_messages ChatMessage[]    @relation("ChatReceiver")
 }
 
 model Task {
@@ -181,6 +190,7 @@ model Task {
   closed_by     String?
   assignees     TaskAssignee[]
   notifications TaskNotification[]
+  permissions   TaskPermission[]
   creator       Account            @relation("TaskCreator", fields: [created_by], references: [username])
   parent        Task?              @relation("TaskChildren", fields: [parent_id], references: [id])
   children      Task[]             @relation("TaskChildren")
@@ -206,6 +216,16 @@ model TaskNotification {
   notify_at DateTime
   is_sent   Boolean  @default(false)
   task      Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
+}
+
+model TaskPermission {
+  task_id    Int
+  username   String
+  permission String              // "READ" | "WRITE"
+  task       Task    @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  account    Account @relation(fields: [username], references: [username], onDelete: Cascade)
+
+  @@id([task_id, username])
 }
 
 model Event {
@@ -236,12 +256,23 @@ model LinkItem {
   created_by  String
   created_at  DateTime   @default(now())
   updated_at  DateTime   @updatedAt
-  creator     Account    @relation("LinkCreator", fields: [created_by], references: [username])
-  parent      LinkItem?  @relation("LinkChildren", fields: [parent_id], references: [id], onDelete: Cascade)
-  children    LinkItem[] @relation("LinkChildren")
+  creator     Account          @relation("LinkCreator", fields: [created_by], references: [username])
+  parent      LinkItem?        @relation("LinkChildren", fields: [parent_id], references: [id], onDelete: Cascade)
+  children    LinkItem[]       @relation("LinkChildren")
+  permissions LinkPermission[]
 
   @@index([created_by])
   @@index([parent_id])
+}
+
+model LinkPermission {
+  link_item_id Int
+  username     String
+  permission   String       // "READ" | "WRITE"
+  linkItem     LinkItem @relation(fields: [link_item_id], references: [id], onDelete: Cascade)
+  account      Account  @relation(fields: [username], references: [username], onDelete: Cascade)
+
+  @@id([link_item_id, username])
 }
 
 model ChatMessage {

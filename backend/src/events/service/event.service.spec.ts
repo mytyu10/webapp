@@ -591,16 +591,12 @@ describe('EventService', () => {
   // update
   // ────────────────────────────────────────────────
   describe('update', () => {
-    it('作成者が更新すると更新済み EventResponseDto を返す', async () => {
+    it('更新すると更新済み EventResponseDto を返す', async () => {
       mockEventRepository.findById.mockResolvedValue(mockEvent);
       const updatedEvent = { ...mockEvent, title: '更新後予定' };
       mockEventRepository.update.mockResolvedValue(updatedEvent);
 
-      const result = await service.update(
-        1,
-        { title: '更新後予定' },
-        'testuser',
-      );
+      const result = await service.update(1, { title: '更新後予定' });
 
       expect(result.title).toBe('更新後予定');
     });
@@ -608,34 +604,19 @@ describe('EventService', () => {
     it('存在しない ID の場合は NotFoundException をスローする', async () => {
       mockEventRepository.findById.mockResolvedValue(null);
 
-      await expect(
-        service.update(999, { title: '更新' }, 'testuser'),
-      ).rejects.toThrow(NotFoundException);
-      await expect(
-        service.update(999, { title: '更新' }, 'testuser'),
-      ).rejects.toThrow(MESSAGE.EVENT.NOT_FOUND);
-    });
-
-    it('作成者以外が更新しようとすると ForbiddenException をスローする', async () => {
-      mockEventRepository.findById.mockResolvedValue(mockEvent);
-
-      await expect(
-        service.update(1, { title: '更新' }, 'otheruser'),
-      ).rejects.toThrow(ForbiddenException);
-      await expect(
-        service.update(1, { title: '更新' }, 'otheruser'),
-      ).rejects.toThrow(MESSAGE.EVENT.FORBIDDEN);
+      await expect(service.update(999, { title: '更新' })).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(service.update(999, { title: '更新' })).rejects.toThrow(
+        MESSAGE.EVENT.NOT_FOUND,
+      );
     });
 
     it('start_at が指定された場合 Date オブジェクトに変換して repository に渡す', async () => {
       mockEventRepository.findById.mockResolvedValue(mockEvent);
       mockEventRepository.update.mockResolvedValue(mockEvent);
 
-      await service.update(
-        1,
-        { start_at: '2026-07-01T09:00:00.000Z' },
-        'testuser',
-      );
+      await service.update(1, { start_at: '2026-07-01T09:00:00.000Z' });
 
       expect(mockEventRepository.update).toHaveBeenCalledWith(
         1,
@@ -649,11 +630,7 @@ describe('EventService', () => {
       mockEventRepository.findById.mockResolvedValue(mockEvent);
       mockEventRepository.update.mockResolvedValue(mockEvent);
 
-      await service.update(
-        1,
-        { end_at: '2026-07-01T10:00:00.000Z' },
-        'testuser',
-      );
+      await service.update(1, { end_at: '2026-07-01T10:00:00.000Z' });
 
       expect(mockEventRepository.update).toHaveBeenCalledWith(
         1,
@@ -667,7 +644,7 @@ describe('EventService', () => {
       mockEventRepository.findById.mockResolvedValue(mockEvent);
       mockEventRepository.update.mockResolvedValue(mockEvent);
 
-      await service.update(1, { title: 'タイトルのみ変更' }, 'testuser');
+      await service.update(1, { title: 'タイトルのみ変更' });
 
       expect(mockEventRepository.update).toHaveBeenCalledWith(
         1,
@@ -682,12 +659,12 @@ describe('EventService', () => {
       mockEventRepository.findById.mockResolvedValue(mockEvent);
       mockEventRepository.update.mockRejectedValue(new Error('DB error'));
 
-      await expect(
-        service.update(1, { title: '更新' }, 'testuser'),
-      ).rejects.toThrow(InternalServerErrorException);
-      await expect(
-        service.update(1, { title: '更新' }, 'testuser'),
-      ).rejects.toThrow(MESSAGE.EVENT.UPDATE_FAILED);
+      await expect(service.update(1, { title: '更新' })).rejects.toThrow(
+        InternalServerErrorException,
+      );
+      await expect(service.update(1, { title: '更新' })).rejects.toThrow(
+        MESSAGE.EVENT.UPDATE_FAILED,
+      );
     });
   });
 
@@ -797,33 +774,20 @@ describe('EventService', () => {
   // remove
   // ────────────────────────────────────────────────
   describe('remove', () => {
-    it('作成者が削除すると正常に完了する', async () => {
+    it('削除すると正常に完了する', async () => {
       mockEventRepository.findById.mockResolvedValue(mockEvent);
       mockEventRepository.delete.mockResolvedValue(undefined);
 
-      await expect(service.remove(1, 'testuser')).resolves.toBeUndefined();
+      await expect(service.remove(1)).resolves.toBeUndefined();
       expect(mockEventRepository.delete).toHaveBeenCalledWith(1);
     });
 
     it('存在しない ID の場合は NotFoundException をスローする', async () => {
       mockEventRepository.findById.mockResolvedValue(null);
 
-      await expect(service.remove(999, 'testuser')).rejects.toThrow(
-        NotFoundException,
-      );
-      await expect(service.remove(999, 'testuser')).rejects.toThrow(
+      await expect(service.remove(999)).rejects.toThrow(NotFoundException);
+      await expect(service.remove(999)).rejects.toThrow(
         MESSAGE.EVENT.NOT_FOUND,
-      );
-    });
-
-    it('作成者以外が削除しようとすると ForbiddenException をスローする', async () => {
-      mockEventRepository.findById.mockResolvedValue(mockEvent);
-
-      await expect(service.remove(1, 'otheruser')).rejects.toThrow(
-        ForbiddenException,
-      );
-      await expect(service.remove(1, 'otheruser')).rejects.toThrow(
-        MESSAGE.EVENT.FORBIDDEN,
       );
     });
 
@@ -831,10 +795,10 @@ describe('EventService', () => {
       mockEventRepository.findById.mockResolvedValue(mockEvent);
       mockEventRepository.delete.mockRejectedValue(new Error('DB error'));
 
-      await expect(service.remove(1, 'testuser')).rejects.toThrow(
+      await expect(service.remove(1)).rejects.toThrow(
         InternalServerErrorException,
       );
-      await expect(service.remove(1, 'testuser')).rejects.toThrow(
+      await expect(service.remove(1)).rejects.toThrow(
         MESSAGE.EVENT.DELETE_FAILED,
       );
     });
