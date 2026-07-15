@@ -23,7 +23,6 @@ datasource db {
 model Account {
   username        String         @id
   hashed_password String
-  line_user_id    String?
   task_assignees  TaskAssignee[]
   created_tasks   Task[]         @relation("TaskCreator")
   created_events  Event[]        @relation("EventCreator")
@@ -87,7 +86,6 @@ model Event {
 |---------|-----|------|------|
 | `username` | String | PRIMARY KEY | ユーザー名（1〜10文字） |
 | `hashed_password` | String | NOT NULL | SHA-256ハッシュ化されたパスワード（hex文字列） |
-| `line_user_id` | String | NULL 許容 | LINE User ID（LINE OAuth連携後に設定） |
 
 ### Task テーブル
 
@@ -130,7 +128,7 @@ model Event {
 | `is_sent` | Boolean | NOT NULL, DEFAULT false | 送信済みフラグ（送信後に `true` へ更新） |
 
 - Task削除時はCascade削除（通知レコードも削除）
-- `notify_at <= 現在時刻` かつ `is_sent = false` の通知を Cron ジョブが毎分取得して LINE プッシュ通知を送信する
+- `notify_at <= 現在時刻` かつ `is_sent = false` の通知を Cron ジョブが毎分取得して処理する
 
 ### Event テーブル
 
@@ -156,7 +154,6 @@ model Event {
 |---------|-----------|------|
 | `getAccount(username)` | `findUnique({ where: { username } })` | ユーザー名でアカウントを取得 |
 | `createUser(data)` | `create({ data })` | アカウントを新規作成 |
-| `updateLineUserId(username, lineUserId)` | `update({ where: { username }, data: { line_user_id } })` | LINE User ID を保存 |
 
 ### TaskRepository
 
@@ -176,7 +173,7 @@ model Event {
 | `create(taskId, notifyAt)` | `create({ data: { task_id, notify_at } })` | タスクに通知を追加 |
 | `findByTaskId(taskId)` | `findMany({ where: { task_id }, orderBy: { notify_at: 'asc' } })` | 指定タスクの通知一覧を取得 |
 | `delete(notificationId)` | `delete({ where: { id } })` | 指定IDの通知を削除 |
-| `findPendingNotifications()` | `findMany({ where: { is_sent: false, notify_at: { lte: new Date() } }, include: { task: { assignees: { account } } } })` | 送信対象通知を担当者（LINE User ID含む）込みで取得 |
+| `findPendingNotifications()` | `findMany({ where: { is_sent: false, notify_at: { lte: new Date() } }, include: { task: { assignees: { account } } } })` | 送信対象通知を担当者情報込みで取得 |
 | `markAsSent(notificationId)` | `update({ where: { id }, data: { is_sent: true } })` | 通知を送信済みにマーク |
 
 ### EventRepository

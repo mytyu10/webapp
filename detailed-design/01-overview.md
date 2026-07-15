@@ -2,7 +2,7 @@
 
 ## アプリケーション概要
 
-アカウント登録・ログイン機能・タスク管理・カレンダー予定管理・LINE連携通知機能を持つフルスタックWebアプリケーション。
+アカウント登録・ログイン機能・タスク管理・カレンダー予定管理・チャット機能を持つフルスタックWebアプリケーション。
 React フロントエンドと NestJS バックエンドで構成される。
 
 ## 技術スタック
@@ -17,8 +17,6 @@ React フロントエンドと NestJS バックエンドで構成される。
 | Backend | NestJS | ^11.0.1 |
 | Backend | TypeScript | ^5.7.3 |
 | Backend | Express | (NestJS経由) |
-| Backend | axios | ^1.x（LINE API通信） |
-| Backend | @nestjs/schedule | ^5.x（Cronジョブ） |
 | ORM | Prisma | ^7.8.0 |
 | DB | SQLite (better-sqlite3) | ^12.9.0 |
 | 認証 | JWT (jsonwebtoken) | ^9.0.3 |
@@ -41,12 +39,6 @@ React フロントエンドと NestJS バックエンドで構成される。
 | `DATABASE_URL` | SQLiteファイルパス（例: `file:./dev.db`）| ✅ |
 | `PORT` | リッスンポート | ❌（デフォルト: 8000） |
 | `CORS_ORIGIN` | CORS許可オリジン | ❌（デフォルト: `http://localhost:3000`） |
-| `LINE_LOGIN_CHANNEL_ID` | LINE Login チャネルID | ✅（LINE連携使用時） |
-| `LINE_LOGIN_CHANNEL_SECRET` | LINE Login チャネルシークレット | ✅（LINE連携使用時） |
-| `LINE_MESSAGING_CHANNEL_ID` | LINE Messaging API チャネルID | ✅（LINE通知使用時） |
-| `LINE_MESSAGING_CHANNEL_SECRET` | LINE Messaging API チャネルシークレット | ✅（LINE通知使用時） |
-| `LINE_MESSAGING_CHANNEL_ACCESS_TOKEN` | LINE Messaging API チャネルアクセストークン | ✅（LINE通知使用時） |
-| `FRONTEND_URL` | フロントエンドのベースURL（例: `http://localhost:3000`）| ✅（LINE連携使用時） |
 
 > **`CORS_ORIGIN` の動作:**
 > - 値が `*` の場合: 全オリジンを許可（`origin: true`）
@@ -88,7 +80,5 @@ React フロントエンドと NestJS バックエンドで構成される。
 | カレンダー日表示でのタスク表示（due_dateベース・ホバーツールチップ） | ✅ 実装済み |
 | スマホ対応レスポンシブレイアウト（SidebarLayout・TaskListPage・CalendarPage） | ✅ 実装済み |
 | タスク詳細パネルのスマホ全画面表示（← 一覧へ戻るボタン） | ✅ 実装済み |
-| LINE連携（LINE Login OAuth）| ✅ 実装済み |
-| LINE通知（タスク期限前プッシュ通知・Cronジョブ毎分実行） | ✅ 実装済み |
 | タスク通知日時設定（複数設定可） | ✅ 実装済み |
 | タスク通知一覧表示・削除（詳細パネル内） | ✅ 実装済み |
