@@ -1,27 +1,13 @@
 import { useState, useEffect } from 'react';
 import { CalendarEvent, EventInput, MultipleEventInput, RepeatEventInput } from '../api/eventApi';
-import {
-  EventFormValues,
-  EventValidationErrors,
-  validateEventForm,
-  isEventFormValid,
-  MultipleEventFormValues,
-  MultipleEventValidationErrors,
-  validateMultipleEventForm,
-  isMultipleEventFormValid,
-  RepeatEventFormValues,
-  RepeatEventValidationErrors,
-  validateRepeatEventForm,
-  isRepeatEventFormValid,
-} from '../validation/eventValidation';
-import DateTimeField from './DateTimeField';
-import TextAreaField from './TextAreaField';
-import FormField from './FormField';
-import SelectField from './SelectField';
+import { EventFormValues, MultipleEventFormValues, RepeatEventFormValues } from '../validation/eventValidation';
 import ConfirmModal from './ConfirmModal';
-import CancelButton from './CancelButton';
-import SubmitButton from './SubmitButton';
-import DeleteButton from './DeleteButton';
+import SingleEventForm from './SingleEventForm';
+import MultipleEventForm from './MultipleEventForm';
+import RepeatEventForm from './RepeatEventForm';
+
+// ColorPicker で定義した EVENT_COLORS を re-export して既存の import を壊さない
+export { EVENT_COLORS } from './ColorPicker';
 
 /** 作成モードの種別 */
 type CreateMode = 'single' | 'multiple' | 'repeat';
@@ -29,27 +15,16 @@ type CreateMode = 'single' | 'multiple' | 'repeat';
 /** 繰り返し予定編集時のスコープ選択 */
 type UpdateScope = 'single' | 'all';
 
-/**
- * 予定に選択できる色の定義。
- * アプリのダークテーマ（slate ベース）に合わせた6色
- */
-export const EVENT_COLORS: Array<{
-  /** 色識別子（APIへ送信する値） */
-  id: string;
-  /** 表示ラベル */
-  label: string;
-  /** カラーパレット上の背景色（Tailwind bg-* クラス） */
-  bgClass: string;
-  /** カラーパレット上の選択リング色（Tailwind ring-* クラス） */
-  ringClass: string;
-}> = [
-  { id: 'cyan',    label: 'シアン',     bgClass: 'bg-cyan-700',    ringClass: 'ring-cyan-400' },
-  { id: 'indigo',  label: 'インディゴ', bgClass: 'bg-indigo-700',  ringClass: 'ring-indigo-400' },
-  { id: 'emerald', label: 'エメラルド', bgClass: 'bg-emerald-700', ringClass: 'ring-emerald-400' },
-  { id: 'violet',  label: 'バイオレット', bgClass: 'bg-violet-700', ringClass: 'ring-violet-400' },
-  { id: 'rose',    label: 'ローズ',     bgClass: 'bg-rose-700',    ringClass: 'ring-rose-400' },
-  { id: 'amber',   label: 'アンバー',   bgClass: 'bg-amber-700',   ringClass: 'ring-amber-400' },
-];
+/** datetime-local入力値形式にISOStringを変換する */
+function toDatetimeLocalValue(isoString: string): string {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/** デフォルトの色識別子 */
+const DEFAULT_COLOR = 'cyan';
 
 /** EventModalのprops型 */
 interface EventModalProps {
@@ -73,76 +48,12 @@ interface EventModalProps {
   onClose: () => void;
 }
 
-/** datetime-local入力値形式にISOStringを変換する */
-function toDatetimeLocalValue(isoString: string): string {
-  if (!isoString) return '';
-  const date = new Date(isoString);
-  const pad = (n: number): string => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-/** 繰り返しタイプの選択肢 */
-const REPEAT_TYPE_OPTIONS = [
-  { value: 'daily', label: '毎日' },
-  { value: 'weekly', label: '毎週' },
-  { value: 'monthly', label: '毎月' },
-];
-
-/** 終了条件の選択肢 */
-const END_CONDITION_OPTIONS = [
-  { value: 'end_date', label: '終了日を指定' },
-  { value: 'count', label: '回数を指定' },
-];
-
-/** 曜日ラベル（0=日曜〜6=土曜） */
-const DAY_OF_WEEK_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
-
-/** デフォルトの色識別子 */
-const DEFAULT_COLOR = 'cyan';
-
-/**
- * 色選択パレットコンポーネント。
- * 6色のボタンを横並びで表示し、選択中の色にリングを表示する
- */
-function ColorPicker({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: string;
-  onChange: (color: string) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="mb-5">
-      <span className="block text-sm font-medium text-slate-300 mb-1.5">色</span>
-      <div className="flex gap-2 flex-wrap">
-        {EVENT_COLORS.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => onChange(c.id)}
-            disabled={disabled}
-            title={c.label}
-            aria-label={c.label}
-            aria-pressed={value === c.id}
-            className={`w-8 h-8 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed ${c.bgClass} ${
-              value === c.id
-                ? `ring-2 ring-offset-2 ring-offset-slate-800 ${c.ringClass} scale-110`
-                : 'hover:scale-105'
-            }`}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /**
  * 予定作成・編集モーダルコンポーネント。
  * 新規作成時は「通常」「複数日付」「繰り返し」の3モードを切り替えられる。
  * 編集時は通常フォームのみ表示する。
- * 繰り返しグループに属する予定の編集時は「この予定のみ変更」「繰り返し全て変更」を選択できる
+ * 繰り返しグループに属する予定の編集時は「この予定のみ変更」「繰り返し全て変更」を選択できる。
+ * 各フォームの状態管理は SingleEventForm / MultipleEventForm / RepeatEventForm に委譲する
  */
 function EventModal({
   open,
@@ -160,200 +71,83 @@ function EventModal({
   const isRepeatGroup = isEditMode && event.repeat_group_id !== null;
 
   const [createMode, setCreateMode] = useState<CreateMode>('single');
-  const [updateScope, setUpdateScope] = useState<UpdateScope>('single');
-
-  // 通常フォームの状態
-  const [formValues, setFormValues] = useState<EventFormValues>({
-    title: '',
-    description: '',
-    start_at: '',
-    end_at: '',
-    color: DEFAULT_COLOR,
-  });
-  const [errors, setErrors] = useState<EventValidationErrors>({});
-
-  // 複数日付フォームの状態
-  const [multipleValues, setMultipleValues] = useState<MultipleEventFormValues>({
-    title: '',
-    description: '',
-    start_times: [''],
-    end_times: [''],
-    color: DEFAULT_COLOR,
-  });
-  const [multipleErrors, setMultipleErrors] = useState<MultipleEventValidationErrors>({});
-
-  // 繰り返しフォームの状態
-  const [repeatValues, setRepeatValues] = useState<RepeatEventFormValues>({
-    title: '',
-    description: '',
-    start_at: '',
-    end_at: '',
-    repeat_type: 'weekly',
-    interval: '1',
-    days_of_week: [],
-    end_condition_type: 'count',
-    end_date: '',
-    count: '4',
-    color: DEFAULT_COLOR,
-  });
-  const [repeatErrors, setRepeatErrors] = useState<RepeatEventValidationErrors>({});
-
-  const [submitting, setSubmitting] = useState(false);
-  const [apiError, setApiError] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
-  /** モーダルが開くたびにフォームを初期化する */
+  /** モーダルが開くたびにモード・削除確認状態をリセットする */
   useEffect(() => {
     if (!open) return;
     setCreateMode('single');
-    setUpdateScope('single');
-    setErrors({});
-    setMultipleErrors({});
-    setRepeatErrors({});
-    setApiError('');
     setShowDeleteConfirm(false);
+    setDeleteError('');
+  }, [open, event]);
 
+  if (!open) return null;
+
+  /** 通常フォームの初期値を計算する */
+  function buildSingleInitialValues(): EventFormValues {
     if (event) {
-      setFormValues({
+      return {
         title: event.title,
         description: event.description,
         start_at: toDatetimeLocalValue(event.start_at),
         end_at: toDatetimeLocalValue(event.end_at),
         color: event.color ?? DEFAULT_COLOR,
-      });
-    } else {
-      const defaultStart = initialStart ? toDatetimeLocalValue(initialStart) : '';
-      const defaultEnd = initialStart
-        ? (() => {
-            const d = new Date(initialStart);
-            d.setHours(d.getHours() + 1);
-            return toDatetimeLocalValue(d.toISOString());
-          })()
-        : '';
-      setFormValues({
-        title: '',
-        description: '',
-        start_at: defaultStart,
-        end_at: defaultEnd,
-        color: DEFAULT_COLOR,
-      });
-      setMultipleValues({
-        title: '',
-        description: '',
-        start_times: [defaultStart],
-        end_times: [defaultEnd],
-        color: DEFAULT_COLOR,
-      });
-      setRepeatValues({
-        title: '',
-        description: '',
-        start_at: defaultStart,
-        end_at: defaultEnd,
-        repeat_type: 'weekly',
-        interval: '1',
-        days_of_week: [],
-        end_condition_type: 'count',
-        end_date: '',
-        count: '4',
-        color: DEFAULT_COLOR,
-      });
-    }
-  }, [open, event, initialStart]);
-
-  if (!open) return null;
-
-  /**
-   * 通常フォームの送信処理
-   */
-  async function handleSingleSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
-    e.preventDefault();
-    const validationErrors = validateEventForm(formValues);
-    setErrors(validationErrors);
-    if (!isEventFormValid(validationErrors)) return;
-
-    setSubmitting(true);
-    setApiError('');
-    try {
-      const input: EventInput = {
-        title: formValues.title,
-        description: formValues.description,
-        start_at: new Date(formValues.start_at).toISOString(),
-        end_at: new Date(formValues.end_at).toISOString(),
-        color: formValues.color,
       };
-      await onSave(input, updateScope);
-      onClose();
-    } catch (err) {
-      setApiError(err instanceof Error ? err.message : '保存に失敗しました。');
-    } finally {
-      setSubmitting(false);
     }
+    const defaultStart = initialStart ? toDatetimeLocalValue(initialStart) : '';
+    const defaultEnd = initialStart
+      ? (() => {
+          const d = new Date(initialStart);
+          d.setHours(d.getHours() + 1);
+          return toDatetimeLocalValue(d.toISOString());
+        })()
+      : '';
+    return { title: '', description: '', start_at: defaultStart, end_at: defaultEnd, color: DEFAULT_COLOR };
   }
 
-  /**
-   * 複数日付フォームの送信処理
-   */
-  async function handleMultipleSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
-    e.preventDefault();
-    const validationErrors = validateMultipleEventForm(multipleValues);
-    setMultipleErrors(validationErrors);
-    if (!isMultipleEventFormValid(validationErrors)) return;
-
-    setSubmitting(true);
-    setApiError('');
-    try {
-      const input: MultipleEventInput = {
-        title: multipleValues.title,
-        description: multipleValues.description,
-        start_times: multipleValues.start_times.map((t) => new Date(t).toISOString()),
-        end_times: multipleValues.end_times.map((t) => new Date(t).toISOString()),
-        color: multipleValues.color,
-      };
-      await onSaveMultiple(input);
-      onClose();
-    } catch (err) {
-      setApiError(err instanceof Error ? err.message : '保存に失敗しました。');
-    } finally {
-      setSubmitting(false);
-    }
+  /** 複数日付フォームの初期値を計算する */
+  function buildMultipleInitialValues(): MultipleEventFormValues {
+    const defaultStart = initialStart ? toDatetimeLocalValue(initialStart) : '';
+    const defaultEnd = initialStart
+      ? (() => {
+          const d = new Date(initialStart);
+          d.setHours(d.getHours() + 1);
+          return toDatetimeLocalValue(d.toISOString());
+        })()
+      : '';
+    return {
+      title: '',
+      description: '',
+      start_times: [defaultStart],
+      end_times: [defaultEnd],
+      color: DEFAULT_COLOR,
+    };
   }
 
-  /**
-   * 繰り返しフォームの送信処理
-   */
-  async function handleRepeatSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
-    e.preventDefault();
-    const validationErrors = validateRepeatEventForm(repeatValues);
-    setRepeatErrors(validationErrors);
-    if (!isRepeatEventFormValid(validationErrors)) return;
-
-    setSubmitting(true);
-    setApiError('');
-    try {
-      const input: RepeatEventInput = {
-        title: repeatValues.title,
-        description: repeatValues.description,
-        start_at: new Date(repeatValues.start_at).toISOString(),
-        end_at: new Date(repeatValues.end_at).toISOString(),
-        repeat: {
-          type: repeatValues.repeat_type,
-          interval: Number(repeatValues.interval),
-          ...(repeatValues.repeat_type === 'weekly' && repeatValues.days_of_week.length > 0
-            ? { days_of_week: repeatValues.days_of_week }
-            : {}),
-          ...(repeatValues.end_condition_type === 'end_date'
-            ? { end_date: new Date(repeatValues.end_date).toISOString() }
-            : { count: Number(repeatValues.count) }),
-        },
-        color: repeatValues.color,
-      };
-      await onSaveRepeat(input);
-      onClose();
-    } catch (err) {
-      setApiError(err instanceof Error ? err.message : '保存に失敗しました。');
-    } finally {
-      setSubmitting(false);
-    }
+  /** 繰り返しフォームの初期値を計算する */
+  function buildRepeatInitialValues(): RepeatEventFormValues {
+    const defaultStart = initialStart ? toDatetimeLocalValue(initialStart) : '';
+    const defaultEnd = initialStart
+      ? (() => {
+          const d = new Date(initialStart);
+          d.setHours(d.getHours() + 1);
+          return toDatetimeLocalValue(d.toISOString());
+        })()
+      : '';
+    return {
+      title: '',
+      description: '',
+      start_at: defaultStart,
+      end_at: defaultEnd,
+      repeat_type: 'weekly',
+      interval: '1',
+      days_of_week: [],
+      end_condition_type: 'count',
+      end_date: '',
+      count: '4',
+      color: DEFAULT_COLOR,
+    };
   }
 
   /**
@@ -361,73 +155,32 @@ function EventModal({
    */
   async function handleConfirmDelete(): Promise<void> {
     if (!event) return;
-    setSubmitting(true);
-    setApiError('');
+    setDeleteError('');
     try {
       await onDelete(event.id);
       onClose();
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : '削除に失敗しました。');
-    } finally {
-      setSubmitting(false);
+      setDeleteError(err instanceof Error ? err.message : '削除に失敗しました。');
       setShowDeleteConfirm(false);
     }
   }
 
-  /**
-   * 複数日付フォームに日時入力行を追加する
-   */
-  function addStartTime(): void {
-    setMultipleValues((prev) => ({
-      ...prev,
-      start_times: [...prev.start_times, ''],
-      end_times: [...prev.end_times, ''],
-    }));
+  /** 通常フォームの保存後にモーダルを閉じるラッパー */
+  async function handleSingleSubmit(input: EventInput, updateScope: UpdateScope): Promise<void> {
+    await onSave(input, updateScope);
+    onClose();
   }
 
-  /**
-   * 複数日付フォームから指定インデックスの行を削除する
-   */
-  function removeStartTime(index: number): void {
-    setMultipleValues((prev) => ({
-      ...prev,
-      start_times: prev.start_times.filter((_, i) => i !== index),
-      end_times: prev.end_times.filter((_, i) => i !== index),
-    }));
+  /** 複数日付フォームの保存後にモーダルを閉じるラッパー */
+  async function handleMultipleSubmit(input: MultipleEventInput): Promise<void> {
+    await onSaveMultiple(input);
+    onClose();
   }
 
-  /**
-   * 複数日付フォームの指定インデックスの開始日時値を更新する
-   */
-  function updateStartTime(index: number, value: string): void {
-    setMultipleValues((prev) => {
-      const next = [...prev.start_times];
-      next[index] = value;
-      return { ...prev, start_times: next };
-    });
-  }
-
-  /**
-   * 複数日付フォームの指定インデックスの終了日時値を更新する
-   */
-  function updateEndTime(index: number, value: string): void {
-    setMultipleValues((prev) => {
-      const next = [...prev.end_times];
-      next[index] = value;
-      return { ...prev, end_times: next };
-    });
-  }
-
-  /**
-   * 繰り返しフォームの曜日チェックボックスの選択状態を切り替える
-   */
-  function toggleDayOfWeek(day: number): void {
-    setRepeatValues((prev) => {
-      const next = prev.days_of_week.includes(day)
-        ? prev.days_of_week.filter((d) => d !== day)
-        : [...prev.days_of_week, day];
-      return { ...prev, days_of_week: next };
-    });
+  /** 繰り返しフォームの保存後にモーダルを閉じるラッパー */
+  async function handleRepeatSubmit(input: RepeatEventInput): Promise<void> {
+    await onSaveRepeat(input);
+    onClose();
   }
 
   const modalTitle = isEditMode ? '予定を編集' : '予定を作成';
@@ -470,349 +223,44 @@ function EventModal({
             </div>
           )}
 
-          {/* 繰り返しグループ予定の編集時に変更スコープ選択を表示する */}
-          {isEditMode && isOwner && isRepeatGroup && (
-            <div className="mb-5 p-3 bg-slate-700/50 rounded-lg border border-slate-600">
-              <p className="text-xs text-slate-400 mb-2">変更対象</p>
-              <div className="flex gap-3">
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="update-scope"
-                    value="single"
-                    checked={updateScope === 'single'}
-                    onChange={() => setUpdateScope('single')}
-                    className="accent-sky-500"
-                  />
-                  <span className="text-sm text-slate-200">この予定のみ変更</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="update-scope"
-                    value="all"
-                    checked={updateScope === 'all'}
-                    onChange={() => setUpdateScope('all')}
-                    className="accent-sky-500"
-                  />
-                  <span className="text-sm text-slate-200">繰り返し予定を全て変更</span>
-                </label>
-              </div>
-            </div>
-          )}
-
-          {apiError && (
+          {deleteError && (
             <div className="mb-4 px-3 py-2 bg-red-900/40 border border-red-700 rounded text-sm text-red-300">
-              {apiError}
+              {deleteError}
             </div>
           )}
 
           {/* 通常モード / 編集モード */}
           {(createMode === 'single' || isEditMode) && (
-            <form onSubmit={(e) => { void handleSingleSubmit(e); }} noValidate>
-              <FormField
-                id="event-title"
-                label="タイトル"
-                value={formValues.title}
-                onChange={(v) => setFormValues((prev) => ({ ...prev, title: v }))}
-                error={errors.title}
-                disabled={submitting || (isEditMode && !isOwner)}
-                maxLength={200}
-              />
-              <TextAreaField
-                id="event-description"
-                label="説明"
-                value={formValues.description}
-                onChange={(v) => setFormValues((prev) => ({ ...prev, description: v }))}
-                disabled={submitting || (isEditMode && !isOwner)}
-                maxLength={1000}
-                rows={3}
-              />
-              <DateTimeField
-                id="event-start-at"
-                label="開始日時"
-                value={formValues.start_at}
-                onChange={(v) => setFormValues((prev) => ({ ...prev, start_at: v }))}
-                error={errors.start_at}
-                disabled={submitting || (isEditMode && !isOwner)}
-              />
-              <DateTimeField
-                id="event-end-at"
-                label="終了日時"
-                value={formValues.end_at}
-                onChange={(v) => setFormValues((prev) => ({ ...prev, end_at: v }))}
-                error={errors.end_at}
-                disabled={submitting || (isEditMode && !isOwner)}
-              />
-              <ColorPicker
-                value={formValues.color}
-                onChange={(c) => setFormValues((prev) => ({ ...prev, color: c }))}
-                disabled={submitting || (isEditMode && !isOwner)}
-              />
-
-              <div className="flex justify-between items-center mt-6">
-                <div className="flex gap-2">
-                  {isEditMode && isOwner && (
-                    <DeleteButton
-                      onClick={() => setShowDeleteConfirm(true)}
-                      disabled={submitting}
-                    />
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <CancelButton
-                    onClick={onClose}
-                    disabled={submitting}
-                    className="px-4 py-2 text-sm font-semibold text-slate-300 bg-slate-600 hover:bg-slate-500 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  {(!isEditMode || isOwner) && (
-                    <SubmitButton
-                      label="保存"
-                      loadingLabel="保存中..."
-                      loading={submitting}
-                      className="px-4 py-2 text-sm font-semibold text-white bg-sky-700 hover:bg-sky-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                  )}
-                </div>
-              </div>
-            </form>
+            <SingleEventForm
+              key={`single-${event?.id ?? 'new'}-${initialStart ?? ''}`}
+              initialValues={buildSingleInitialValues()}
+              isEditMode={isEditMode}
+              isOwner={isOwner}
+              isRepeatGroup={isRepeatGroup}
+              onSubmit={handleSingleSubmit}
+              onDeleteClick={() => setShowDeleteConfirm(true)}
+              onClose={onClose}
+            />
           )}
 
           {/* 複数日付モード */}
           {!isEditMode && createMode === 'multiple' && (
-            <form onSubmit={(e) => { void handleMultipleSubmit(e); }} noValidate>
-              <FormField
-                id="multiple-event-title"
-                label="タイトル"
-                value={multipleValues.title}
-                onChange={(v) => setMultipleValues((prev) => ({ ...prev, title: v }))}
-                error={multipleErrors.title}
-                disabled={submitting}
-                maxLength={200}
-              />
-              <TextAreaField
-                id="multiple-event-description"
-                label="説明"
-                value={multipleValues.description}
-                onChange={(v) => setMultipleValues((prev) => ({ ...prev, description: v }))}
-                disabled={submitting}
-                maxLength={1000}
-                rows={3}
-              />
-
-              <div className="mb-5">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="block text-sm font-medium text-slate-300">日時</span>
-                  <button
-                    type="button"
-                    onClick={addStartTime}
-                    disabled={submitting}
-                    className="text-xs text-sky-400 hover:text-sky-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    + 日時を追加
-                  </button>
-                </div>
-                {multipleValues.start_times.map((startTime, i) => (
-                  <div key={i} className="flex items-start gap-2 mb-3">
-                    <div className="flex-1 space-y-1">
-                      <DateTimeField
-                        id={`multiple-start-time-${i}`}
-                        label="開始"
-                        value={startTime}
-                        onChange={(v) => updateStartTime(i, v)}
-                        disabled={submitting}
-                      />
-                      <DateTimeField
-                        id={`multiple-end-time-${i}`}
-                        label="終了"
-                        value={multipleValues.end_times[i] ?? ''}
-                        onChange={(v) => updateEndTime(i, v)}
-                        disabled={submitting}
-                      />
-                    </div>
-                    {multipleValues.start_times.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeStartTime(i)}
-                        disabled={submitting}
-                        className="mt-6 text-slate-400 hover:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed text-lg leading-none"
-                        aria-label="削除"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                ))}
-                {multipleErrors.start_times && (
-                  <p className="mt-1 text-xs text-red-400">{multipleErrors.start_times}</p>
-                )}
-                {multipleErrors.end_times && (
-                  <p className="mt-1 text-xs text-red-400">{multipleErrors.end_times}</p>
-                )}
-              </div>
-
-              <ColorPicker
-                value={multipleValues.color}
-                onChange={(c) => setMultipleValues((prev) => ({ ...prev, color: c }))}
-                disabled={submitting}
-              />
-
-              <div className="flex justify-end gap-2 mt-6">
-                <CancelButton
-                  onClick={onClose}
-                  disabled={submitting}
-                  className="px-4 py-2 text-sm font-semibold text-slate-300 bg-slate-600 hover:bg-slate-500 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-                <SubmitButton
-                  label={`${multipleValues.start_times.length}件作成`}
-                  loadingLabel="作成中..."
-                  loading={submitting}
-                  className="px-4 py-2 text-sm font-semibold text-white bg-sky-700 hover:bg-sky-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-              </div>
-            </form>
+            <MultipleEventForm
+              key={`multiple-${initialStart ?? ''}`}
+              initialValues={buildMultipleInitialValues()}
+              onSubmit={handleMultipleSubmit}
+              onClose={onClose}
+            />
           )}
 
           {/* 繰り返しモード */}
           {!isEditMode && createMode === 'repeat' && (
-            <form onSubmit={(e) => { void handleRepeatSubmit(e); }} noValidate>
-              <FormField
-                id="repeat-event-title"
-                label="タイトル"
-                value={repeatValues.title}
-                onChange={(v) => setRepeatValues((prev) => ({ ...prev, title: v }))}
-                error={repeatErrors.title}
-                disabled={submitting}
-                maxLength={200}
-              />
-              <TextAreaField
-                id="repeat-event-description"
-                label="説明"
-                value={repeatValues.description}
-                onChange={(v) => setRepeatValues((prev) => ({ ...prev, description: v }))}
-                disabled={submitting}
-                maxLength={1000}
-                rows={3}
-              />
-              <DateTimeField
-                id="repeat-event-start-at"
-                label="最初の開始日時"
-                value={repeatValues.start_at}
-                onChange={(v) => setRepeatValues((prev) => ({ ...prev, start_at: v }))}
-                error={repeatErrors.start_at}
-                disabled={submitting}
-              />
-              <DateTimeField
-                id="repeat-event-end-at"
-                label="最初の終了日時"
-                value={repeatValues.end_at}
-                onChange={(v) => setRepeatValues((prev) => ({ ...prev, end_at: v }))}
-                error={repeatErrors.end_at}
-                disabled={submitting}
-              />
-
-              <SelectField
-                id="repeat-event-type"
-                label="繰り返しタイプ"
-                value={repeatValues.repeat_type}
-                onChange={(v) =>
-                  setRepeatValues((prev) => ({
-                    ...prev,
-                    repeat_type: v as 'daily' | 'weekly' | 'monthly',
-                  }))
-                }
-                options={REPEAT_TYPE_OPTIONS}
-                disabled={submitting}
-              />
-
-              <FormField
-                id="repeat-event-interval"
-                label={`繰り返し間隔（${{ daily: '日', weekly: '週', monthly: 'ヶ月' }[repeatValues.repeat_type]}ごと）`}
-                value={repeatValues.interval}
-                onChange={(v) => setRepeatValues((prev) => ({ ...prev, interval: v }))}
-                disabled={submitting}
-              />
-
-              {/* 毎週の場合のみ曜日選択を表示する */}
-              {repeatValues.repeat_type === 'weekly' && (
-                <div className="mb-5">
-                  <span className="block text-sm font-medium text-slate-300 mb-1.5">
-                    対象曜日（未選択の場合は開始日時の曜日）
-                  </span>
-                  <div className="flex gap-2 flex-wrap">
-                    {DAY_OF_WEEK_LABELS.map((label, day) => (
-                      <button
-                        key={day}
-                        type="button"
-                        onClick={() => toggleDayOfWeek(day)}
-                        disabled={submitting}
-                        className={`w-9 h-9 text-sm font-medium rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                          repeatValues.days_of_week.includes(day)
-                            ? 'bg-sky-700 text-white'
-                            : 'bg-slate-600 text-slate-300 hover:bg-slate-500'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <SelectField
-                id="repeat-event-end-condition-type"
-                label="終了条件"
-                value={repeatValues.end_condition_type}
-                onChange={(v) =>
-                  setRepeatValues((prev) => ({
-                    ...prev,
-                    end_condition_type: v as 'end_date' | 'count',
-                  }))
-                }
-                options={END_CONDITION_OPTIONS}
-                disabled={submitting}
-              />
-
-              {repeatValues.end_condition_type === 'end_date' ? (
-                <DateTimeField
-                  id="repeat-event-end-date"
-                  label="終了日"
-                  value={repeatValues.end_date}
-                  onChange={(v) => setRepeatValues((prev) => ({ ...prev, end_date: v }))}
-                  error={repeatErrors.end_condition}
-                  disabled={submitting}
-                />
-              ) : (
-                <FormField
-                  id="repeat-event-count"
-                  label="繰り返し回数"
-                  value={repeatValues.count}
-                  onChange={(v) => setRepeatValues((prev) => ({ ...prev, count: v }))}
-                  error={repeatErrors.end_condition}
-                  disabled={submitting}
-                />
-              )}
-
-              <ColorPicker
-                value={repeatValues.color}
-                onChange={(c) => setRepeatValues((prev) => ({ ...prev, color: c }))}
-                disabled={submitting}
-              />
-
-              <div className="flex justify-end gap-2 mt-6">
-                <CancelButton
-                  onClick={onClose}
-                  disabled={submitting}
-                  className="px-4 py-2 text-sm font-semibold text-slate-300 bg-slate-600 hover:bg-slate-500 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-                <SubmitButton
-                  label="繰り返し作成"
-                  loadingLabel="作成中..."
-                  loading={submitting}
-                  className="px-4 py-2 text-sm font-semibold text-white bg-sky-700 hover:bg-sky-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-              </div>
-            </form>
+            <RepeatEventForm
+              key={`repeat-${initialStart ?? ''}`}
+              initialValues={buildRepeatInitialValues()}
+              onSubmit={handleRepeatSubmit}
+              onClose={onClose}
+            />
           )}
         </div>
       </div>

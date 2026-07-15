@@ -143,14 +143,20 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/validation/linkValidation.ts` — リンク/フォルダフォームバリデーション。title必須。type="LINK" の場合は url も必須
 - `src/components/ConfirmModal.tsx` — 削除確認モーダル
 - `src/components/PermissionModal.tsx` — 権限共有モーダル。`GET /chat/users` で全ユーザー一覧を取得し、既に権限付与済みのユーザーを除外してセレクトに表示。READ/WRITE 選択 + 付与ボタン + 既存権限一覧（削除ボタン付き）。タスクとリンク集の両方で共通使用する
-- `src/components/TaskDetailPanel.tsx` — タスク詳細サイドパネル。`task: Task | null` / `isToggling` / `isOwner` / `isMobile` / `onClose` / `onToggleComplete` / `onSelectTask` / `onDeleteClick` / `onUpdate` / `onDeleteNotification` を受け取り、タスクデータを props で表示する（独自 API 呼び出しなし）。スマホ時（`isMobile=true`）は「← 一覧へ戻る」ボタンを表示し PC 向け × ボタンを非表示にする。子タスク・親タスクのリンクは `onSelectTask` 経由でパネル内切り替え（ページ遷移なし）。通知一覧を表示し `onDeleteNotification` コールバックで削除を親に委譲する。作成者のみ「共有」ボタンを表示し、クリックで `fetchTaskPermissions` を呼び出して `PermissionModal` を開く
+- `src/components/TaskDetailPanel.tsx` — タスク詳細サイドパネル。`task: Task | null` / `isToggling` / `isOwner` / `isMobile` / `onClose` / `onToggleComplete` / `onSelectTask` / `onDeleteClick` / `onUpdate` / `onDeleteNotification` を受け取り、タスクデータを props で表示する（独自 API 呼び出しなし）。スマホ時（`isMobile=true`）は「← 一覧へ戻る」ボタンを表示し PC 向け × ボタンを非表示にする。子タスク・親タスクのリンクは `onSelectTask` 経由でパネル内切り替え（ページ遷移なし）。通知一覧を表示し `onDeleteNotification` コールバックで削除を親に委譲する。作成者のみ「共有」ボタンを表示し、クリックで `fetchTaskPermissions` を呼び出して `PermissionModal` を開く。「編集する」ボタン押下でインライン編集フォーム（`TaskEditForm`）を表示する
 - `src/components/LinkFormModal.tsx` — リンク/フォルダ作成・編集フォームモーダル。タイプ選択（編集時は変更不可）・タイトル・URL（LINK タイプのみ）・説明・親フォルダ選択（FOLDER タイプのみ表示）。自分自身と子孫は親フォルダ候補から除外する
 - `src/components/TextAreaField.tsx` — textareaラッパー共通コンポーネント
 - `src/components/DateTimeField.tsx` — datetime-local入力ラッパー共通コンポーネント
 - `src/components/SelectField.tsx` — selectラッパー共通コンポーネント
-- `src/components/EventModal.tsx` — 予定作成・編集モーダル。新規作成時は「通常」「複数日付」「繰り返し」の3モードをタブで切り替えられる。編集時は通常フォームのみ表示。繰り返しグループ予定の編集時は「この予定のみ変更」「繰り返し予定を全て変更」のスコープ選択ラジオボタンを表示する。`onSave` コールバックは `(input: EventInput, updateScope: UpdateScope) => Promise<void>` シグネチャ。複数日付モードは `DateTimeField` の開始・終了ペアをリストで追加・削除可能（`start_times`/`end_times` を同期して管理）。繰り返しモードは最初の開始日時・終了日時・繰り返しタイプ（毎日/毎週/毎月）・間隔・曜日（毎週のみ）・終了条件（終了日 or 回数）を設定可能。全 3 モードに `ColorPicker` コンポーネントを配置し、6色（cyan/indigo/emerald/violet/rose/amber）からカラー選択できる。`EVENT_COLORS` 定数をエクスポートして色定義を一元管理する
+- `src/components/EventModal.tsx` — 予定作成・編集モーダル（オーケストレーター）。新規作成時は「通常」「複数日付」「繰り返し」の3モードをタブで切り替えられる。編集時は通常フォームのみ表示。各フォームのUIと状態管理は `SingleEventForm` / `MultipleEventForm` / `RepeatEventForm` に委譲する。`onSave` コールバックは `(input: EventInput, updateScope: UpdateScope) => Promise<void>` シグネチャ。`EVENT_COLORS` 定数を `ColorPicker.tsx` から re-export する
+- `src/components/SingleEventForm.tsx` — 通常予定作成・編集フォームコンポーネント。フォーム状態・バリデーション・送信ロジックを担う。繰り返しグループ予定の編集時にスコープ選択（この予定のみ/全て変更）を表示する
+- `src/components/MultipleEventForm.tsx` — 複数日付一括作成フォームコンポーネント。開始・終了日時のペアをリストで追加・削除でき、全ペアで一括作成する
+- `src/components/RepeatEventForm.tsx` — 繰り返し予定一括作成フォームコンポーネント。繰り返しタイプ・間隔・曜日・終了条件を設定できる
+- `src/components/ColorPicker.tsx` — 色選択パレットコンポーネント。`EVENT_COLORS` 定数（6色）と `ColorPicker` コンポーネントを提供する
 - `src/validation/eventValidation.ts` — カレンダー予定フォームのバリデーション。`validateEventForm`（通常）・`validateMultipleEventForm`（複数日付: 各ペアで end_time > start_time を検証）・`validateRepeatEventForm`（繰り返し: end_at > start_at を検証）の3種類を提供。`MultipleEventFormValues` は `start_times`/`end_times` 配列、`RepeatEventFormValues` は `end_at` を持つ。全フォーム値型に `color: string` フィールドを含む
-- - `src/components/CancelButton.tsx` — キャンセルボタン共通コンポーネント
+- `src/components/CancelButton.tsx` — キャンセルボタン共通コンポーネント
+- `src/components/TaskEditForm.tsx` — タスクインライン編集フォームコンポーネント。`TaskDetailPanel` 内で使用し、タイトル・説明・期限・優先度・カテゴリ・担当者を編集する。`onSave(id, input)` / `onCancel()` コールバックで親と通信する
+- `src/components/LinkTreeNode.tsx` — リンクツリーの1ノードを再帰的にレンダリングするコンポーネント。FOLDER タイプは展開/折りたたみ可能で子要素を再帰レンダリング。LINK タイプは別タブでリンクを開く。`LinkListPage` から独立ファイルとして抽出
 
 API base URL is built from env vars: `REACT_APP_API_SCHEME`, `REACT_APP_API_HOST`, `REACT_APP_API_PORT`.
 

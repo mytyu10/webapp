@@ -4,10 +4,8 @@ import {
   Task,
   TaskInput,
   TaskNotification,
-  Priority,
-  PRIORITY_VALUES,
-  PRIORITY_LABELS,
   PRIORITY_BADGE_CLASSES,
+  PRIORITY_LABELS,
 } from '../api/taskApi';
 import {
   fetchTaskPermissions,
@@ -16,18 +14,11 @@ import {
   Permission,
   PermissionInput,
 } from '../api/permissionApi';
-import { validateTaskForm, parseAssignees, TaskFormValues, TaskFormErrors } from '../validation/taskValidation';
 import PermissionModal from './PermissionModal';
+import TaskEditForm from './TaskEditForm';
 import { logger } from '../logger';
 
 const CONTEXT = 'TaskDetailPanel';
-
-/** ISO文字列をdatetime-local input用のローカル時刻文字列に変換する */
-function toDatetimeLocal(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number): string => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 /** TaskDetailPanel コンポーネントのProps型 */
 interface TaskDetailPanelProps {
@@ -53,17 +44,12 @@ interface TaskDetailPanelProps {
   onDeleteNotification: (taskId: number, notificationId: number) => Promise<void>;
 }
 
-const INPUT_CLASS =
-  'w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-md text-sm text-slate-100 outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/30 disabled:opacity-50';
-const LABEL_CLASS = 'block text-xs font-medium text-slate-400 uppercase tracking-wide mb-1';
-const ERROR_CLASS = 'mt-1 text-xs text-red-400';
-
 /**
  * タスク詳細サイドパネルコンポーネント
  * タスク一覧画面の右側に表示するサイドパネル。
  * タスクデータは useTaskList と共有した props で受け取り、独自の API 呼び出しは行わない。
  * 編集・削除・子タスク作成・権限共有のアクションを提供する。
- * 「編集する」ボタン押下でパネル内にインライン編集フォームを表示する。
+ * 「編集する」ボタン押下でパネル内にインライン編集フォーム（TaskEditForm）を表示する。
  * スマホ（isMobile=true）時は「← 一覧へ戻る」ボタンを表示し、閉じるボタンを拡大する。
  * 通知一覧を表示し、各通知に削除ボタンを提供する。
  * 作成者のみ「共有」ボタンを表示し、PermissionModal で権限管理を行う。
@@ -83,17 +69,6 @@ function TaskDetailPanel({
   const navigate = useNavigate();
 
   const [isEditing, setIsEditing] = useState(false);
-  const [editValues, setEditValues] = useState<TaskFormValues>({
-    title: '',
-    description: '',
-    due_date: '',
-    assigneesText: '',
-    priority: 'MEDIUM',
-    category: '',
-  });
-  const [editErrors, setEditErrors] = useState<TaskFormErrors>({});
-  const [saveError, setSaveError] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
   const [deletingNotificationId, setDeletingNotificationId] = useState<number | null>(null);
 
   /** 権限モーダルの表示状態 */
@@ -103,58 +78,8 @@ function TaskDetailPanel({
 
   useEffect(() => {
     setIsEditing(false);
-    setEditErrors({});
-    setSaveError('');
     setIsPermissionModalOpen(false);
   }, [task?.id]);
-
-  function startEdit(): void {
-    if (!task) return;
-    setEditValues({
-      title: task.title,
-      description: task.description,
-      due_date: toDatetimeLocal(task.due_date),
-      assigneesText: task.assignees.join(', '),
-      priority: task.priority,
-      category: task.category ?? '',
-    });
-    setEditErrors({});
-    setSaveError('');
-    setIsEditing(true);
-  }
-
-  function cancelEdit(): void {
-    setIsEditing(false);
-    setEditErrors({});
-    setSaveError('');
-  }
-
-  async function handleSave(): Promise<void> {
-    if (!task) return;
-    const errors = validateTaskForm(editValues);
-    if (Object.keys(errors).length > 0) {
-      setEditErrors(errors);
-      return;
-    }
-    setEditErrors({});
-    setSaveError('');
-    setIsSaving(true);
-    try {
-      await onUpdate(task.id, {
-        title: editValues.title,
-        description: editValues.description,
-        due_date: new Date(editValues.due_date).toISOString(),
-        assignees: parseAssignees(editValues.assigneesText),
-        priority: editValues.priority,
-        category: editValues.category || undefined,
-      });
-      setIsEditing(false);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'タスクの更新に失敗しました。');
-    } finally {
-      setIsSaving(false);
-    }
-  }
 
   /**
    * 通知削除を親コンポーネントに委譲する
@@ -205,6 +130,14 @@ function TaskDetailPanel({
     if (!task) return;
     await deleteTaskPermission(task.id, username);
     setPermissions((prev) => prev.filter((p) => p.username !== username));
+  }
+
+  /**
+   * タスク編集フォームの保存完了後に編集モードを終了する
+   */
+  async function handleEditSave(id: number, input: Partial<TaskInput>): Promise<void> {
+    await onUpdate(id, input);
+    setIsEditing(false);
   }
 
   return (
@@ -276,105 +209,11 @@ function TaskDetailPanel({
 
             {isEditing ? (
               /* 編集フォーム */
-              <div className="space-y-4">
-                <div>
-                  <label className={LABEL_CLASS}>タイトル</label>
-                  <input
-                    type="text"
-                    value={editValues.title}
-                    onChange={(e) => setEditValues((prev) => ({ ...prev, title: e.target.value }))}
-                    disabled={isSaving}
-                    className={INPUT_CLASS}
-                  />
-                  {editErrors.title && <p className={ERROR_CLASS}>{editErrors.title}</p>}
-                </div>
-
-                <div>
-                  <label className={LABEL_CLASS}>説明文</label>
-                  <textarea
-                    value={editValues.description}
-                    onChange={(e) => setEditValues((prev) => ({ ...prev, description: e.target.value }))}
-                    disabled={isSaving}
-                    rows={4}
-                    className={`${INPUT_CLASS} resize-none`}
-                  />
-                  {editErrors.description && <p className={ERROR_CLASS}>{editErrors.description}</p>}
-                </div>
-
-                <div>
-                  <label className={LABEL_CLASS}>期限</label>
-                  <input
-                    type="datetime-local"
-                    value={editValues.due_date}
-                    onChange={(e) => setEditValues((prev) => ({ ...prev, due_date: e.target.value }))}
-                    disabled={isSaving}
-                    className={INPUT_CLASS}
-                  />
-                  {editErrors.due_date && <p className={ERROR_CLASS}>{editErrors.due_date}</p>}
-                </div>
-
-                <div>
-                  <label className={LABEL_CLASS}>優先度</label>
-                  <select
-                    value={editValues.priority}
-                    onChange={(e) => setEditValues((prev) => ({ ...prev, priority: e.target.value as Priority }))}
-                    disabled={isSaving}
-                    className={INPUT_CLASS}
-                  >
-                    {PRIORITY_VALUES.map((p) => (
-                      <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
-                    ))}
-                  </select>
-                  {editErrors.priority && <p className={ERROR_CLASS}>{editErrors.priority}</p>}
-                </div>
-
-                <div>
-                  <label className={LABEL_CLASS}>カテゴリ（任意）</label>
-                  <input
-                    type="text"
-                    value={editValues.category}
-                    onChange={(e) => setEditValues((prev) => ({ ...prev, category: e.target.value }))}
-                    disabled={isSaving}
-                    placeholder="例: 開発, 設計"
-                    className={INPUT_CLASS}
-                  />
-                  {editErrors.category && <p className={ERROR_CLASS}>{editErrors.category}</p>}
-                </div>
-
-                <div>
-                  <label className={LABEL_CLASS}>担当者（カンマ区切り）</label>
-                  <input
-                    type="text"
-                    value={editValues.assigneesText}
-                    onChange={(e) => setEditValues((prev) => ({ ...prev, assigneesText: e.target.value }))}
-                    disabled={isSaving}
-                    placeholder="例: alice, bob"
-                    className={INPUT_CLASS}
-                  />
-                  {editErrors.assignees && <p className={ERROR_CLASS}>{editErrors.assignees}</p>}
-                </div>
-
-                {saveError && <p className={ERROR_CLASS}>{saveError}</p>}
-
-                <div className="flex gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => void handleSave()}
-                    disabled={isSaving}
-                    className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-sm font-semibold rounded-md transition-colors"
-                  >
-                    {isSaving ? '保存中...' : '保存する'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelEdit}
-                    disabled={isSaving}
-                    className="px-4 py-2 bg-slate-600 hover:bg-slate-500 disabled:opacity-50 text-white text-sm font-semibold rounded-md transition-colors"
-                  >
-                    キャンセル
-                  </button>
-                </div>
-              </div>
+              <TaskEditForm
+                task={task}
+                onSave={handleEditSave}
+                onCancel={() => setIsEditing(false)}
+              />
             ) : (
               /* 詳細表示 */
               <>
@@ -563,7 +402,7 @@ function TaskDetailPanel({
                   </button>
                   <button
                     type="button"
-                    onClick={startEdit}
+                    onClick={() => setIsEditing(true)}
                     disabled={isToggling}
                     className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-md transition-colors"
                   >
