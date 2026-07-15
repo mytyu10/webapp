@@ -36,6 +36,10 @@ model Task {
   creator       Account            @relation("TaskCreator", fields: [created_by], references: [username])
   parent        Task?              @relation("TaskChildren", fields: [parent_id], references: [id])
   children      Task[]             @relation("TaskChildren")
+
+  @@index([created_by])
+  @@index([parent_id])
+  @@index([due_date])
 }
 
 model TaskAssignee {
@@ -45,6 +49,7 @@ model TaskAssignee {
   account  Account @relation(fields: [username], references: [username], onDelete: Cascade)
 
   @@id([task_id, username])
+  @@index([username])
 }
 
 model TaskNotification {
@@ -67,6 +72,9 @@ model Event {
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
   creator         Account  @relation("EventCreator", fields: [created_by], references: [username])
+
+  @@index([created_by])
+  @@index([start_at])
 }
 
 model LinkItem {
@@ -83,6 +91,9 @@ model LinkItem {
   creator     Account    @relation("LinkCreator", fields: [created_by], references: [username])
   parent      LinkItem?  @relation("LinkChildren", fields: [parent_id], references: [id], onDelete: Cascade)
   children    LinkItem[] @relation("LinkChildren")
+
+  @@index([created_by])
+  @@index([parent_id])
 }
 
 model ChatMessage {
@@ -93,4 +104,8 @@ model ChatMessage {
   created_at DateTime @default(now())
   sender     Account  @relation("ChatSender",   fields: [from_user], references: [username])
   receiver   Account  @relation("ChatReceiver", fields: [to_user],   references: [username])
+
+  @@index([from_user])
+  @@index([to_user])
+  @@index([created_at])
 }

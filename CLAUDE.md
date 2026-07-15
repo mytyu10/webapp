@@ -18,6 +18,7 @@ npm run format        # Prettier format
 npm run test          # run unit tests
 npm run test:watch    # unit tests in watch mode
 npm run test:cov      # unit tests with coverage
+npm run test:e2e      # run E2E tests (requires backend/.env)
 ```
 
 Run a single test file:
@@ -48,19 +49,19 @@ npx prisma generate           # regenerate Prisma client
 
 Layered module structure: **Controller → Service → Repository → Prisma**.
 
-- `src/accounts/controller/` — REST endpoints (`POST /accounts/login`, `POST /accounts/regist`, `GET /accounts/me`, `GET /accounts/line/login`, `GET /accounts/line/callback`)
-- `src/accounts/service/` — business logic（ログイン・登録・LINE OAuth フロー・ログインユーザー情報取得）
-- `src/accounts/repository/` — Prisma queries（`updateLineUserId` で LINE User ID を保存。`findAll()` で全ユーザー一覧取得）
+- `src/accounts/controller/` — REST endpoints (`POST /accounts/login`, `POST /accounts/regist`, `GET /accounts/me`, `GET /accounts/line/login`, `GET /accounts/line/callback`)。`POST /accounts/login` と `POST /accounts/regist` には `@Throttle({ default: { ttl: 60000, limit: 5 } })` で1分5回のレートリミットを適用する
+- `src/accounts/service/` — business logic（ログイン・登録・LINE OAuth フロー・ログインユーザー情報取得）。`login()` は bcrypt で照合し、失敗時は SHA-256 フォールバックで旧形式パスワードを確認して自動移行する
+- `src/accounts/repository/` — Prisma queries（`updateLineUserId` で LINE User ID を保存。`findAll()` で全ユーザー一覧取得。`updateHashedPassword()` で bcrypt 移行時のパスワード更新）
 - `src/accounts/dto/account.dto.ts` — validation DTOs (class-validator)。`LineCallbackQueryDto`（OAuthコード受取）・`AccountMeResponseDto`（LINE連携状態含む）を定義
 - `src/tasks/controller/` — REST endpoints (`GET /tasks`, `GET /tasks/categories`, `GET /tasks/:id`, `POST /tasks`, `PATCH /tasks/:id`, `DELETE /tasks/:id`, `POST /tasks/:id/notifications`, `GET /tasks/:id/notifications`, `DELETE /tasks/:id/notifications/:notificationId`) — JwtAuthGuard適用済み。`GET /tasks` と `GET /tasks/categories` は `req.user.username` をサービスに渡してログインユーザーのタスクのみ取得する
 - `src/tasks/service/` — タスクのビジネスロジック（`task.service.ts`）・バッチ更新処理（`task-queue.service.ts`: 100msウィンドウ内のリクエストをバッファリングして順次処理）・通知CRUD（`task-notification.service.ts`）。`findAll(username)` / `findAllCategories(username)` はユーザー名をリポジトリに伝播する
 - `src/tasks/repository/` — Prisma CRUD・カテゴリ取得（is_completed・closed_by・notifications フィールド対応）。`task-notification.repository.ts` で通知の作成・取得・削除・送信対象抽出・送信済みマークを提供。`findAll(username)` は `created_by = username` OR `assignees に username が含まれる` 条件でフィルタリングする。`findAllCategories(username)` も同様の OR 条件でユーザーのタスクに紐付くカテゴリのみ返す
-- `src/tasks/dto/task.dto.ts` — CreateTaskDto / UpdateTaskDto（is_completed含む） / TaskResponseDto（is_completed・closed_by・notifications含む） / Priority型 / CreateNotificationDto / NotificationResponseDto
+- `src/tasks/dto/task.dto.ts` — CreateTaskDto / UpdateTaskDto（is_completed含む） / TaskResponseDto（is_completed・closed_by・notifications含む） / Priority型 / CreateNotificationDto / NotificationResponseDto。主要クラスに `@ApiProperty` / `@ApiPropertyOptional` デコレータを追加済み
 - `src/line/line-notification.service.ts` — `@Cron(CronExpression.EVERY_MINUTE)` で毎分実行するCronジョブ。未送信かつ `notify_at <= 現在時刻` の通知を取得し、担当者（LINE連携済みのみ）に LINE Messaging API でプッシュ通知を送信。全担当者処理後に `is_sent=true` にマーク。送信失敗時は `is_sent` を更新せず次回再試行
 - `src/events/controller/` — REST endpoints (`GET /events`, `GET /events/:id`, `POST /events`, `POST /events/multiple`, `POST /events/repeat`, `PATCH /events/repeat-group/:groupId`, `PATCH /events/:id`, `DELETE /events/:id`) — JwtAuthGuard適用済み。`POST /events/multiple` は複数日付一括作成、`POST /events/repeat` は繰り返しルール一括作成、`PATCH /events/repeat-group/:groupId` は繰り返しグループ全件一括更新（ルート衝突回避のため `:id` より前に定義）。`GET /events` は `req.user.username` をサービスに渡してログインユーザーの予定のみ取得する
 - `src/events/service/` — 予定のビジネスロジック（`event.service.ts`）。単件作成（`create`）・複数日付一括作成（`createMultiple`）・繰り返し一括作成（`createRepeat`）・単件更新（`update`）・繰り返しグループ全件更新（`updateRepeatGroup`）・削除。繰り返し展開は daily/weekly/monthly の3タイプ対応。monthly は月末補正あり。最大生成件数100件制限。`createRepeat` は全件に同一 `repeat_group_id`（UUID）を付与する。`updateRepeatGroup` はグループ全件の `created_by` を確認してから `start_diff_ms`/`end_diff_ms` で各日時をシフト更新する。全作成・更新メソッドで `color` フィールドを処理する（未指定時はデフォルト `cyan`）。`findAll(username)` はユーザー名をリポジトリに伝播する
 - `src/events/repository/` — Prisma CRUD（findAll/findById/create/createMany/update/updateMany/delete/findByRepeatGroupId）。`createMany`・`updateMany` は SQLite の制約回避のため `$transaction` + 個別操作配列で実装。`findByRepeatGroupId` は `repeat_group_id` で絞り込み `start_at` 昇順で返す。`update`/`updateMany` は `color` フィールドをサポート。`findAll(username)` は `where: { created_by: username }` でログインユーザーの予定のみ返す
-- `src/events/dto/event.dto.ts` — CreateEventDto / CreateMultipleEventsDto（start_times配列・end_times配列。件数一致必須） / CreateRepeatEventDto（end_at・RepeatRuleDto含む） / UpdateEventDto / UpdateRepeatGroupEventDto（title?・description?・start_diff_ms?・end_diff_ms?・color? のオプション項目） / EventResponseDto（repeat_group_id・color含む） / RepeatType enum（daily/weekly/monthly）。全 DTO に `color?: string`（@IsOptional・@IsString）を追加
+- `src/events/dto/event.dto.ts` — CreateEventDto / CreateMultipleEventsDto（start_times配列・end_times配列。件数一致必須） / CreateRepeatEventDto（end_at・RepeatRuleDto含む） / UpdateEventDto / UpdateRepeatGroupEventDto（title?・description?・start_diff_ms?・end_diff_ms?・color? のオプション項目） / EventResponseDto（repeat_group_id・color含む） / RepeatType enum（daily/weekly/monthly）。全 DTO に `color?: string`（@IsOptional・@IsString）を追加。主要クラスに `@ApiProperty` / `@ApiPropertyOptional` デコレータを追加済み
 - - `src/links/controller/` — REST endpoints (`GET /links`, `POST /links`, `PATCH /links/:id`, `DELETE /links/:id`) — JwtAuthGuard適用済み。`GET /links` は `req.user.username` をサービスに渡してログインユーザーのリンクのみ取得する
 - `src/links/service/` — リンク/フォルダのビジネスロジック。ツリー構築（Map を使ったフラット→ツリー変換）・LINK を親にできない制約チェック・作成者チェック。`findAll(username)` はユーザー名をリポジトリに伝播する
 - `src/links/repository/` — Prisma CRUD（findAll/findById/create/update/delete）。order昇順・created_at昇順でソート。`findAll(username)` は `where: { created_by: username }` でログインユーザーのリンク/フォルダのみ返す
@@ -74,14 +75,15 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/jwt/jwt-auth.guard.ts` — JwtAuthGuard（Bearerトークン検証）。検証成功時に `request.user` へ `JwtPayload` をセット
 - `src/types/express.d.ts` — Express `Request` 型拡張（`request.user?: JwtPayload`）
 - `src/prisma/prisma.service.ts` — Prisma client singleton
-- `src/common/service/hash.service.ts` — SHA256 password hashing
+- `src/common/service/hash.service.ts` — bcrypt（rounds=10）によるパスワードハッシュ化。`createHash(value)` → bcrypt ハッシュ（async）、`compareHash(value, hashed)` → bcrypt 照合（async）、`isLegacySha256(value, hashed)` → SHA-256 フォールバック照合（sync、移行期間用）
 - `src/common/service/logger.service.ts` — ロガーサービス
 - `src/common/type/message.ts` — Japanese message constants (centralised)。`AUTH`（LINE OAuth関連含む）・`NOTIFICATION`（通知CRUD・LINE送信失敗）・`LINK`（リンク集CRUD・権限エラー）・`CHAT`（チャット送受信・ユーザー取得）セクションを含む
 - `src/common/type/status.enum.ts` — HTTP status enums
+- `src/main.ts` — Swagger（OpenAPI）ドキュメントを `/api/docs` で提供する。`DocumentBuilder` で JWT Bearer 認証を設定し `SwaggerModule.setup()` で公開する
 
-`AppModule` imports `ScheduleModule.forRoot()`（Cronジョブ有効化）・`CommonModule`・`AccountsModule`・`TaskModule`・`EventsModule`・`LinkModule`・`ChatModule`。`LineNotificationService` は `AppModule` の providers に登録し、`TaskModule` エクスポートの `TaskNotificationRepository` と `CommonModule` エクスポートの `LoggerService` を DI で受け取る。重複登録なし。`AccountsModule` は `AccountRepository` をエクスポートして `ChatModule` からの DI を可能にする。
+`AppModule` imports `ScheduleModule.forRoot()`（Cronジョブ有効化）・`ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }])`（レートリミット: デフォルト1分20回）・`CommonModule`・`AccountsModule`・`TaskModule`・`EventsModule`・`LinkModule`・`ChatModule`。`LineNotificationService` は `AppModule` の providers に登録し、`TaskModule` エクスポートの `TaskNotificationRepository` と `CommonModule` エクスポートの `LoggerService` を DI で受け取る。`APP_GUARD` として `ThrottlerGuard` をグローバル適用する。`AccountsModule` は `AccountRepository` をエクスポートして `ChatModule` からの DI を可能にする。
 
-**Login flow**: DTO validation → SHA256 hash password → query DB by username → compare hashes → issue JWT.
+**Login flow**: DTO validation → bcrypt compare（bcrypt ハッシュと照合）→ 失敗時は SHA-256 フォールバック（移行ロジック）→ SHA-256 一致時は bcrypt 再ハッシュして DB 更新 → issue JWT.
 
 **Task flow**: JwtAuthGuard → Controller（`req.user.username` 抽出）→ Service → Repository（`username` でフィルタリング）→ Prisma。
 
@@ -182,6 +184,10 @@ model Task {
   creator       Account            @relation("TaskCreator", fields: [created_by], references: [username])
   parent        Task?              @relation("TaskChildren", fields: [parent_id], references: [id])
   children      Task[]             @relation("TaskChildren")
+
+  @@index([created_by])
+  @@index([parent_id])
+  @@index([due_date])
 }
 
 model TaskAssignee {
@@ -191,6 +197,7 @@ model TaskAssignee {
   account  Account @relation(fields: [username], references: [username], onDelete: Cascade)
 
   @@id([task_id, username])
+  @@index([username])
 }
 
 model TaskNotification {
@@ -213,6 +220,9 @@ model Event {
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
   creator         Account  @relation("EventCreator", fields: [created_by], references: [username])
+
+  @@index([created_by])
+  @@index([start_at])
 }
 
 model LinkItem {
@@ -229,6 +239,9 @@ model LinkItem {
   creator     Account    @relation("LinkCreator", fields: [created_by], references: [username])
   parent      LinkItem?  @relation("LinkChildren", fields: [parent_id], references: [id], onDelete: Cascade)
   children    LinkItem[] @relation("LinkChildren")
+
+  @@index([created_by])
+  @@index([parent_id])
 }
 
 model ChatMessage {
@@ -239,6 +252,10 @@ model ChatMessage {
   created_at DateTime @default(now())
   sender     Account  @relation("ChatSender",   fields: [from_user], references: [username])
   receiver   Account  @relation("ChatReceiver", fields: [to_user],   references: [username])
+
+  @@index([from_user])
+  @@index([to_user])
+  @@index([created_at])
 }
 ```
 
@@ -265,7 +282,10 @@ model ChatMessage {
 
 ## Key Conventions
 
-- Password hashing uses **SHA256** (not bcrypt, despite bcrypt being installed)
+- Password hashing uses **bcrypt (rounds=10)**. SHA-256 is used only as a legacy fallback during login migration (auto-rehash to bcrypt on successful SHA-256 login)
 - Backend ESLint disables `no-explicit-any`; warns on `no-floating-promises` and `no-unsafe-argument`
 - Prettier: single quotes, trailing commas
 - Backend `tsconfig.json`: `noImplicitAny: false`, module resolution `nodenext`
+- Rate limiting: `ThrottlerModule` global guard (1分20回). Login/regist endpoints: 1分5回
+- Swagger: available at `GET /api/docs`
+- E2E tests: `backend/test/app.e2e-spec.ts`。`ThrottlerGuard` を `overrideGuard` でモックしてテスト実行する

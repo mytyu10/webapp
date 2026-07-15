@@ -7,10 +7,10 @@ import { JwtService } from 'src/jwt/jwt.service';
 import { LoggerService } from 'src/common/service/logger.service';
 import { MESSAGE } from 'src/common/type/message';
 
-/** モック用アカウントデータ */
+/** モック用アカウントデータ（bcryptハッシュ済みの例） */
 const mockAccount = {
   username: 'testuser',
-  hashed_password: 'hashed_pass',
+  hashed_password: '$2b$10$mockedhashvalue',
   line_user_id: null,
 };
 
@@ -18,10 +18,19 @@ const mockAccountRepository = {
   getAccount: jest.fn(),
   createUser: jest.fn(),
   updateLineUserId: jest.fn(),
+  updateHashedPassword: jest.fn(),
 };
 
+/**
+ * HashService のモック
+ * - createHash: bcrypt ハッシュを返す（async）
+ * - compareHash: bcrypt 照合結果を返す（async）
+ * - isLegacySha256: SHA-256 フォールバック照合（sync）
+ */
 const mockHashService = {
-  createHash: jest.fn().mockReturnValue('hashed_pass'),
+  createHash: jest.fn().mockResolvedValue('$2b$10$mockedhashvalue'),
+  compareHash: jest.fn().mockResolvedValue(false),
+  isLegacySha256: jest.fn().mockReturnValue(false),
 };
 
 const mockJwtService = {
@@ -50,20 +59,46 @@ describe('AccountService', () => {
 
     service = module.get<AccountService>(AccountService);
     jest.clearAllMocks();
-    mockHashService.createHash.mockReturnValue('hashed_pass');
+    mockHashService.createHash.mockResolvedValue('$2b$10$mockedhashvalue');
+    mockHashService.compareHash.mockResolvedValue(false);
+    mockHashService.isLegacySha256.mockReturnValue(false);
     mockJwtService.createToken.mockReturnValue('mock_token');
+    mockAccountRepository.updateHashedPassword.mockResolvedValue(mockAccount);
   });
 
   describe('login', () => {
-    it('正しいパスワードでログインするとJWTトークンを返す', async () => {
+    it('bcrypt照合が成功するとJWTトークンを返す', async () => {
       mockAccountRepository.getAccount.mockResolvedValue(mockAccount);
+      // bcrypt 照合成功
+      mockHashService.compareHash.mockResolvedValue(true);
 
       const result = await service.login({
         username: 'testuser',
-        password: 'pass',
+        password: 'correctpassword',
       });
 
       expect(result).toBe('mock_token');
+      expect(mockHashService.compareHash).toHaveBeenCalledWith(
+        'correctpassword',
+        mockAccount.hashed_password,
+      );
+    });
+
+    it('SHA-256フォールバックが一致する場合、bcrypt再ハッシュしてJWTを返す', async () => {
+      mockAccountRepository.getAccount.mockResolvedValue(mockAccount);
+      // bcrypt 照合失敗 → SHA-256 フォールバック成功
+      mockHashService.compareHash.mockResolvedValue(false);
+      mockHashService.isLegacySha256.mockReturnValue(true);
+
+      const result = await service.login({
+        username: 'testuser',
+        password: 'legacypassword',
+      });
+
+      expect(result).toBe('mock_token');
+      // 再ハッシュして DB 更新する
+      expect(mockHashService.createHash).toHaveBeenCalledWith('legacypassword');
+      expect(mockAccountRepository.updateHashedPassword).toHaveBeenCalled();
     });
 
     it('存在しないユーザーの場合は null を返す', async () => {
@@ -77,16 +112,27 @@ describe('AccountService', () => {
       expect(result).toBeNull();
     });
 
-    it('パスワードが一致しない場合は null を返す', async () => {
-      mockHashService.createHash.mockReturnValue('wrong_hash');
+    it('bcryptもSHA-256も一致しない場合は null を返す', async () => {
       mockAccountRepository.getAccount.mockResolvedValue(mockAccount);
+      mockHashService.compareHash.mockResolvedValue(false);
+      mockHashService.isLegacySha256.mockReturnValue(false);
 
       const result = await service.login({
         username: 'testuser',
-        password: 'wrong',
+        password: 'wrongpassword',
       });
 
       expect(result).toBeNull();
+    });
+
+    it('パスワードが空の場合は null を返す', async () => {
+      const result = await service.login({
+        username: 'testuser',
+        password: '',
+      });
+
+      expect(result).toBeNull();
+      expect(mockAccountRepository.getAccount).not.toHaveBeenCalled();
     });
   });
 
@@ -97,10 +143,12 @@ describe('AccountService', () => {
 
       const result = await service.regist({
         username: 'newuser',
-        password: 'pass',
+        password: 'password1',
       });
 
       expect(result).toBe('success');
+      // bcrypt ハッシュを使用することを確認する
+      expect(mockHashService.createHash).toHaveBeenCalledWith('password1');
     });
 
     it('ユーザー名が重複している場合は "duplicate" を返す', async () => {
@@ -108,7 +156,7 @@ describe('AccountService', () => {
 
       const result = await service.regist({
         username: 'testuser',
-        password: 'pass',
+        password: 'password1',
       });
 
       expect(result).toBe('duplicate');
@@ -119,7 +167,7 @@ describe('AccountService', () => {
       mockAccountRepository.createUser.mockRejectedValue(new Error('DB error'));
 
       await expect(
-        service.regist({ username: 'newuser', password: 'pass' }),
+        service.regist({ username: 'newuser', password: 'password1' }),
       ).rejects.toThrow(InternalServerErrorException);
     });
   });
