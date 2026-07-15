@@ -5,7 +5,6 @@ import RegistPage from './pages/RegistPage';
 import TaskListPage from './pages/TaskListPage';
 import TaskFormPage from './pages/TaskFormPage';
 import CalendarPage from './pages/CalendarPage';
-import LineCallbackPage from './pages/LineCallbackPage';
 import LinkListPage from './pages/LinkListPage';
 import ChatPage from './pages/ChatPage';
 import PrivateRoute from './components/PrivateRoute';
@@ -18,8 +17,6 @@ function App() {
         {/* 公開ルート */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/regist" element={<RegistPage />} />
-        {/* LINE連携コールバック（認証不要：LINE OAuthから直接リダイレクトされるため） */}
-        <Route path="/line-callback" element={<LineCallbackPage />} />
 
         {/* 認証済みルート（PrivateRoute + SidebarLayout） */}
         <Route element={<PrivateRoute />}>

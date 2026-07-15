@@ -8,9 +8,6 @@ export const MESSAGE = {
     REGIST_DUPLICATE: 'このユーザー名は既に使用されています',
     UNAUTHORIZED: '認証が必要です',
     AUTH_INFO_FAILED: '認証情報の取得に失敗しました',
-    LINE_LOGIN_URL_FAILED: 'LINE認証URLの生成に失敗しました',
-    LINE_CALLBACK_FAILED: 'LINE連携に失敗しました',
-    LINE_CALLBACK_SUCCESS: 'LINE連携が完了しました',
     ME_FETCH_FAILED: 'ユーザー情報の取得に失敗しました',
   },
   DB: {
@@ -39,7 +36,6 @@ export const MESSAGE = {
     CREATE_FAILED: '通知の追加に失敗しました',
     DELETE_FAILED: '通知の削除に失敗しました',
     FETCH_FAILED: '通知一覧の取得に失敗しました',
-    LINE_SEND_FAILED: 'LINE通知の送信に失敗しました',
   },
   EVENT: {
     CREATE_SUCCESS: '予定を作成しました',

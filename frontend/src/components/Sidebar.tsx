@@ -1,17 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
 import { logger } from '../logger';
-import { fetchMe } from '../api/taskApi';
 
 const CONTEXT = 'Sidebar';
-
-/** バックエンドの LINE ログイン開始エンドポイント URL */
-const LINE_LOGIN_URL = (() => {
-  const { REACT_APP_API_SCHEME, REACT_APP_API_HOST, REACT_APP_API_PORT } = process.env;
-  return REACT_APP_API_HOST
-    ? `${REACT_APP_API_SCHEME}://${REACT_APP_API_HOST}:${REACT_APP_API_PORT}/accounts/line/login`
-    : '/accounts/line/login';
-})();
 
 /** ナビゲーションリンクの定義 */
 const NAV_LINKS = [
@@ -29,28 +19,10 @@ interface SidebarProps {
 /**
  * サイドバーコンポーネント
  * ログイン後の全画面に共通して表示されるナビゲーションサイドバー。
- * LINE連携状態を取得して表示する。
  * isOpen=false のとき PC では非表示になる（モバイルは常に表示）
  */
 function Sidebar({ isOpen }: SidebarProps) {
   const navigate = useNavigate();
-  const [isLineLinked, setIsLineLinked] = useState<boolean | null>(null);
-
-  /**
-   * LINE連携状態を取得する
-   */
-  useEffect(() => {
-    async function loadLineStatus(): Promise<void> {
-      try {
-        const me = await fetchMe();
-        setIsLineLinked(me.line_user_id !== null);
-      } catch (err) {
-        logger.warn(CONTEXT, `LINE連携状態取得失敗: ${err instanceof Error ? err.message : '不明なエラー'}`);
-        setIsLineLinked(false);
-      }
-    }
-    void loadLineStatus();
-  }, []);
 
   /**
    * ログアウト処理
@@ -60,14 +32,6 @@ function Sidebar({ isOpen }: SidebarProps) {
     logger.info(CONTEXT, 'ログアウト処理実行');
     localStorage.removeItem('token');
     navigate('/login');
-  }
-
-  /**
-   * LINE連携ボタンをクリックしたときにバックエンドの LINE ログイン開始エンドポイントへ遷移する
-   */
-  function handleLineLogin(): void {
-    logger.info(CONTEXT, 'LINE連携開始');
-    window.location.href = LINE_LOGIN_URL;
   }
 
   return (
@@ -102,21 +66,6 @@ function Sidebar({ isOpen }: SidebarProps) {
       </nav>
 
       <div className="px-2 sm:px-3 py-2 sm:py-4 sm:border-t border-slate-700 flex flex-col gap-2 items-start shrink-0 min-w-0">
-        {/* LINE連携状態表示 */}
-        {isLineLinked === true ? (
-          <span className="flex items-center px-3 py-2 text-sm font-medium text-slate-500 select-none whitespace-nowrap">
-            LINE連携済み
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={handleLineLogin}
-            className="flex items-center px-3 py-2 rounded-md text-sm font-medium text-green-400 hover:bg-slate-800 hover:text-green-300 transition-colors whitespace-nowrap"
-          >
-            LINEと連携する
-          </button>
-        )}
-
         <button
           type="button"
           onClick={handleLogout}

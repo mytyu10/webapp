@@ -11,13 +11,11 @@ import { MESSAGE } from 'src/common/type/message';
 const mockAccount = {
   username: 'testuser',
   hashed_password: '$2b$10$mockedhashvalue',
-  line_user_id: null,
 };
 
 const mockAccountRepository = {
   getAccount: jest.fn(),
   createUser: jest.fn(),
-  updateLineUserId: jest.fn(),
   updateHashedPassword: jest.fn(),
 };
 
@@ -172,37 +170,13 @@ describe('AccountService', () => {
     });
   });
 
-  describe('getLineLoginUrl', () => {
-    it('LINE認証URLを返す', () => {
-      process.env.LINE_LOGIN_CHANNEL_ID = '12345';
-
-      const url = service.getLineLoginUrl();
-
-      expect(url).toContain('https://access.line.me/oauth2/v2.1/authorize');
-      expect(url).toContain('response_type=code');
-      expect(url).toContain('client_id=12345');
-      expect(url).toContain('scope=profile');
-    });
-  });
-
   describe('getMe', () => {
-    it('ログインユーザー情報を返す（LINE未連携）', async () => {
+    it('ログインユーザー情報を返す', async () => {
       mockAccountRepository.getAccount.mockResolvedValue(mockAccount);
 
       const result = await service.getMe('testuser');
 
       expect(result.username).toBe('testuser');
-      expect(result.line_user_id).toBeNull();
-    });
-
-    it('ログインユーザー情報を返す（LINE連携済み）', async () => {
-      const linkedAccount = { ...mockAccount, line_user_id: 'U123456789' };
-      mockAccountRepository.getAccount.mockResolvedValue(linkedAccount);
-
-      const result = await service.getMe('testuser');
-
-      expect(result.username).toBe('testuser');
-      expect(result.line_user_id).toBe('U123456789');
     });
 
     it('アカウントが見つからない場合は InternalServerErrorException をスローする', async () => {

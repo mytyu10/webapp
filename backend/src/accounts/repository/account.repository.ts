@@ -32,19 +32,6 @@ export class AccountRepository {
   }
 
   /**
-   * アカウントの LINE User ID を更新する
-   */
-  async updateLineUserId(
-    username: string,
-    lineUserId: string,
-  ): Promise<Account> {
-    return this.prisma.account.update({
-      where: { username },
-      data: { line_user_id: lineUserId },
-    });
-  }
-
-  /**
    * アカウントのハッシュ化パスワードを更新する（SHA-256 から bcrypt への移行時に使用）
    */
   async updateHashedPassword(
