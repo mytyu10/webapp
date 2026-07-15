@@ -3,16 +3,28 @@ name: CI
 on:
   push:
     branches:
-      - '**'
+      - main
+      - develop
   pull_request:
     branches:
       - main
       - develop
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+
 jobs:
   backend:
-    name: Backend (lint / build / test / e2e)
+    name: Backend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     defaults:
       run:
@@ -21,10 +33,6 @@ jobs:
     env:
       JWT_SECRET: test-secret-for-ci
       DATABASE_URL: file:./test.db
-      LINE_LOGIN_CHANNEL_ID: dummy
-      LINE_LOGIN_CHANNEL_SECRET: dummy
-      LINE_MESSAGING_CHANNEL_ID: dummy
-      LINE_MESSAGING_CHANNEL_ACCESS_TOKEN: dummy
       FRONTEND_URL: http://localhost:3000
 
     steps:
@@ -34,31 +42,38 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: npm
           cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
       - name: Lint
         run: npm run lint
+
+      - name: Unit tests
+        run: npm run test -- --runInBand
 
       - name: Build
         run: npm run build
 
-      - name: Unit tests
-        run: npm run test
+      - name: Reset E2E database
+        run: rm -f prisma/test.db
 
-      - name: Apply Prisma migrations (for E2E)
+      - name: Apply Prisma migrations
         run: npx prisma migrate deploy
 
       - name: E2E tests
-        run: npm run test:e2e
+        run: npm run test:e2e -- --runInBand
 
   frontend:
-    name: Frontend (build / test)
+    name: Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     defaults:
       run:
@@ -71,15 +86,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
+      - name: Lint
+        run: npm run lint
 
       - name: Test
-        run: npm test -- --watchAll=false --ci
+        run: npm test -- --watchAll=false
+
+      - name: Build
+        run: npm run build
