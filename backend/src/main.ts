@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local', override: true });
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, BadRequestException } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filter/http-exception.filter';
 import { MESSAGE } from './common/type/message';
@@ -40,6 +41,19 @@ async function bootstrap() {
 
   // 全例外を { message: string } 形式に統一するグローバルフィルター
   app.useGlobalFilters(new AllExceptionsFilter());
+
+  // Swagger（OpenAPI）ドキュメントのセットアップ
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Webapp API')
+    .setDescription('ポートフォリオ Webapp の REST API ドキュメント')
+    .setVersion('1.0')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'JWT',
+    )
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, document);
 
   await app.listen(process.env.PORT ?? 8000);
 }

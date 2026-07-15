@@ -15,12 +15,16 @@ import {
 import type { Request, Response } from 'express';
 import { TaskService } from '../service/task.service';
 import { TaskNotificationService } from '../service/task-notification.service';
+import { TaskPermissionService } from '../service/task-permission.service';
 import {
   CreateTaskDto,
   UpdateTaskDto,
   CreateNotificationDto,
 } from '../dto/task.dto';
+import { CreatePermissionDto } from 'src/permissions/permission.dto';
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
+import { OwnershipGuard } from 'src/common/guards/ownership.guard';
+import { CheckOwnership } from 'src/common/decorators/check-ownership.decorator';
 import { HttpStatus } from 'src/common/type/status.enum';
 import { MESSAGE } from 'src/common/type/message';
 import { LoggerService } from 'src/common/service/logger.service';
@@ -37,26 +41,45 @@ export class TaskController {
   constructor(
     private readonly taskService: TaskService,
     private readonly taskNotificationService: TaskNotificationService,
+    private readonly taskPermissionService: TaskPermissionService,
     private readonly logger: LoggerService,
   ) {}
 
   /**
    * カテゴリ一覧取得エンドポイント（`/tasks/:id` より先に定義して衝突を防ぐ）
+   * ログインユーザーが作成者または担当者であるタスクのカテゴリのみ返す
    */
   @Get('categories')
-  async getCategories(@Res() response: Response): Promise<Response> {
+  async getCategories(
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<Response> {
     this.logger.log(CONTEXT, 'カテゴリ一覧取得リクエスト');
-    const categories = await this.taskService.findAllCategories();
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
+    const categories = await this.taskService.findAllCategories(
+      requestUser.username,
+    );
     return response.status(HttpStatus.OK).json(categories);
   }
 
   /**
    * タスク一覧取得エンドポイント
+   * ログインユーザーが作成者または担当者または権限付与済みであるタスクのみ返す
    */
   @Get()
-  async findAll(@Res() response: Response): Promise<Response> {
+  async findAll(
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<Response> {
     this.logger.log(CONTEXT, 'タスク一覧取得リクエスト');
-    const tasks = await this.taskService.findAll();
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
+    const tasks = await this.taskService.findAll(requestUser.username);
     return response.status(HttpStatus.OK).json(tasks);
   }
 
@@ -90,8 +113,11 @@ export class TaskController {
 
   /**
    * タスク更新エンドポイント
+   * 作成者・担当者・WRITE権限保持者のみ操作可能（OwnershipGuard）
    */
   @Patch(':id')
+  @CheckOwnership('task')
+  @UseGuards(OwnershipGuard)
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTaskDto,
@@ -111,8 +137,11 @@ export class TaskController {
 
   /**
    * タスク削除エンドポイント
+   * 作成者・WRITE権限保持者のみ操作可能（OwnershipGuard）
    */
   @Delete(':id')
+  @CheckOwnership('task')
+  @UseGuards(OwnershipGuard)
   async remove(
     @Param('id', ParseIntPipe) id: number,
     @Res() response: Response,
@@ -174,5 +203,82 @@ export class TaskController {
     return response
       .status(HttpStatus.OK)
       .json({ message: MESSAGE.NOTIFICATION.DELETE_SUCCESS });
+  }
+
+  /**
+   * タスク権限一覧取得エンドポイント（作成者のみ）
+   */
+  @Get(':id/permissions')
+  async getPermissions(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(CONTEXT, `タスク権限一覧取得リクエスト: taskId=${id}`);
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
+    const permissions = await this.taskPermissionService.findAll(
+      id,
+      requestUser.username,
+    );
+    return response.status(HttpStatus.OK).json(permissions);
+  }
+
+  /**
+   * タスク権限付与エンドポイント（作成者のみ）
+   */
+  @Post(':id/permissions')
+  async addPermission(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreatePermissionDto,
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(
+      CONTEXT,
+      `タスク権限付与リクエスト: taskId=${id}, target=${dto.username}`,
+    );
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
+    const permission = await this.taskPermissionService.add(
+      id,
+      dto,
+      requestUser.username,
+    );
+    return response
+      .status(HttpStatus.CREATED)
+      .json({ message: MESSAGE.PERMISSION.ADD_SUCCESS, permission });
+  }
+
+  /**
+   * タスク権限削除エンドポイント（作成者のみ）
+   */
+  @Delete(':id/permissions/:username')
+  async removePermission(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('username') targetUsername: string,
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(
+      CONTEXT,
+      `タスク権限削除リクエスト: taskId=${id}, target=${targetUsername}`,
+    );
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
+    await this.taskPermissionService.remove(
+      id,
+      targetUsername,
+      requestUser.username,
+    );
+    return response
+      .status(HttpStatus.OK)
+      .json({ message: MESSAGE.PERMISSION.REMOVE_SUCCESS });
   }
 }

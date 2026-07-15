@@ -50,16 +50,23 @@ describe('TaskRepository', () => {
   });
 
   describe('findAll', () => {
-    it('prisma.task.findMany が where: { parent_id: null } を含む引数で呼ばれる', async () => {
+    it('prisma.task.findMany が parent_id: null と OR 条件（created_by・assignees・permissions）を含む引数で呼ばれる', async () => {
       mockPrismaService.task.findMany.mockResolvedValue([
         mockTaskWithRelations,
       ]);
 
-      await repository.findAll();
+      await repository.findAll('testuser');
 
       expect(mockPrismaService.task.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { parent_id: null },
+          where: {
+            parent_id: null,
+            OR: [
+              { created_by: 'testuser' },
+              { assignees: { some: { username: 'testuser' } } },
+              { permissions: { some: { username: 'testuser' } } },
+            ],
+          },
         }),
       );
     });
@@ -69,7 +76,7 @@ describe('TaskRepository', () => {
         mockTaskWithRelations,
       ]);
 
-      await repository.findAll();
+      await repository.findAll('testuser');
 
       expect(mockPrismaService.task.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -83,7 +90,7 @@ describe('TaskRepository', () => {
         mockTaskWithRelations,
       ]);
 
-      const result = await repository.findAll();
+      const result = await repository.findAll('testuser');
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe(1);
@@ -92,7 +99,7 @@ describe('TaskRepository', () => {
     it('タスクが存在しない場合は空配列を返す', async () => {
       mockPrismaService.task.findMany.mockResolvedValue([]);
 
-      const result = await repository.findAll();
+      const result = await repository.findAll('testuser');
 
       expect(result).toHaveLength(0);
     });
@@ -116,6 +123,46 @@ describe('TaskRepository', () => {
       const result = await repository.findById(999);
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('findAllCategories', () => {
+    it('prisma.task.findMany が OR 条件（created_by・assignees・permissions）を含む引数で呼ばれる', async () => {
+      mockPrismaService.task.findMany.mockResolvedValue([]);
+
+      await repository.findAllCategories('testuser');
+
+      expect(mockPrismaService.task.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          where: expect.objectContaining({
+            OR: [
+              { created_by: 'testuser' },
+              { assignees: { some: { username: 'testuser' } } },
+              { permissions: { some: { username: 'testuser' } } },
+            ],
+          }),
+        }),
+      );
+    });
+
+    it('カテゴリ一覧を返す', async () => {
+      mockPrismaService.task.findMany.mockResolvedValue([
+        { category: '仕事' },
+        { category: 'プライベート' },
+      ]);
+
+      const result = await repository.findAllCategories('testuser');
+
+      expect(result).toEqual(['仕事', 'プライベート']);
+    });
+
+    it('カテゴリが存在しない場合は空配列を返す', async () => {
+      mockPrismaService.task.findMany.mockResolvedValue([]);
+
+      const result = await repository.findAllCategories('testuser');
+
+      expect(result).toHaveLength(0);
     });
   });
 

@@ -7,10 +7,11 @@ export class EventRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * 全予定を開始日時の昇順で取得する
+   * 指定ユーザーが作成者である予定を開始日時の昇順で取得する
    */
-  async findAll(): Promise<Event[]> {
+  async findAll(username: string): Promise<Event[]> {
     return this.prisma.event.findMany({
+      where: { created_by: username },
       orderBy: { start_at: 'asc' },
     });
   }

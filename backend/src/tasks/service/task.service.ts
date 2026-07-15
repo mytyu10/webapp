@@ -34,11 +34,11 @@ export class TaskService {
   ) {}
 
   /**
-   * タスク一覧を取得する
+   * 指定ユーザーが作成者または担当者であるタスク一覧を取得する
    */
-  async findAll(): Promise<TaskResponseDto[]> {
-    this.logger.log(CONTEXT, 'タスク一覧取得開始');
-    const tasks = await this.taskRepository.findAll();
+  async findAll(username: string): Promise<TaskResponseDto[]> {
+    this.logger.log(CONTEXT, `タスク一覧取得開始: user=${username}`);
+    const tasks = await this.taskRepository.findAll(username);
     return tasks.map((task) => this.toResponseDto(task));
   }
 
@@ -167,12 +167,12 @@ export class TaskService {
   }
 
   /**
-   * 使用中のカテゴリ一覧を取得する
+   * 指定ユーザーが作成者または担当者であるタスクの使用中カテゴリ一覧を取得する
    */
-  async findAllCategories(): Promise<string[]> {
-    this.logger.log(CONTEXT, 'カテゴリ一覧取得開始');
+  async findAllCategories(username: string): Promise<string[]> {
+    this.logger.log(CONTEXT, `カテゴリ一覧取得開始: user=${username}`);
     try {
-      return await this.taskRepository.findAllCategories();
+      return await this.taskRepository.findAllCategories(username);
     } catch (error) {
       this.logger.error(CONTEXT, `カテゴリ一覧取得失敗: ${String(error)}`);
       throw new InternalServerErrorException(

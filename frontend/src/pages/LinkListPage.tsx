@@ -2,10 +2,20 @@ import { useState, useCallback, useMemo } from 'react';
 import { useLinkList } from '../hooks/useLinkList';
 import { getCurrentUsername } from '../api/taskApi';
 import { LinkItem } from '../api/linkApi';
+import {
+  fetchLinkPermissions,
+  addLinkPermission,
+  deleteLinkPermission,
+  Permission,
+  PermissionInput,
+} from '../api/permissionApi';
 import ConfirmModal from '../components/ConfirmModal';
 import LinkFormModal from '../components/LinkFormModal';
+import PermissionModal from '../components/PermissionModal';
 import FormErrorBanner from '../components/FormErrorBanner';
+import { logger } from '../logger';
 
+const CONTEXT = 'LinkListPage';
 
 /** フォルダ展開アイコン */
 const ICON_FOLDER_CLOSED = '▶';
@@ -45,7 +55,8 @@ type ModalMode =
   | { type: 'none' }
   | { type: 'create' }
   | { type: 'edit'; item: LinkItem }
-  | { type: 'delete'; item: LinkItem };
+  | { type: 'delete'; item: LinkItem }
+  | { type: 'permission'; item: LinkItem };
 
 interface LinkTreeNodeProps {
   item: LinkItem;
@@ -54,6 +65,7 @@ interface LinkTreeNodeProps {
   onToggleExpand: (id: number) => void;
   onEdit: (item: LinkItem) => void;
   onDelete: (item: LinkItem) => void;
+  onShare: (item: LinkItem) => void;
   currentUsername: string | null;
 }
 
@@ -67,6 +79,7 @@ function LinkTreeNode({
   onToggleExpand,
   onEdit,
   onDelete,
+  onShare,
   currentUsername,
 }: LinkTreeNodeProps) {
   const isOwner = item.created_by === currentUsername;
@@ -110,13 +123,22 @@ function LinkTreeNode({
               編集
             </button>
             {isOwner && (
-              <button
-                type="button"
-                onClick={() => onDelete(item)}
-                className="px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded transition-colors"
-              >
-                削除
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => onShare(item)}
+                  className="px-2 py-1 text-xs text-violet-400 hover:text-violet-300 hover:bg-violet-900/30 rounded transition-colors"
+                >
+                  共有
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(item)}
+                  className="px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded transition-colors"
+                >
+                  削除
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -133,6 +155,7 @@ function LinkTreeNode({
                 onToggleExpand={onToggleExpand}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onShare={onShare}
                 currentUsername={currentUsername}
               />
             ))}
@@ -174,13 +197,22 @@ function LinkTreeNode({
             編集
           </button>
           {isOwner && (
-            <button
-              type="button"
-              onClick={() => onDelete(item)}
-              className="px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded transition-colors"
-            >
-              削除
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => onShare(item)}
+                className="px-2 py-1 text-xs text-violet-400 hover:text-violet-300 hover:bg-violet-900/30 rounded transition-colors"
+              >
+                共有
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(item)}
+                className="px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded transition-colors"
+              >
+                削除
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -192,12 +224,15 @@ function LinkTreeNode({
  * リンク集一覧ページ
  * エクスプローラー風のツリー表示でフォルダ/リンクを管理する。
  * フォルダはクリックで展開/折りたたみ。リンクは別タブで開く。
- * 作成・編集はモーダルで行う。削除は作成者のみ可能
+ * 作成・編集はモーダルで行う。削除は作成者のみ可能。
+ * 作成者は「共有」ボタンから他ユーザーに READ/WRITE 権限を付与できる
  */
 function LinkListPage() {
   const { links, loading, error, expandedIds, toggleExpand, handleDelete, reload } = useLinkList();
   const [modalMode, setModalMode] = useState<ModalMode>({ type: 'none' });
   const [deleteError, setDeleteError] = useState('');
+  const [permissionError, setPermissionError] = useState('');
+  const [permissions, setPermissions] = useState<Permission[]>([]);
   const currentUsername = getCurrentUsername();
 
   /** 全フォルダの一覧（親フォルダ選択肢に使用） */
@@ -219,6 +254,21 @@ function LinkListPage() {
   }, []);
 
   /**
+   * 共有モーダルを開く（権限一覧を取得してから表示する）
+   */
+  const handleShareClick = useCallback(async (item: LinkItem): Promise<void> => {
+    setPermissionError('');
+    try {
+      const perms = await fetchLinkPermissions(item.id);
+      setPermissions(perms);
+      setModalMode({ type: 'permission', item });
+    } catch (err) {
+      logger.warn(CONTEXT, `権限一覧取得失敗: ${err instanceof Error ? err.message : '不明なエラー'}`);
+      setPermissionError('権限一覧の取得に失敗しました。');
+    }
+  }, []);
+
+  /**
    * 削除を実行する
    */
   async function handleDeleteConfirm(): Promise<void> {
@@ -230,6 +280,27 @@ function LinkListPage() {
       const message = err instanceof Error ? err.message : 'リンクの削除に失敗しました。';
       setDeleteError(message);
     }
+  }
+
+  /**
+   * 権限を付与してローカルステートを更新する
+   */
+  async function handleAddPermission(input: PermissionInput): Promise<void> {
+    if (modalMode.type !== 'permission') return;
+    const added = await addLinkPermission(modalMode.item.id, input);
+    setPermissions((prev) => {
+      const filtered = prev.filter((p) => p.username !== added.username);
+      return [...filtered, added];
+    });
+  }
+
+  /**
+   * 権限を削除してローカルステートを更新する
+   */
+  async function handleRemovePermission(username: string): Promise<void> {
+    if (modalMode.type !== 'permission') return;
+    await deleteLinkPermission(modalMode.item.id, username);
+    setPermissions((prev) => prev.filter((p) => p.username !== username));
   }
 
   /**
@@ -271,6 +342,7 @@ function LinkListPage() {
       </div>
 
       <FormErrorBanner message={deleteError} />
+      <FormErrorBanner message={permissionError} />
 
       {/* ローディング */}
       {loading && (
@@ -302,6 +374,7 @@ function LinkListPage() {
               onToggleExpand={toggleExpand}
               onEdit={handleEdit}
               onDelete={handleDeleteClick}
+              onShare={(item) => { void handleShareClick(item); }}
               currentUsername={currentUsername}
             />
           ))}
@@ -327,6 +400,17 @@ function LinkListPage() {
         onConfirm={() => { void handleDeleteConfirm(); }}
         onCancel={handleModalClose}
       />
+
+      {/* 権限共有モーダル */}
+      {modalMode.type === 'permission' && (
+        <PermissionModal
+          title={`「${modalMode.item.title}」の共有設定`}
+          permissions={permissions}
+          onAdd={handleAddPermission}
+          onRemove={handleRemovePermission}
+          onClose={handleModalClose}
+        />
+      )}
     </div>
   );
 }

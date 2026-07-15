@@ -228,7 +228,7 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
       if (isEditMode && id !== undefined) {
         navigate(`/tasks`);
       } else if (parentId !== undefined) {
-        navigate(`/tasks/${parentId}`);
+        navigate("/tasks");
       } else {
         navigate('/tasks');
       }

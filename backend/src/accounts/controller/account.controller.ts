@@ -9,6 +9,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AccountService } from '../service/account.service';
 import { AccountDto } from '../dto/account';
@@ -34,8 +35,10 @@ export class AccountsController {
   /**
    * ログインエンドポイント
    * 認証成功時はJWTトークンを返す
+   * レートリミット: 1分間に5リクエストまで
    */
   @Post('login')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   async checkAccount(
     @Body() account: AccountDto,
     @Res() response: Response,
@@ -58,8 +61,10 @@ export class AccountsController {
   /**
    * アカウント登録エンドポイント
    * 重複ユーザー名は409、登録成功は201を返す
+   * レートリミット: 1分間に5リクエストまで
    */
   @Post('regist')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   async registAccount(
     @Body() account: AccountDto,
     @Res() response: Response,

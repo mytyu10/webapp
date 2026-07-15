@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { LinkRepository } from '../repository/link.repository';
@@ -31,13 +30,13 @@ export class LinkService {
   ) {}
 
   /**
-   * 全リンク/フォルダをツリー構造で取得する。
+   * 指定ユーザーが作成者・権限付与済みであるリンク/フォルダをツリー構造で取得する。
    * parent_id が null の要素をルートとして配置し、FOLDER の children に配下要素を再帰的に格納する。
    * LINK の children は常に空配列とする
    */
-  async findAll(): Promise<LinkItemResponseDto[]> {
-    this.logger.log(CONTEXT, 'リンク一覧取得開始');
-    const all = await this.linkRepository.findAll();
+  async findAll(username: string): Promise<LinkItemResponseDto[]> {
+    this.logger.log(CONTEXT, `リンク一覧取得開始: user=${username}`);
+    const all = await this.linkRepository.findAll(username);
 
     /** フラット配列を Map に変換してツリー構築に使用する */
     const map = new Map<number, LinkItemResponseDto>();
@@ -113,7 +112,8 @@ export class LinkService {
   }
 
   /**
-   * リンク/フォルダを更新する。parent_id 変更時は親が FOLDER であることを確認する
+   * リンク/フォルダを更新する。parent_id 変更時は親が FOLDER であることを確認する。
+   * 認可チェック（作成者 or WRITE権限）は OwnershipGuard が担当する
    */
   async update(
     id: number,
@@ -148,20 +148,17 @@ export class LinkService {
   }
 
   /**
-   * リンク/フォルダを削除する。作成者のみ削除可能。FOLDER 削除時は子も Cascade で削除される
+   * リンク/フォルダを削除する。
+   * 認可チェック（作成者 or WRITE権限）は OwnershipGuard が担当する。
+   * FOLDER 削除時は子も Cascade で削除される
    */
   async delete(id: number, username: string): Promise<void> {
-    this.logger.log(CONTEXT, `リンク削除開始: id=${id}`);
+    this.logger.log(CONTEXT, `リンク削除開始: id=${id}, user=${username}`);
 
     const existing = await this.linkRepository.findById(id);
     if (!existing) {
       this.logger.warn(CONTEXT, `リンクが見つかりません: id=${id}`);
       throw new NotFoundException(MESSAGE.LINK.NOT_FOUND);
-    }
-
-    if (existing.created_by !== username) {
-      this.logger.warn(CONTEXT, `削除権限なし: id=${id}, user=${username}`);
-      throw new ForbiddenException(MESSAGE.LINK.FORBIDDEN);
     }
 
     try {

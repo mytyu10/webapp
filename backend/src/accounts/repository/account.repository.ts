@@ -16,6 +16,15 @@ export class AccountRepository {
   }
 
   /**
+   * 全アカウント一覧を取得する（username 昇順）
+   */
+  async findAll(): Promise<Account[]> {
+    return this.prisma.account.findMany({
+      orderBy: { username: 'asc' },
+    });
+  }
+
+  /**
    * 新規アカウントを作成する
    */
   async createUser(data: Prisma.AccountCreateInput): Promise<Account> {
@@ -32,6 +41,19 @@ export class AccountRepository {
     return this.prisma.account.update({
       where: { username },
       data: { line_user_id: lineUserId },
+    });
+  }
+
+  /**
+   * アカウントのハッシュ化パスワードを更新する（SHA-256 から bcrypt への移行時に使用）
+   */
+  async updateHashedPassword(
+    username: string,
+    hashedPassword: string,
+  ): Promise<Account> {
+    return this.prisma.account.update({
+      where: { username },
+      data: { hashed_password: hashedPassword },
     });
   }
 }
