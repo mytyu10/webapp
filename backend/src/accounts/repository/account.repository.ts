@@ -30,17 +30,4 @@ export class AccountRepository {
   async createUser(data: Prisma.AccountCreateInput): Promise<Account> {
     return this.prisma.account.create({ data });
   }
-
-  /**
-   * アカウントのハッシュ化パスワードを更新する（SHA-256 から bcrypt への移行時に使用）
-   */
-  async updateHashedPassword(
-    username: string,
-    hashedPassword: string,
-  ): Promise<Account> {
-    return this.prisma.account.update({
-      where: { username },
-      data: { hashed_password: hashedPassword },
-    });
-  }
 }

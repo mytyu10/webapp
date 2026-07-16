@@ -61,8 +61,8 @@ npx prisma generate           # regenerate Prisma client
 Layered module structure: **Controller → Service → Repository → Prisma**.
 
 - `src/accounts/controller/` — REST endpoints (`POST /accounts/login`, `POST /accounts/regist`, `GET /accounts/me`)。`POST /accounts/login` と `POST /accounts/regist` には `@Throttle({ default: { ttl: 60000, limit: 5 } })` で1分5回のレートリミットを適用する
-- `src/accounts/service/` — business logic（ログイン・登録・ログインユーザー情報取得）。`login()` は bcrypt で照合し、失敗時は SHA-256 フォールバックで旧形式パスワードを確認して自動移行する
-- `src/accounts/repository/` — Prisma queries（`findAll()` で全ユーザー一覧取得。`updateHashedPassword()` で bcrypt 移行時のパスワード更新）
+- `src/accounts/service/` — business logic（ログイン・登録・ログインユーザー情報取得）。`login()` は bcrypt でパスワードを照合し、一致した場合に JWT を発行する
+- `src/accounts/repository/` — Prisma queries（`findAll()` で全ユーザー一覧取得）
 - `src/accounts/dto/account.dto.ts` — validation DTOs (class-validator)。`AccountMeResponseDto`（usernameのみ）を定義
 - `src/tasks/controller/` — REST endpoints (`GET /tasks`, `GET /tasks/categories`, `GET /tasks/:id`, `POST /tasks`, `PATCH /tasks/:id`, `DELETE /tasks/:id`, `POST /tasks/:id/notifications`, `GET /tasks/:id/notifications`, `DELETE /tasks/:id/notifications/:notificationId`, `GET /tasks/:id/permissions`, `POST /tasks/:id/permissions`, `DELETE /tasks/:id/permissions/:username`) — JwtAuthGuard適用済み。`GET /tasks` と `GET /tasks/categories` は `req.user.username` をサービスに渡してログインユーザーのタスクのみ取得する。`PATCH :id` / `DELETE :id` は `@CheckOwnership('task')` + `OwnershipGuard` で作成者・担当者・WRITE権限保持者のみ許可する
 - `src/tasks/service/` — タスクのビジネスロジック（`task.service.ts`）・バッチ更新処理（`task-queue.service.ts`: 100msウィンドウ内のリクエストをバッファリングして順次処理）・通知CRUD（`task-notification.service.ts`）・権限CRUD（`task-permission.service.ts`: 作成者のみ操作可能）。`findAll(username)` / `findAllCategories(username)` はユーザー名をリポジトリに伝播する
@@ -85,7 +85,7 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/jwt/jwt-auth.guard.ts` — JwtAuthGuard（Bearerトークン検証）。検証成功時に `request.user` へ `JwtPayload` をセット
 - `src/types/express.d.ts` — Express `Request` 型拡張（`request.user?: JwtPayload`）
 - `src/prisma/prisma.service.ts` — Prisma client singleton
-- `src/common/service/hash.service.ts` — bcrypt（rounds=10）によるパスワードハッシュ化。`createHash(value)` → bcrypt ハッシュ（async）、`compareHash(value, hashed)` → bcrypt 照合（async）、`isLegacySha256(value, hashed)` → SHA-256 フォールバック照合（sync、移行期間用）
+- `src/common/service/hash.service.ts` — bcrypt（rounds=10）によるパスワードハッシュ化。`createHash(value)` → bcrypt ハッシュ（async）、`compareHash(value, hashed)` → bcrypt 照合（async）
 - `src/common/service/logger.service.ts` — ロガーサービス
 - `src/common/type/message.ts` — Japanese message constants (centralised)。`AUTH`・`NOTIFICATION`（通知CRUD）・`LINK`（リンク集CRUD・権限エラー）・`CHAT`（チャット送受信・ユーザー取得）・`PERMISSION`（権限CRUD・作成者のみ・未存在エラー）セクションを含む
 - `src/common/type/status.enum.ts` — HTTP status enums
@@ -96,7 +96,7 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 
 `AppModule` imports `ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }])`（レートリミット: デフォルト1分20回）・`CommonModule`・`AccountsModule`・`TaskModule`・`EventsModule`・`LinkModule`・`ChatModule`。`APP_GUARD` として `ThrottlerGuard` をグローバル適用する。`AccountsModule` は `AccountRepository` をエクスポートして `ChatModule` からの DI を可能にする。
 
-**Login flow**: DTO validation → bcrypt compare（bcrypt ハッシュと照合）→ 失敗時は SHA-256 フォールバック（移行ロジック）→ SHA-256 一致時は bcrypt 再ハッシュして DB 更新 → issue JWT.
+**Login flow**: DTO validation → bcrypt compare（bcrypt ハッシュと照合）→ 一致時に JWT 発行。
 
 **Task flow**: JwtAuthGuard → Controller（`req.user.username` 抽出）→ Service → Repository（`username` でフィルタリング）→ Prisma。
 
@@ -320,7 +320,7 @@ model ChatMessage {
 
 ## Key Conventions
 
-- Password hashing uses **bcrypt (rounds=10)**. SHA-256 is used only as a legacy fallback during login migration (auto-rehash to bcrypt on successful SHA-256 login)
+- Password hashing uses **bcrypt (rounds=10)**. SHA-256 is not used; all passwords are hashed and verified with bcrypt only
 - Backend ESLint disables `no-explicit-any`; warns on `no-floating-promises` and `no-unsafe-argument`
 - Prettier: single quotes, trailing commas
 - Backend `tsconfig.json`: `noImplicitAny: false`, module resolution `nodenext`

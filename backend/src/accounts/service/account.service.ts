@@ -23,8 +23,7 @@ export class AccountService {
 
   /**
    * ログイン処理
-   * bcrypt で照合し、失敗時は SHA-256 フォールバックで旧形式パスワードを確認する。
-   * SHA-256 で一致した場合は bcrypt で再ハッシュして DB を更新する（移行ロジック）。
+   * bcrypt でパスワードを照合し、一致した場合に JWT を発行する。
    */
   async login(dto: AccountDto): Promise<string | null> {
     this.logger.log(CONTEXT, `ログイン処理開始: ${dto.username}`);
@@ -44,31 +43,13 @@ export class AccountService {
       return null;
     }
 
-    // bcrypt で照合する
     const isBcryptMatch = await this.hashService.compareHash(
       dto.password,
       account.hashed_password,
     );
 
     if (isBcryptMatch) {
-      this.logger.log(CONTEXT, `認証成功（bcrypt）: ${dto.username}`);
-      return this.jwtService.createToken({ username: dto.username });
-    }
-
-    // SHA-256 フォールバック（旧形式パスワードの移行）
-    const isLegacyMatch = this.hashService.isLegacySha256(
-      dto.password,
-      account.hashed_password,
-    );
-
-    if (isLegacyMatch) {
-      this.logger.log(
-        CONTEXT,
-        `旧形式パスワード一致。bcrypt に再ハッシュして更新: ${dto.username}`,
-      );
-      const newHash = await this.hashService.createHash(dto.password);
-      await this.accountRepository.updateHashedPassword(dto.username, newHash);
-      this.logger.log(CONTEXT, `bcrypt 移行完了: ${dto.username}`);
+      this.logger.log(CONTEXT, `認証成功: ${dto.username}`);
       return this.jwtService.createToken({ username: dto.username });
     }
 
