@@ -4,8 +4,9 @@ import {
   createTask,
   updateTask,
   fetchTask,
-  getCurrentUsername,
   addNotification,
+  deleteNotification,
+  fetchNotifications,
   Priority,
 } from '../api/taskApi';
 import {
@@ -161,7 +162,7 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
   /**
    * フォーム送信処理
    * バリデーション後、作成または更新APIを呼び出す
-   * 完了後に通知日時をAPIへ送信する
+   * 編集モードでは既存通知を全削除してからフォームの通知を再登録する
    */
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
@@ -191,13 +192,18 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
         const updated = await updateTask(id, input);
         savedTaskId = updated.id;
         logger.info(CONTEXT, `タスク更新成功: id=${id}`);
-      } else {
-        const username = getCurrentUsername();
-        if (!username) {
-          setApiError('ログイン情報が取得できません。再度ログインしてください。');
-          setLoading(false);
-          return;
+
+        /** 編集モード: 既存通知を全削除してからフォームの通知を再登録する */
+        try {
+          const existingNotifications = await fetchNotifications(savedTaskId);
+          for (const notif of existingNotifications) {
+            await deleteNotification(savedTaskId, notif.id);
+            logger.info(CONTEXT, `既存通知削除: taskId=${savedTaskId}, notificationId=${notif.id}`);
+          }
+        } catch (notifErr) {
+          logger.warn(CONTEXT, `既存通知削除失敗: ${notifErr instanceof Error ? notifErr.message : '不明なエラー'}`);
         }
+      } else {
         const input = {
           title: values.title,
           description: values.description,
@@ -206,7 +212,6 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
           priority: values.priority,
           category: values.category || undefined,
           parent_id: parentId,
-          created_by: username,
         };
         logger.info(CONTEXT, `タスク作成送信: ${input.title}`);
         const created = await createTask(input);
@@ -225,13 +230,7 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
         }
       }
 
-      if (isEditMode && id !== undefined) {
-        navigate(`/tasks`);
-      } else if (parentId !== undefined) {
-        navigate("/tasks");
-      } else {
-        navigate('/tasks');
-      }
+      navigate('/tasks');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'サーバーへの接続に失敗しました。';
       logger.warn(CONTEXT, `タスクフォーム送信失敗: ${message}`);

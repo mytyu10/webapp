@@ -67,7 +67,7 @@ describe('useCalendar', () => {
 
   it('初期状態でローディングが true になる', () => {
     (eventApi.fetchEvents as jest.Mock).mockResolvedValue([]);
-    (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
+    // 初期ビューは dayGridMonth なので fetchTasks は呼ばれない
 
     const { result } = renderHook(() => useCalendar());
 
@@ -75,9 +75,8 @@ describe('useCalendar', () => {
     expect(result.current.events).toEqual([]);
   });
 
-  it('予定・タスク取得成功後に state が更新される', async () => {
+  it('予定取得成功後に state が更新される（dayGridMonthビュー）', async () => {
     (eventApi.fetchEvents as jest.Mock).mockResolvedValue([mockEvent]);
-    (taskApi.fetchTasks as jest.Mock).mockResolvedValue([incompleteTask]);
 
     const { result } = renderHook(() => useCalendar());
 
@@ -85,11 +84,12 @@ describe('useCalendar', () => {
 
     expect(result.current.events).toHaveLength(1);
     expect(result.current.events[0].id).toBe(1);
+    // dayGridMonth では fetchTasks は呼ばれない
+    expect(taskApi.fetchTasks).not.toHaveBeenCalled();
   });
 
   it('データ取得失敗時に error がセットされる', async () => {
     (eventApi.fetchEvents as jest.Mock).mockRejectedValue(new Error('ネットワークエラー'));
-    (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
 
     const { result } = renderHook(() => useCalendar());
 
@@ -101,7 +101,6 @@ describe('useCalendar', () => {
   describe('calendarEvents（FullCalendar用イベント配列）', () => {
     it('dayGridMonthビューではタスクを含めず予定のみを返す', async () => {
       (eventApi.fetchEvents as jest.Mock).mockResolvedValue([mockEvent]);
-      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([incompleteTask]);
 
       const { result } = renderHook(() => useCalendar());
 
@@ -111,11 +110,12 @@ describe('useCalendar', () => {
       expect(result.current.currentView).toBe('dayGridMonth');
       expect(result.current.calendarEvents).toHaveLength(1);
       expect(result.current.calendarEvents[0].id).toBe('event-1');
+      // fetchTasks は呼ばれない
+      expect(taskApi.fetchTasks).not.toHaveBeenCalled();
     });
 
     it('timeGridWeekビューでもタスクを含めない', async () => {
       (eventApi.fetchEvents as jest.Mock).mockResolvedValue([mockEvent]);
-      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([incompleteTask]);
 
       const { result } = renderHook(() => useCalendar());
 
@@ -125,8 +125,12 @@ describe('useCalendar', () => {
         result.current.setCurrentView('timeGridWeek');
       });
 
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
       expect(result.current.calendarEvents).toHaveLength(1);
       expect(result.current.calendarEvents[0].id).toBe('event-1');
+      // timeGridWeek でも fetchTasks は呼ばれない
+      expect(taskApi.fetchTasks).not.toHaveBeenCalled();
     });
 
     it('timeGridDayビューでは予定とタスクの両方を含む', async () => {
@@ -140,6 +144,9 @@ describe('useCalendar', () => {
       act(() => {
         result.current.setCurrentView('timeGridDay');
       });
+
+      // timeGridDay に切り替わると再度 loadData が実行される
+      await waitFor(() => expect(result.current.loading).toBe(false));
 
       expect(result.current.calendarEvents).toHaveLength(2);
       const ids = result.current.calendarEvents.map((e) => e.id);
@@ -164,6 +171,8 @@ describe('useCalendar', () => {
         result.current.setCurrentView('timeGridDay');
       });
 
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
       const taskEvent = result.current.calendarEvents.find((e) => e.id === 'task-10');
       expect(taskEvent).toBeDefined();
       expect(taskEvent!.end).toBe(incompleteTask.due_date);
@@ -179,6 +188,8 @@ describe('useCalendar', () => {
       act(() => {
         result.current.setCurrentView('timeGridDay');
       });
+
+      await waitFor(() => expect(result.current.loading).toBe(false));
 
       const taskEvent = result.current.calendarEvents.find((e) => e.id === 'task-10');
       expect(taskEvent).toBeDefined();
@@ -200,6 +211,8 @@ describe('useCalendar', () => {
         result.current.setCurrentView('timeGridDay');
       });
 
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
       const taskEvent = result.current.calendarEvents.find((e) => e.id === 'task-10');
       expect(taskEvent).toBeDefined();
       expect(taskEvent!.backgroundColor).toBe('#6d28d9');
@@ -215,6 +228,8 @@ describe('useCalendar', () => {
       act(() => {
         result.current.setCurrentView('timeGridDay');
       });
+
+      await waitFor(() => expect(result.current.loading).toBe(false));
 
       const taskEvent = result.current.calendarEvents.find((e) => e.id === 'task-11');
       expect(taskEvent).toBeDefined();
@@ -232,6 +247,8 @@ describe('useCalendar', () => {
         result.current.setCurrentView('timeGridDay');
       });
 
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
       const taskEvent = result.current.calendarEvents.find((e) => e.id === 'task-10');
       expect(taskEvent).toBeDefined();
       expect((taskEvent!.extendedProps as { type: string }).type).toBe('task');
@@ -248,6 +265,8 @@ describe('useCalendar', () => {
         result.current.setCurrentView('timeGridDay');
       });
 
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
       const taskEvent = result.current.calendarEvents.find((e) => e.id === 'task-10');
       expect(taskEvent).toBeDefined();
       expect(taskEvent!.title).toBe('[タスク] 未完了タスク');
@@ -257,7 +276,6 @@ describe('useCalendar', () => {
   describe('handleCreateEvent', () => {
     it('予定を作成してローカルステートに追加する', async () => {
       (eventApi.fetchEvents as jest.Mock).mockResolvedValue([]);
-      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
       (eventApi.createEvent as jest.Mock).mockResolvedValue(mockEvent);
 
       const { result } = renderHook(() => useCalendar());
@@ -278,7 +296,6 @@ describe('useCalendar', () => {
 
     it('予定作成失敗時に例外をスローする', async () => {
       (eventApi.fetchEvents as jest.Mock).mockResolvedValue([]);
-      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
       (eventApi.createEvent as jest.Mock).mockRejectedValue(new Error('作成失敗'));
 
       const { result } = renderHook(() => useCalendar());
@@ -300,7 +317,6 @@ describe('useCalendar', () => {
   describe('handleUpdateEvent', () => {
     it('予定を更新してローカルステートを置き換える', async () => {
       (eventApi.fetchEvents as jest.Mock).mockResolvedValue([mockEvent]);
-      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
 
       const updated: eventApi.CalendarEvent = { ...mockEvent, title: '更新後のタイトル' };
       (eventApi.updateEvent as jest.Mock).mockResolvedValue(updated);
@@ -318,7 +334,6 @@ describe('useCalendar', () => {
 
     it('予定更新失敗時に例外をスローする', async () => {
       (eventApi.fetchEvents as jest.Mock).mockResolvedValue([mockEvent]);
-      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
       (eventApi.updateEvent as jest.Mock).mockRejectedValue(new Error('更新失敗'));
 
       const { result } = renderHook(() => useCalendar());
@@ -336,7 +351,6 @@ describe('useCalendar', () => {
   describe('handleDeleteEvent', () => {
     it('予定を削除してローカルステートから除去する', async () => {
       (eventApi.fetchEvents as jest.Mock).mockResolvedValue([mockEvent]);
-      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
       (eventApi.deleteEvent as jest.Mock).mockResolvedValue(undefined);
 
       const { result } = renderHook(() => useCalendar());
@@ -352,7 +366,6 @@ describe('useCalendar', () => {
 
     it('予定削除失敗時に例外をスローする', async () => {
       (eventApi.fetchEvents as jest.Mock).mockResolvedValue([mockEvent]);
-      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
       (eventApi.deleteEvent as jest.Mock).mockRejectedValue(new Error('削除失敗'));
 
       const { result } = renderHook(() => useCalendar());
@@ -368,7 +381,26 @@ describe('useCalendar', () => {
   });
 
   describe('reload', () => {
-    it('reload を呼ぶと fetchEvents・fetchTasks が再実行される', async () => {
+    it('reload を呼ぶと fetchEvents が再実行される（dayGridMonthビュー）', async () => {
+      (eventApi.fetchEvents as jest.Mock).mockResolvedValue([]);
+
+      const { result } = renderHook(() => useCalendar());
+
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      expect(eventApi.fetchEvents).toHaveBeenCalledTimes(1);
+      // dayGridMonth では fetchTasks は呼ばれない
+      expect(taskApi.fetchTasks).not.toHaveBeenCalled();
+
+      act(() => {
+        result.current.reload();
+      });
+
+      await waitFor(() => expect(eventApi.fetchEvents).toHaveBeenCalledTimes(2));
+      expect(taskApi.fetchTasks).not.toHaveBeenCalled();
+    });
+
+    it('timeGridDayビューで reload を呼ぶと fetchEvents・fetchTasks が再実行される', async () => {
       (eventApi.fetchEvents as jest.Mock).mockResolvedValue([]);
       (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
 
@@ -376,14 +408,21 @@ describe('useCalendar', () => {
 
       await waitFor(() => expect(result.current.loading).toBe(false));
 
-      expect(eventApi.fetchEvents).toHaveBeenCalledTimes(1);
+      // timeGridDay に切り替える
+      act(() => {
+        result.current.setCurrentView('timeGridDay');
+      });
+
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      expect(eventApi.fetchEvents).toHaveBeenCalledTimes(2);
       expect(taskApi.fetchTasks).toHaveBeenCalledTimes(1);
 
       act(() => {
         result.current.reload();
       });
 
-      await waitFor(() => expect(eventApi.fetchEvents).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(eventApi.fetchEvents).toHaveBeenCalledTimes(3));
       expect(taskApi.fetchTasks).toHaveBeenCalledTimes(2);
     });
   });
@@ -391,7 +430,6 @@ describe('useCalendar', () => {
   describe('handleCreateMultipleEvents', () => {
     it('複数予定を一括作成してローカルステートに追加する', async () => {
       (eventApi.fetchEvents as jest.Mock).mockResolvedValue([]);
-      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
       const created1 = { ...mockEvent, id: 2 };
       const created2 = { ...mockEvent, id: 3 };
       (eventApi.createMultipleEvents as jest.Mock).mockResolvedValue([created1, created2]);
@@ -419,7 +457,6 @@ describe('useCalendar', () => {
 
     it('複数予定作成失敗時に例外をスローする', async () => {
       (eventApi.fetchEvents as jest.Mock).mockResolvedValue([]);
-      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
       (eventApi.createMultipleEvents as jest.Mock).mockRejectedValue(new Error('複数作成失敗'));
 
       const { result } = renderHook(() => useCalendar());
@@ -440,7 +477,6 @@ describe('useCalendar', () => {
   describe('handleCreateRepeatEvent', () => {
     it('繰り返し予定を一括作成してローカルステートに追加する', async () => {
       (eventApi.fetchEvents as jest.Mock).mockResolvedValue([]);
-      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
       const created1 = { ...mockEvent, id: 4 };
       const created2 = { ...mockEvent, id: 5 };
       const created3 = { ...mockEvent, id: 6 };
@@ -464,7 +500,6 @@ describe('useCalendar', () => {
 
     it('繰り返し予定作成失敗時に例外をスローする', async () => {
       (eventApi.fetchEvents as jest.Mock).mockResolvedValue([]);
-      (taskApi.fetchTasks as jest.Mock).mockResolvedValue([]);
       (eventApi.createRepeatEvent as jest.Mock).mockRejectedValue(new Error('繰り返し作成失敗'));
 
       const { result } = renderHook(() => useCalendar());

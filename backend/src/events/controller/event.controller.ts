@@ -3,16 +3,14 @@ import {
   Controller,
   Delete,
   Get,
-  InternalServerErrorException,
   Param,
   ParseIntPipe,
   Patch,
   Post,
-  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { EventService } from '../service/event.service';
 import {
   CreateEventDto,
@@ -24,9 +22,11 @@ import {
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
 import { OwnershipGuard } from 'src/common/guards/ownership.guard';
 import { CheckOwnership } from 'src/common/decorators/check-ownership.decorator';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { HttpStatus } from 'src/common/type/status.enum';
 import { MESSAGE } from 'src/common/type/message';
 import { LoggerService } from 'src/common/service/logger.service';
+import type { JwtPayload } from 'src/jwt/jwt.payload';
 
 const CONTEXT = 'EventController';
 
@@ -48,22 +48,21 @@ export class EventController {
    */
   @Get()
   async findAll(
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, '予定一覧取得リクエスト');
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
-    const events = await this.eventService.findAll(requestUser.username);
+    const events = await this.eventService.findAll(currentUser.username);
     return response.status(HttpStatus.OK).json(events);
   }
 
   /**
    * 予定詳細取得エンドポイント
+   * 作成者のみアクセス可能（OwnershipGuard）
    */
   @Get(':id')
+  @CheckOwnership('event')
+  @UseGuards(OwnershipGuard)
   async findOne(
     @Param('id', ParseIntPipe) id: number,
     @Res() response: Response,
@@ -79,15 +78,11 @@ export class EventController {
   @Post()
   async create(
     @Body() dto: CreateEventDto,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `予定作成リクエスト: ${dto.title}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
-    const event = await this.eventService.create(dto, requestUser.username);
+    const event = await this.eventService.create(dto, currentUser.username);
     return response
       .status(HttpStatus.CREATED)
       .json({ message: MESSAGE.EVENT.CREATE_SUCCESS, event });
@@ -100,17 +95,13 @@ export class EventController {
   @Post('multiple')
   async createMultiple(
     @Body() dto: CreateMultipleEventsDto,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `複数予定作成リクエスト: ${dto.title}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     const events = await this.eventService.createMultiple(
       dto,
-      requestUser.username,
+      currentUser.username,
     );
     return response
       .status(HttpStatus.CREATED)
@@ -124,17 +115,13 @@ export class EventController {
   @Post('repeat')
   async createRepeat(
     @Body() dto: CreateRepeatEventDto,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `繰り返し予定作成リクエスト: ${dto.title}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     const events = await this.eventService.createRepeat(
       dto,
-      requestUser.username,
+      currentUser.username,
     );
     return response
       .status(HttpStatus.CREATED)
@@ -150,21 +137,17 @@ export class EventController {
   async updateRepeatGroup(
     @Param('groupId') groupId: string,
     @Body() dto: UpdateRepeatGroupEventDto,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(
       CONTEXT,
       `繰り返しグループ更新リクエスト: groupId=${groupId}`,
     );
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     const events = await this.eventService.updateRepeatGroup(
       groupId,
       dto,
-      requestUser.username,
+      currentUser.username,
     );
     return response
       .status(HttpStatus.OK)
@@ -180,14 +163,9 @@ export class EventController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateEventDto,
-    @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `予定更新リクエスト: id=${id}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     const event = await this.eventService.update(id, dto);
     return response
       .status(HttpStatus.OK)
@@ -202,14 +180,9 @@ export class EventController {
   @UseGuards(OwnershipGuard)
   async remove(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `予定削除リクエスト: id=${id}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     await this.eventService.remove(id);
     return response
       .status(HttpStatus.OK)

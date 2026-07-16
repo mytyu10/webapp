@@ -56,9 +56,12 @@ export class TaskService {
   }
 
   /**
-   * タスクを作成する
+   * タスクを作成する。作成者はコントローラーから渡されたJWT認証済みユーザー名を使用する
    */
-  async create(dto: CreateTaskDto): Promise<TaskResponseDto> {
+  async create(
+    dto: CreateTaskDto,
+    createdBy: string,
+  ): Promise<TaskResponseDto> {
     this.logger.log(CONTEXT, `タスク作成開始: ${dto.title}`);
     try {
       const priority = this.normalizePriority(dto.priority);
@@ -69,7 +72,7 @@ export class TaskService {
         priority,
         category: dto.category ?? null,
         parent_id: dto.parent_id ?? null,
-        created_by: dto.created_by,
+        created_by: createdBy,
         assignees: dto.assignees ?? [],
       });
       this.logger.log(CONTEXT, `タスク作成完了: id=${task.id}`);

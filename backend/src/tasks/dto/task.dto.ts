@@ -90,12 +90,6 @@ export class CreateTaskDto {
   @IsPositive({ message: '親タスクIDは正の整数で指定してください' })
   @IsOptional()
   parent_id?: number;
-
-  /** 作成者ユーザー名 */
-  @ApiProperty({ description: '作成者ユーザー名', example: 'alice' })
-  @IsString()
-  @IsNotEmpty({ message: '作成者を指定してください' })
-  created_by: string;
 }
 
 /** タスク更新リクエストDTO */

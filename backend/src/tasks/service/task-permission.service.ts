@@ -35,7 +35,6 @@ export class TaskPermissionService {
       `タスク権限一覧取得開始: taskId=${taskId}, user=${requestUsername}`,
     );
 
-    await this.ensureTaskExists(taskId);
     await this.ensureOwner(taskId, requestUsername);
 
     try {
@@ -63,7 +62,6 @@ export class TaskPermissionService {
       `タスク権限付与開始: taskId=${taskId}, target=${dto.username}, permission=${dto.permission}`,
     );
 
-    await this.ensureTaskExists(taskId);
     await this.ensureOwner(taskId, requestUsername);
 
     try {
@@ -96,7 +94,6 @@ export class TaskPermissionService {
       `タスク権限削除開始: taskId=${taskId}, target=${targetUsername}`,
     );
 
-    await this.ensureTaskExists(taskId);
     await this.ensureOwner(taskId, requestUsername);
 
     const existing = await this.taskPermissionRepository.findOne(
@@ -120,17 +117,8 @@ export class TaskPermissionService {
   }
 
   /**
-   * タスクが存在することを確認する
-   */
-  private async ensureTaskExists(taskId: number): Promise<void> {
-    const task = await this.taskRepository.findById(taskId);
-    if (!task) {
-      throw new NotFoundException(MESSAGE.TASK.NOT_FOUND);
-    }
-  }
-
-  /**
-   * リクエストユーザーがタスクの作成者であることを確認する
+   * リクエストユーザーがタスクの作成者であることを確認する。
+   * タスクが存在しない場合は 404、作成者でない場合は 403 を返す
    */
   private async ensureOwner(
     taskId: number,

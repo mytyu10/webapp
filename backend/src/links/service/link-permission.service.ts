@@ -35,7 +35,6 @@ export class LinkPermissionService {
       `リンク権限一覧取得開始: linkItemId=${linkItemId}, user=${requestUsername}`,
     );
 
-    await this.ensureLinkExists(linkItemId);
     await this.ensureOwner(linkItemId, requestUsername);
 
     try {
@@ -63,7 +62,6 @@ export class LinkPermissionService {
       `リンク権限付与開始: linkItemId=${linkItemId}, target=${dto.username}, permission=${dto.permission}`,
     );
 
-    await this.ensureLinkExists(linkItemId);
     await this.ensureOwner(linkItemId, requestUsername);
 
     try {
@@ -96,7 +94,6 @@ export class LinkPermissionService {
       `リンク権限削除開始: linkItemId=${linkItemId}, target=${targetUsername}`,
     );
 
-    await this.ensureLinkExists(linkItemId);
     await this.ensureOwner(linkItemId, requestUsername);
 
     const existing = await this.linkPermissionRepository.findOne(
@@ -120,17 +117,8 @@ export class LinkPermissionService {
   }
 
   /**
-   * リンクアイテムが存在することを確認する
-   */
-  private async ensureLinkExists(linkItemId: number): Promise<void> {
-    const item = await this.linkRepository.findById(linkItemId);
-    if (!item) {
-      throw new NotFoundException(MESSAGE.LINK.NOT_FOUND);
-    }
-  }
-
-  /**
-   * リクエストユーザーがリンクアイテムの作成者であることを確認する
+   * リクエストユーザーがリンクアイテムの作成者であることを確認する。
+   * リンクアイテムが存在しない場合は 404、作成者でない場合は 403 を返す
    */
   private async ensureOwner(
     linkItemId: number,

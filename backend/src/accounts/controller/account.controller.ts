@@ -1,20 +1,14 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  Req,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import type { Request, Response } from 'express';
-import { AccountService } from '../service/account.service';
-import { AccountDto } from '../dto/account';
-import { HttpStatus } from '../../common/type/status.enum';
-import { MESSAGE } from '../../common/type/message';
-import { LoggerService } from '../../common/service/logger.service';
+import type { Response } from 'express';
+import { AccountService } from 'src/accounts/service/account.service';
+import { AccountDto } from 'src/accounts/dto/account';
+import { HttpStatus } from 'src/common/type/status.enum';
+import { MESSAGE } from 'src/common/type/message';
+import { LoggerService } from 'src/common/service/logger.service';
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import type { JwtPayload } from 'src/jwt/jwt.payload';
 
 const CONTEXT = 'AccountsController';
 
@@ -88,26 +82,17 @@ export class AccountsController {
       .json({ message: MESSAGE.AUTH.REGIST_FAILED });
   }
 
-  @Get('logout')
-  logout() {}
-
   /**
    * ログインユーザー情報取得エンドポイント
    */
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async getMe(
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, 'ユーザー情報取得リクエスト');
-    const requestUser = req.user;
-    if (!requestUser) {
-      return response
-        .status(HttpStatus.UNAUTHORIZED)
-        .json({ message: MESSAGE.AUTH.UNAUTHORIZED });
-    }
-    const me = await this.accountService.getMe(requestUser.username);
+    const me = await this.accountService.getMe(currentUser.username);
     return response.status(HttpStatus.OK).json(me);
   }
 }

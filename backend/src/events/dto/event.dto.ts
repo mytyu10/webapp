@@ -11,9 +11,20 @@ import {
   Max,
   ValidateNested,
   IsEnum,
+  IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+/** 予定の色識別子有効値 */
+const EVENT_COLORS = [
+  'cyan',
+  'indigo',
+  'emerald',
+  'violet',
+  'rose',
+  'amber',
+] as const;
 
 /** 繰り返しタイプ */
 export enum RepeatType {
@@ -117,10 +128,13 @@ export class CreateEventDto {
   /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は cyan */
   @ApiPropertyOptional({
     description: '予定の色識別子',
-    enum: ['cyan', 'indigo', 'emerald', 'violet', 'rose', 'amber'],
+    enum: EVENT_COLORS,
     example: 'cyan',
   })
-  @IsString()
+  @IsIn(EVENT_COLORS, {
+    message:
+      '色はcyan/indigo/emerald/violet/rose/amberのいずれかで指定してください',
+  })
   @IsOptional()
   color?: string;
 }
@@ -176,9 +190,12 @@ export class CreateMultipleEventsDto {
   /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は cyan */
   @ApiPropertyOptional({
     description: '予定の色識別子',
-    enum: ['cyan', 'indigo', 'emerald', 'violet', 'rose', 'amber'],
+    enum: EVENT_COLORS,
   })
-  @IsString()
+  @IsIn(EVENT_COLORS, {
+    message:
+      '色はcyan/indigo/emerald/violet/rose/amberのいずれかで指定してください',
+  })
   @IsOptional()
   color?: string;
 }
@@ -230,9 +247,12 @@ export class CreateRepeatEventDto {
   /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は cyan */
   @ApiPropertyOptional({
     description: '予定の色識別子',
-    enum: ['cyan', 'indigo', 'emerald', 'violet', 'rose', 'amber'],
+    enum: EVENT_COLORS,
   })
-  @IsString()
+  @IsIn(EVENT_COLORS, {
+    message:
+      '色はcyan/indigo/emerald/violet/rose/amberのいずれかで指定してください',
+  })
   @IsOptional()
   color?: string;
 }
@@ -275,9 +295,12 @@ export class UpdateEventDto {
   /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は変更なし */
   @ApiPropertyOptional({
     description: '予定の色識別子',
-    enum: ['cyan', 'indigo', 'emerald', 'violet', 'rose', 'amber'],
+    enum: EVENT_COLORS,
   })
-  @IsString()
+  @IsIn(EVENT_COLORS, {
+    message:
+      '色はcyan/indigo/emerald/violet/rose/amberのいずれかで指定してください',
+  })
   @IsOptional()
   color?: string;
 }
@@ -326,9 +349,12 @@ export class UpdateRepeatGroupEventDto {
   /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は変更なし */
   @ApiPropertyOptional({
     description: '予定の色識別子',
-    enum: ['cyan', 'indigo', 'emerald', 'violet', 'rose', 'amber'],
+    enum: EVENT_COLORS,
   })
-  @IsString()
+  @IsIn(EVENT_COLORS, {
+    message:
+      '色はcyan/indigo/emerald/violet/rose/amberのいずれかで指定してください',
+  })
   @IsOptional()
   color?: string;
 }

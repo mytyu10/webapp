@@ -3,16 +3,14 @@ import {
   Controller,
   Delete,
   Get,
-  InternalServerErrorException,
   Param,
   ParseIntPipe,
   Patch,
   Post,
-  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { LinkService } from '../service/link.service';
 import { LinkPermissionService } from '../service/link-permission.service';
 import { CreateLinkItemDto, UpdateLinkItemDto } from '../dto/link.dto';
@@ -20,9 +18,11 @@ import { CreatePermissionDto } from 'src/permissions/permission.dto';
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
 import { OwnershipGuard } from 'src/common/guards/ownership.guard';
 import { CheckOwnership } from 'src/common/decorators/check-ownership.decorator';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { HttpStatus } from 'src/common/type/status.enum';
 import { MESSAGE } from 'src/common/type/message';
 import { LoggerService } from 'src/common/service/logger.service';
+import type { JwtPayload } from 'src/jwt/jwt.payload';
 
 const CONTEXT = 'LinkController';
 
@@ -45,15 +45,11 @@ export class LinkController {
    */
   @Get()
   async findAll(
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, 'リンク一覧取得リクエスト');
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
-    const links = await this.linkService.findAll(requestUser.username);
+    const links = await this.linkService.findAll(currentUser.username);
     return response.status(HttpStatus.OK).json(links);
   }
 
@@ -63,15 +59,11 @@ export class LinkController {
   @Post()
   async create(
     @Body() dto: CreateLinkItemDto,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `リンク作成リクエスト: ${dto.title}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
-    const link = await this.linkService.create(dto, requestUser.username);
+    const link = await this.linkService.create(dto, currentUser.username);
     return response
       .status(HttpStatus.CREATED)
       .json({ message: MESSAGE.LINK.CREATE_SUCCESS, link });
@@ -87,14 +79,9 @@ export class LinkController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateLinkItemDto,
-    @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `リンク更新リクエスト: id=${id}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     const link = await this.linkService.update(id, dto);
     return response
       .status(HttpStatus.OK)
@@ -110,15 +97,11 @@ export class LinkController {
   @UseGuards(OwnershipGuard)
   async remove(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `リンク削除リクエスト: id=${id}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
-    await this.linkService.delete(id, requestUser.username);
+    await this.linkService.delete(id, currentUser.username);
     return response
       .status(HttpStatus.OK)
       .json({ message: MESSAGE.LINK.DELETE_SUCCESS });
@@ -130,17 +113,13 @@ export class LinkController {
   @Get(':id/permissions')
   async getPermissions(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `リンク権限一覧取得リクエスト: linkItemId=${id}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     const permissions = await this.linkPermissionService.findAll(
       id,
-      requestUser.username,
+      currentUser.username,
     );
     return response.status(HttpStatus.OK).json(permissions);
   }
@@ -152,21 +131,17 @@ export class LinkController {
   async addPermission(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreatePermissionDto,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(
       CONTEXT,
       `リンク権限付与リクエスト: linkItemId=${id}, target=${dto.username}`,
     );
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     const permission = await this.linkPermissionService.add(
       id,
       dto,
-      requestUser.username,
+      currentUser.username,
     );
     return response
       .status(HttpStatus.CREATED)
@@ -180,21 +155,17 @@ export class LinkController {
   async removePermission(
     @Param('id', ParseIntPipe) id: number,
     @Param('username') targetUsername: string,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(
       CONTEXT,
       `リンク権限削除リクエスト: linkItemId=${id}, target=${targetUsername}`,
     );
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     await this.linkPermissionService.remove(
       id,
       targetUsername,
-      requestUser.username,
+      currentUser.username,
     );
     return response
       .status(HttpStatus.OK)

@@ -1,21 +1,22 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
-  InternalServerErrorException,
   Post,
   Query,
-  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { ChatService } from '../service/chat.service';
 import { CreateChatMessageDto } from '../dto/chat.dto';
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { HttpStatus } from 'src/common/type/status.enum';
 import { MESSAGE } from 'src/common/type/message';
 import { LoggerService } from 'src/common/service/logger.service';
+import type { JwtPayload } from 'src/jwt/jwt.payload';
 
 const CONTEXT = 'ChatController';
 
@@ -36,15 +37,11 @@ export class ChatController {
    */
   @Get('contacts')
   async findContacts(
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, 'チャット相手一覧取得リクエスト');
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
-    const contacts = await this.chatService.findContacts(requestUser.username);
+    const contacts = await this.chatService.findContacts(currentUser.username);
     return response.status(HttpStatus.OK).json(contacts);
   }
 
@@ -53,15 +50,11 @@ export class ChatController {
    */
   @Get('users')
   async findAllUsers(
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, '全ユーザー一覧取得リクエスト');
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
-    const users = await this.chatService.findAllUsers(requestUser.username);
+    const users = await this.chatService.findAllUsers(currentUser.username);
     return response.status(HttpStatus.OK).json(users);
   }
 
@@ -71,17 +64,16 @@ export class ChatController {
    */
   @Get('messages')
   async findMessages(
-    @Query('with') withUser: string,
-    @Req() req: Request,
+    @Query('with') withUser: string | undefined,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `メッセージ一覧取得リクエスト: with=${withUser}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    if (!withUser) {
+      throw new BadRequestException('クエリパラメータ with は必須です');
     }
     const messages = await this.chatService.findConversation(
-      requestUser.username,
+      currentUser.username,
       withUser,
     );
     return response.status(HttpStatus.OK).json(messages);
@@ -93,16 +85,12 @@ export class ChatController {
   @Post('messages')
   async sendMessage(
     @Body() dto: CreateChatMessageDto,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `メッセージ送信リクエスト: to=${dto.to_user}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     const message = await this.chatService.sendMessage(
-      requestUser.username,
+      currentUser.username,
       dto,
     );
     return response
