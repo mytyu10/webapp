@@ -5,6 +5,8 @@ import {
   updateTask,
   fetchTask,
   addNotification,
+  deleteNotification,
+  fetchNotifications,
   Priority,
 } from '../api/taskApi';
 import {
@@ -160,7 +162,7 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
   /**
    * フォーム送信処理
    * バリデーション後、作成または更新APIを呼び出す
-   * 完了後に通知日時をAPIへ送信する
+   * 編集モードでは既存通知を全削除してからフォームの通知を再登録する
    */
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
@@ -190,6 +192,17 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
         const updated = await updateTask(id, input);
         savedTaskId = updated.id;
         logger.info(CONTEXT, `タスク更新成功: id=${id}`);
+
+        /** 編集モード: 既存通知を全削除してからフォームの通知を再登録する */
+        try {
+          const existingNotifications = await fetchNotifications(savedTaskId);
+          for (const notif of existingNotifications) {
+            await deleteNotification(savedTaskId, notif.id);
+            logger.info(CONTEXT, `既存通知削除: taskId=${savedTaskId}, notificationId=${notif.id}`);
+          }
+        } catch (notifErr) {
+          logger.warn(CONTEXT, `既存通知削除失敗: ${notifErr instanceof Error ? notifErr.message : '不明なエラー'}`);
+        }
       } else {
         const input = {
           title: values.title,

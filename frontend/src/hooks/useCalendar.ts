@@ -156,6 +156,10 @@ export function useCalendar(): UseCalendarReturn {
     setReloadTrigger((prev) => prev + 1);
   }, []);
 
+  /**
+   * 予定データを読み込む。
+   * 日表示（timeGridDay）の場合のみタスクも取得する
+   */
   useEffect(() => {
     let cancelled = false;
 
@@ -163,12 +167,22 @@ export function useCalendar(): UseCalendarReturn {
       setLoading(true);
       setError('');
       try {
-        logger.info(CONTEXT, '予定・タスク一覧読み込み開始');
-        const [eventsData, tasksData] = await Promise.all([fetchEvents(), fetchTasks()]);
-        if (!cancelled) {
-          setEvents(eventsData);
-          setTasks(tasksData);
-          logger.info(CONTEXT, `予定: ${eventsData.length}件, タスク: ${tasksData.length}件 読み込み完了`);
+        if (currentView === 'timeGridDay') {
+          logger.info(CONTEXT, '予定・タスク一覧読み込み開始（日表示）');
+          const [eventsData, tasksData] = await Promise.all([fetchEvents(), fetchTasks()]);
+          if (!cancelled) {
+            setEvents(eventsData);
+            setTasks(tasksData);
+            logger.info(CONTEXT, `予定: ${eventsData.length}件, タスク: ${tasksData.length}件 読み込み完了`);
+          }
+        } else {
+          logger.info(CONTEXT, '予定一覧読み込み開始');
+          const eventsData = await fetchEvents();
+          if (!cancelled) {
+            setEvents(eventsData);
+            setTasks([]);
+            logger.info(CONTEXT, `予定: ${eventsData.length}件 読み込み完了`);
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -186,7 +200,7 @@ export function useCalendar(): UseCalendarReturn {
     return () => {
       cancelled = true;
     };
-  }, [reloadTrigger]);
+  }, [reloadTrigger, currentView]);
 
   /**
    * FullCalendarへ渡すイベント配列を構築する。
