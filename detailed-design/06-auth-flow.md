@@ -1,4 +1,4 @@
-# 認証フロー・LINE連携フロー・LINE通知フロー
+# 認証フロー
 
 ## ログインフロー
 
@@ -121,69 +121,7 @@ PrivateRoute
 
 ---
 
-## LINE OAuth フロー（LINE Login 認可コードフロー）
-
-```
-[ユーザー] Sidebar の "LINEと連携する" ボタンをクリック
-    │
-    ▼
-[Sidebar] handleLineLogin()
-    │ window.location.href = LINE_LOGIN_URL
-    │ （= http://localhost:8000/accounts/line/login, Authorization ヘッダーは自動付与されない）
-    │
-    ▼
-※ 注意: /accounts/line/login は JwtAuthGuard が適用されているため、
-   フロントエンドは localStorage の JWT を含む形でリダイレクト先を構築する必要がある。
-   現状はブラウザの URL 遷移のため Authorization ヘッダーが付与されず、
-   実運用では LINE_LOGIN_URL にトークンを含めるか、Cookie ベースの認証への変更が必要。
-
-    ▼
-[AccountController] GET /accounts/line/login （JwtAuthGuard適用）
-    │
-    ▼
-[AccountService] getLineLoginUrl()
-    │ LINE_LOGIN_CHANNEL_ID / LINE_CALLBACK_URL / scope / state を組み立て
-    │ LINE 認可エンドポイントへのリダイレクト URL を返す
-    │
-    ▼
-[LINE Login API] https://access.line.me/oauth2/v2.1/authorize
-    │ ユーザーが LINE でログイン・許可
-    │
-    ▼
-[LINE] GET /accounts/line/callback?code=<AUTHORIZATION_CODE>&state=<STATE>
-    │   （Authorization ヘッダーに JWT が必要）
-    ▼
-[AccountController] GET /accounts/line/callback （JwtAuthGuard適用）
-    │ @Query() dto: LineCallbackQueryDto で code を受け取る
-    ▼
-[AccountService] handleLineCallback(code, username)
-    │
-    ├─ [LINE Token API] POST https://api.line.me/oauth2/v2.1/token
-    │       { code, client_id, client_secret, redirect_uri, grant_type }
-    │       → access_token 取得
-    │
-    ├─ [LINE Profile API] GET https://api.line.me/v2/profile
-    │       Authorization: Bearer <access_token>
-    │       → userId 取得
-    │
-    └─ [AccountRepository] updateLineUserId(username, userId)
-           Account.line_user_id を更新
-    │
-    ▼
-[AccountController]
-    │ 成功 → {FRONTEND_URL}/line-callback?status=success へリダイレクト
-    │ 失敗 → {FRONTEND_URL}/line-callback?status=error へリダイレクト
-    ▼
-[LineCallbackPage]
-    │ status=success → 2秒後に /tasks へ自動遷移（カウントダウン表示）
-    │ status=error   → エラーメッセージ表示・手動で /tasks へ戻る
-```
-
----
-
-## LINE 通知フロー（タスク期限通知・Cronジョブ）
-
-### 通知設定フロー（タスク作成・編集時）
+## 通知設定フロー（タスク作成・編集時）
 
 ```
 [ユーザー] TaskFormPage で通知日時を追加して "作成する" / "更新する" をクリック
@@ -198,7 +136,7 @@ PrivateRoute
          → TaskNotification レコードが DB に作成される（is_sent=false）
 ```
 
-### 通知削除フロー（詳細パネルから）
+## 通知削除フロー（詳細パネルから）
 
 ```
 [ユーザー] TaskDetailPanel の通知 "削除" ボタンをクリック
@@ -215,36 +153,6 @@ PrivateRoute
     └─ reload() → タスク一覧を再取得してパネルの通知一覧を更新
 ```
 
-### LINE プッシュ通知フロー（Cronジョブ・毎分実行）
-
-```
-[NestJS Scheduler] @Cron(CronExpression.EVERY_MINUTE)
-    │
-    ▼
-[LineNotificationService] sendPendingNotifications()
-    │
-    ├─ LINE_MESSAGING_CHANNEL_ACCESS_TOKEN が未設定 → ログ出力して終了
-    │
-    ├─ [TaskNotificationRepository] findPendingNotifications()
-    │       WHERE is_sent = false AND notify_at <= NOW()
-    │       include: task（title, due_date, assignees（account.line_user_id含む））
-    │
-    ├─ 送信対象なし → ログ出力して終了
-    │
-    └─ 各通知に対して:
-        ├─ メッセージ本文構築（タスク名・期限）
-        ├─ 各担当者に対して:
-        │   ├─ line_user_id が null → ログ出力してスキップ（LINE未連携）
-        │   └─ [LINE Messaging API] POST https://api.line.me/v2/bot/message/push
-        │           { to: line_user_id, messages: [{ type: 'text', text: ... }] }
-        │           Authorization: Bearer <LINE_MESSAGING_CHANNEL_ACCESS_TOKEN>
-        │           成功 → ログ出力
-        │           失敗 → エラーログ出力・is_sent は更新しない（次回再試行）
-        └─ 全担当者処理後:
-            [TaskNotificationRepository] markAsSent(notificationId)
-            → is_sent = true に更新
-```
-
 ---
 
 ## セキュリティ上の注意点
@@ -255,6 +163,4 @@ PrivateRoute
 | トークン保存場所 | localStorage | XSS攻撃でトークンが窃取される可能性。httpOnly Cookie推奨 |
 | バックエンドログアウト | 未実装 | トークンの無効化ができない |
 | 認証済みルートの保護 | PrivateRoute で JWT exp 検証 | ✅ 有効期限チェックあり |
-| LINE OAuth コールバック認証 | JwtAuthGuard 適用 | ブラウザリダイレクトでは Authorization ヘッダーが付与されない問題あり（要改善） |
-| LINE User ID の保護 | DB に直接保存 | バックエンドの認証済みエンドポイント経由でのみ更新可能 |
 | 本番マイグレーション | `npx prisma migrate deploy` | 本番環境では `migrate dev` を使用しないこと |

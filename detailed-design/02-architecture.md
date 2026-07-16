@@ -10,8 +10,7 @@
 │  BrowserRouter                               │     │  main.ts                                   │
 │  ├── /login → LoginPage           ───────────┼─────┤  ├── ValidationPipe (global)               │
 │  ├── /regist → RegistPage                    │ HTTP│  ├── AllExceptionsFilter (global)          │
-│  ├── /line-callback → LineCallbackPage       │     │  └── AppModule                             │
-│  └── PrivateRoute (JWT検証)                  │     │       ├── ScheduleModule.forRoot()         │
+│  └── PrivateRoute (JWT検証)                  │     │  └── AppModule                             │
 │      └── SidebarLayout                       │     │       ├── CommonModule                     │
 │          ├── / → HomePage(リダイレクト)      │     │       │    ├── LoggerService               │
 │          ├── /tasks → TaskListPage           │     │       │    └── BatchQueueService           │
@@ -25,11 +24,10 @@
 │  ├── pages/        画面                      │     │       │    ├── TaskRepository              │
 │  └── components/   共通UI                    │     │       │    ├── TaskNotificationService     │
 └──────────────────────────────────────────────┘     │       │    └── TaskNotificationRepository  │
-                                                     │       ├── EventsModule                     │
-                                                     │       │    ├── EventController             │
-                                                     │       │    ├── EventService                │
-                                                     │       │    └── EventRepository             │
-                                                     │       └── LineNotificationService (Cron)   │
+                                                     │       └── EventsModule                     │
+                                                     │            ├── EventController             │
+                                                     │            ├── EventService                │
+                                                     │            └── EventRepository             │
                                                      │                                            │
                                                      │  共通                                      │
                                                      │  ├── JwtAuthGuard                          │
@@ -43,16 +41,6 @@
                                                                 │  SQLite DB    │
                                                                 │  (dev.db)     │
                                                                 └───────────────┘
-                                                                        
-                                                     LINE OAuth ┌──────────────────────────────┐
-                                                     ──────────▶│  LINE Login API               │
-                                                                │  （認可コード→トークン→Profile）│
-                                                                └──────────────────────────────┘
-
-                                                     LINE Push  ┌──────────────────────────────┐
-                                                     ──────────▶│  LINE Messaging API           │
-                                                                │  （Cronジョブ毎分実行）         │
-                                                                └──────────────────────────────┘
 ```
 
 ## バックエンド レイヤー構成
@@ -118,15 +106,15 @@ backend/src/
 ├── accounts/                                   # アカウント機能モジュール
 │   ├── controller/
 │   │   └── account.controller.ts              # POST /accounts/login, /regist
-│   │                                          # GET /accounts/me, /line/login, /line/callback
+│   │                                          # GET /accounts/me
 │   ├── dto/
-│   │   └── account.dto.ts                     # AccountDto・LineCallbackQueryDto・AccountMeResponseDto
+│   │   └── account.dto.ts                     # AccountDto・AccountMeResponseDto
 │   ├── module/
 │   │   └── account.module.ts                  # モジュール定義・DI設定
 │   ├── repository/
-│   │   └── account.repository.ts              # Prismaを使ったDBアクセス（updateLineUserId 含む）
+│   │   └── account.repository.ts              # Prismaを使ったDBアクセス
 │   └── service/
-│       └── account.service.ts                 # ログイン・登録・LINE OAuth・ユーザー情報取得のビジネスロジック
+│       └── account.service.ts                 # ログイン・登録・ユーザー情報取得のビジネスロジック
 ├── tasks/                                      # タスク管理機能モジュール
 │   ├── controller/
 │   │   └── task.controller.ts                 # GET/POST/PATCH/DELETE /tasks（JwtAuthGuard適用）
@@ -152,8 +140,6 @@ backend/src/
 │   ├── service/
 │   │   └── event.service.ts                  # 予定CRUDのビジネスロジック（作成者のみ編集・削除可）
 │   └── events.module.ts                       # EventsModule定義・DI設定
-├── line/
-│   └── line-notification.service.ts           # Cronジョブ（毎分）: 未送信通知を取得してLINE Messaging APIでプッシュ送信
 ├── common/                                     # 共通ユーティリティ
 │   ├── common.module.ts                        # CommonModule（LoggerService・BatchQueueService を providers/exports に登録）
 │   ├── filter/
@@ -186,7 +172,7 @@ frontend/src/
 ├── logger.ts                        # コンソールロガー
 ├── api/
 │   ├── accountApi.ts                # バックエンドHTTP通信（ログイン・登録）
-│   ├── taskApi.ts                   # バックエンドHTTP通信（タスクCRUD・通知CRUD・LINE連携状態取得・Bearer認証）
+│   ├── taskApi.ts                   # バックエンドHTTP通信（タスクCRUD・通知CRUD・Bearer認証）
 │   └── eventApi.ts                  # バックエンドHTTP通信（予定CRUD、Bearer認証）
 ├── components/                      # 共通UIコンポーネント
 │   ├── FormCard.tsx                 # フォーム外枠カード
@@ -200,7 +186,7 @@ frontend/src/
 │   ├── SelectField.tsx              # selectラッパー
 │   ├── ConfirmModal.tsx             # 削除確認モーダル
 │   ├── PrivateRoute.tsx             # JWT有効期限検証（exp チェック）
-│   ├── Sidebar.tsx                  # サイドバーナビゲーション（LINE連携状態表示含む）
+│   ├── Sidebar.tsx                  # サイドバーナビゲーション
 │   ├── SidebarLayout.tsx            # サイドバー付きレイアウト
 │   ├── TaskCard.tsx                 # タスク1件表示カードコンポーネント
 │   ├── TaskDetailPanel.tsx          # タスク詳細サイドパネル（詳細表示＋インライン編集＋通知一覧）
@@ -220,8 +206,7 @@ frontend/src/
 │   ├── RegistPage.tsx               # アカウント登録画面
 │   ├── TaskListPage.tsx             # タスク一覧画面（サイドパネル・リサイズディバイダー・完了セクション折りたたみ）
 │   ├── TaskFormPage.tsx             # タスク作成・編集画面（通知日時設定UI含む）
-│   ├── CalendarPage.tsx             # カレンダー画面（FullCalendar・予定CRUD・タスク表示）
-│   └── LineCallbackPage.tsx         # LINE OAuth コールバックページ（PrivateRoute外）
+│   └── CalendarPage.tsx             # カレンダー画面（FullCalendar・予定CRUD・タスク表示）
 └── validation/                      # バリデーション（純粋関数）
     ├── loginValidation.ts           # ログインフォームバリデーション
     ├── registValidation.ts          # 登録フォームバリデーション
@@ -234,15 +219,12 @@ frontend/src/
 ```
 AppModule
 ├── imports
-│   ├── ScheduleModule.forRoot()     ← Cronジョブ有効化
 │   ├── CommonModule                 ← LoggerService / BatchQueueService をエクスポート
 │   ├── AccountsModule
 │   ├── TaskModule                   ← TaskNotificationRepository をエクスポート
 │   └── EventsModule
 ├── providers
-│   ├── AppService
-│   └── LineNotificationService      ← TaskModule の TaskNotificationRepository と
-│                                       CommonModule の LoggerService を DI で受け取る（重複登録なし）
+│   └── AppService
 │
 ├── AccountsModule
 │   └── provides

@@ -9,8 +9,6 @@
     {/* 公開ルート */}
     <Route path="/login"         element={<LoginPage />}        />
     <Route path="/regist"        element={<RegistPage />}       />
-    {/* LINE OAuthコールバック（認証不要：LINE から直接リダイレクトされる） */}
-    <Route path="/line-callback" element={<LineCallbackPage />} />
 
     {/* 認証済みルート（PrivateRoute + SidebarLayout） */}
     <Route element={<PrivateRoute />}>
@@ -30,7 +28,6 @@
 | `/` | `HomePage` → `/tasks` リダイレクト | 要認証 | 実装済み |
 | `/login` | `LoginPage` | 不要 | 実装済み |
 | `/regist` | `RegistPage` | 不要 | 実装済み |
-| `/line-callback` | `LineCallbackPage` | 不要 | LINE OAuth コールバック |
 | `/tasks` | `TaskListPage` | 要認証 | 実装済み |
 | `/tasks/new` | `TaskFormPage`（作成・子タスク作成モード） | 要認証 | 実装済み |
 | `/calendar` | `CalendarPage` | 要認証 | 実装済み |
@@ -74,15 +71,13 @@ SidebarLayout（スマホ: flex-col、PC[sm:]: flex-row）
 
 ### Sidebar
 
-レスポンシブ対応済み。LINE連携状態を `fetchMe()` で取得して表示する。
+レスポンシブ対応済み。
 
 | 要素 | 説明 |
 |------|------|
 | ブランド名 | "WebApp" |
 | NavLink | タスク管理（/tasks、アクティブ時 `bg-sky-700`） |
 | NavLink | カレンダー（/calendar、アクティブ時 `bg-sky-700`） |
-| LINE連携状態 | `line_user_id` が null → "LINEと連携する"ボタン（クリックで `/accounts/line/login` へ遷移）|
-|              | `line_user_id` あり → "LINE連携済み"テキスト（グレー・操作なし） |
 | ログアウトボタン | `localStorage.removeItem('token')` → `/login` |
 
 ---
@@ -116,29 +111,6 @@ RegistPage
     ├── SubmitButton（"登録"）
     └── <Link to="/login">ログインはこちら</Link>
 ```
-
-### LineCallbackPage
-
-LINE OAuth完了後のコールバックページ。PrivateRoute 外に配置。
-
-```
-LineCallbackPage
-└── 中央カード（bg-slate-800）
-    ├── [status=success]
-    │   ├── ✓ アイコン（緑）
-    │   ├── "LINE連携が完了しました"
-    │   ├── "{N}秒後にタスク一覧へ移動します..." カウントダウン
-    │   └── "今すぐ移動する" ボタン → navigate('/tasks')
-    └── [status=error]
-        ├── ✗ アイコン（赤）
-        ├── "LINE連携に失敗しました"
-        ├── 再試行案内テキスト
-        └── "タスク一覧へ戻る" ボタン → navigate('/tasks')
-```
-
-**動作:**
-- `status=success` 時: 2秒後に自動で `/tasks` へリダイレクト（カウントダウン表示）
-- `status=error` 時: 手動でボタンをクリックして戻る
 
 ### TaskListPage
 
@@ -380,7 +352,6 @@ Authorizationヘッダー（`Bearer <token>`）を全リクエストに付与。
 | `fetchNotifications(taskId)` | GET | `/tasks/:id/notifications` | 通知一覧取得 |
 | `addNotification(taskId, notify_at)` | POST | `/tasks/:id/notifications` | 通知追加 |
 | `deleteNotification(taskId, notificationId)` | DELETE | `/tasks/:id/notifications/:notificationId` | 通知削除 |
-| `fetchMe()` | GET | `/accounts/me` | ログインユーザー情報取得（LINE連携状態含む） |
 | `getCurrentUsername()` | - | - | localStorage の JWT をデコードして username を取得 |
 
 **Task インターフェース**
@@ -413,15 +384,6 @@ interface TaskNotification {
   task_id: number;
   notify_at: string;    // ISO8601形式
   is_sent: boolean;
-}
-```
-
-**AccountMe インターフェース**
-
-```typescript
-interface AccountMe {
-  username: string;
-  line_user_id: string | null;
 }
 ```
 
@@ -460,7 +422,6 @@ interface AccountMe {
 |------|------|
 | ブランド名 | "WebApp" |
 | NavLink | タスク管理・カレンダー |
-| LINE連携表示 | `fetchMe()` でマウント時に取得。連携済み → グレーテキスト、未連携 → 緑ボタン |
 | ログアウト | `localStorage.removeItem('token')` → `/login` |
 
 ### CalendarViewToggle

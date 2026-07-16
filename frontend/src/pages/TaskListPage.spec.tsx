@@ -434,8 +434,8 @@ describe('TaskListPage', () => {
       // 詳細パネルに「編集する」「削除する」ボタンが表示される
       await waitFor(() => {
         expect(screen.getByRole('button', { name: '編集する' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: '削除する' })).toBeInTheDocument();
       });
+      expect(screen.getByRole('button', { name: '削除する' })).toBeInTheDocument();
     });
 
     it('他者が作成者の場合はタスクカードをクリックすると詳細パネルに編集ボタンは表示されるが削除ボタンは表示されない', async () => {

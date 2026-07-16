@@ -3,8 +3,6 @@ import {
   Controller,
   Get,
   Post,
-  Query,
-  Redirect,
   Req,
   Res,
   UseGuards,
@@ -19,11 +17,6 @@ import { LoggerService } from '../../common/service/logger.service';
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
 
 const CONTEXT = 'AccountsController';
-
-/** フロントエンドのLINEコールバックページURL */
-const FRONTEND_LINE_CALLBACK_URL = process.env.FRONTEND_URL
-  ? `${process.env.FRONTEND_URL}/line-callback`
-  : 'http://localhost:3000/line-callback';
 
 @Controller('accounts')
 export class AccountsController {
@@ -99,52 +92,7 @@ export class AccountsController {
   logout() {}
 
   /**
-   * LINE OAuth認証URLへリダイレクトするエンドポイント
-   * ユーザーをLINEログイン画面へ誘導する
-   */
-  @Get('line/login')
-  @Redirect()
-  lineLogin() {
-    this.logger.log(CONTEXT, 'LINE認証URLへリダイレクト');
-    const url = this.accountService.getLineLoginUrl();
-    return { url, statusCode: HttpStatus.OK };
-  }
-
-  /**
-   * LINE OAuthコールバックエンドポイント
-   * LINEからの認可コードを受け取り、User IDを取得してアカウントに保存する
-   * 処理後はフロントエンドのコールバックページへリダイレクトする
-   * JwtAuthGuardを適用してログイン済みユーザーのみ連携可能にする
-   */
-  @Get('line/callback')
-  @UseGuards(JwtAuthGuard)
-  async lineCallback(
-    @Query('code') code: string,
-    @Req() req: Request,
-    @Res() response: Response,
-  ): Promise<void> {
-    this.logger.log(CONTEXT, 'LINE OAuthコールバック受信');
-
-    const requestUser = req.user;
-    if (!requestUser) {
-      this.logger.error(CONTEXT, '認証情報が取得できません');
-      response.redirect(`${FRONTEND_LINE_CALLBACK_URL}?status=error`);
-      return;
-    }
-
-    try {
-      await this.accountService.handleLineCallback(code, requestUser.username);
-      this.logger.log(CONTEXT, `LINE連携成功: ${requestUser.username}`);
-      response.redirect(`${FRONTEND_LINE_CALLBACK_URL}?status=success`);
-    } catch (error) {
-      this.logger.error(CONTEXT, `LINE連携失敗: ${String(error)}`);
-      response.redirect(`${FRONTEND_LINE_CALLBACK_URL}?status=error`);
-    }
-  }
-
-  /**
    * ログインユーザー情報取得エンドポイント
-   * LINE連携状態の確認に使用する
    */
   @Get('me')
   @UseGuards(JwtAuthGuard)

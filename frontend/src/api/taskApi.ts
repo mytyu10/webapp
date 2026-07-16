@@ -249,12 +249,6 @@ export interface TaskNotification {
   is_sent: boolean;
 }
 
-/** ログインユーザー情報レスポンス型 */
-export interface AccountMe {
-  username: string;
-  line_user_id: string | null;
-}
-
 /**
  * 指定タスクの通知一覧を取得する
  */
@@ -320,26 +314,4 @@ export async function deleteNotification(taskId: number, notificationId: number)
   }
 
   logger.info(CONTEXT, `通知削除成功: taskId=${taskId}, notificationId=${notificationId}`);
-}
-
-/**
- * ログインユーザー情報（LINE連携状態含む）を取得する
- */
-export async function fetchMe(): Promise<AccountMe> {
-  logger.info(CONTEXT, 'ユーザー情報取得リクエスト送信');
-
-  const response = await fetch(`${API_BASE}/accounts/me`, {
-    method: 'GET',
-    headers: authHeaders(),
-  });
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    const message = (data as { message?: string }).message || 'ユーザー情報の取得に失敗しました。';
-    logger.warn(CONTEXT, `ユーザー情報取得失敗: ${message}`);
-    throw new Error(message);
-  }
-
-  logger.info(CONTEXT, 'ユーザー情報取得成功');
-  return (await response.json()) as AccountMe;
 }

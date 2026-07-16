@@ -105,7 +105,7 @@ HTTP 400
 
 ### GET /accounts/me ※要認証
 
-ログイン中ユーザーの情報（LINE連携状態含む）を返す。
+ログイン中ユーザーの情報を返す。
 
 **リクエストヘッダー**
 
@@ -117,75 +117,9 @@ Authorization: Bearer <JWT>
 
 | ステータス | 条件 | レスポンスボディ |
 |-----------|------|----------------|
-| 200 | 取得成功 | `{ "username": "string", "line_user_id": "string | null" }` |
+| 200 | 取得成功 | `{ "username": "string" }` |
 | 401 | 認証エラー | `{ "message": "認証が必要です" }` |
 | 500 | 取得失敗 | `{ "message": "ユーザー情報の取得に失敗しました" }` |
-
----
-
-### GET /accounts/line/login ※要認証
-
-LINE Login の認可URLを生成してリダイレクトする。
-
-**リクエストヘッダー**
-
-```
-Authorization: Bearer <JWT>
-```
-
-**レスポンス**
-
-| ステータス | 条件 | レスポンスボディ |
-|-----------|------|----------------|
-| 302 | リダイレクト成功 | LINE Login 認可エンドポイントへリダイレクト |
-| 401 | 認証エラー | `{ "message": "認証が必要です" }` |
-| 500 | URL生成失敗 | `{ "message": "LINEログインURLの生成に失敗しました" }` |
-
-**LINE認可URLのクエリパラメータ:**
-
-```
-response_type=code
-client_id=<LINE_LOGIN_CHANNEL_ID>
-redirect_uri=http://localhost:8000/accounts/line/callback
-state=<random_state>
-scope=profile openid
-```
-
----
-
-### GET /accounts/line/callback ※要認証
-
-LINE OAuth コールバック。コードをトークンに交換し、LINE User ID を Account に保存する。
-
-**リクエストヘッダー**
-
-```
-Authorization: Bearer <JWT>
-```
-
-**クエリパラメータ**
-
-```
-code=<LINE_AUTHORIZATION_CODE>
-```
-
-**レスポンス**
-
-| ステータス | 条件 | レスポンスボディ |
-|-----------|------|----------------|
-| 302 | 連携成功 | `{FRONTEND_URL}/line-callback?status=success` へリダイレクト |
-| 302 | 連携失敗 | `{FRONTEND_URL}/line-callback?status=error` へリダイレクト |
-| 401 | 認証エラー | `{ "message": "認証が必要です" }` |
-
-**処理フロー:**
-
-```
-1. LINE Token API へ axios POST（コード → アクセストークン交換）
-2. LINE Profile API へ axios GET（アクセストークン → User ID 取得）
-3. AccountRepository.updateLineUserId(username, userId) で DB 保存
-4. FRONTEND_URL/line-callback?status=success へリダイレクト
-   エラー時: FRONTEND_URL/line-callback?status=error へリダイレクト
-```
 
 ---
 
@@ -480,21 +414,11 @@ class AccountDto {
 }
 ```
 
-### LineCallbackQueryDto
-
-```typescript
-class LineCallbackQueryDto {
-  @IsString() @IsNotEmpty()
-  code: string;
-}
-```
-
 ### AccountMeResponseDto
 
 ```typescript
 interface AccountMeResponseDto {
   username: string;
-  line_user_id: string | null;
 }
 ```
 
@@ -625,28 +549,3 @@ interface EventResponseDto {
 | ペイロード | `{ username: string }` |
 | 保存場所（フロント） | `localStorage` |
 
----
-
-## LINE API 連携仕様
-
-### LINE Login（OAuth 2.0 認可コードフロー）
-
-| 項目 | 内容 |
-|------|------|
-| 認可エンドポイント | `https://access.line.me/oauth2/v2.1/authorize` |
-| トークンエンドポイント | `https://api.line.me/oauth2/v2.1/token`（axios POST） |
-| プロフィールエンドポイント | `https://api.line.me/v2/profile`（axios GET） |
-| コールバックURL | `http://localhost:8000/accounts/line/callback` |
-| スコープ | `profile openid` |
-
-### LINE Messaging API（プッシュ通知）
-
-| 項目 | 内容 |
-|------|------|
-| エンドポイント | `https://api.line.me/v2/bot/message/push`（axios POST） |
-| 認証 | `Authorization: Bearer <LINE_MESSAGING_CHANNEL_ACCESS_TOKEN>` |
-| 実行タイミング | `@Cron(CronExpression.EVERY_MINUTE)`（毎分） |
-| メッセージ形式 | テキストメッセージ（`type: 'text'`）。タスク名と期限を含む |
-| 送信条件 | `is_sent=false` かつ `notify_at <= 現在時刻` の通知 |
-| スキップ条件 | `line_user_id` が null の担当者はスキップ |
-| 送信失敗時 | `is_sent` を更新せず次回 Cron で再試行 |
