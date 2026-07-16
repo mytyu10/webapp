@@ -3,16 +3,14 @@ import {
   Controller,
   Delete,
   Get,
-  InternalServerErrorException,
   Param,
   ParseIntPipe,
   Patch,
   Post,
-  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { TaskService } from '../service/task.service';
 import { TaskNotificationService } from '../service/task-notification.service';
 import { TaskPermissionService } from '../service/task-permission.service';
@@ -25,9 +23,11 @@ import { CreatePermissionDto } from 'src/permissions/permission.dto';
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
 import { OwnershipGuard } from 'src/common/guards/ownership.guard';
 import { CheckOwnership } from 'src/common/decorators/check-ownership.decorator';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { HttpStatus } from 'src/common/type/status.enum';
 import { MESSAGE } from 'src/common/type/message';
 import { LoggerService } from 'src/common/service/logger.service';
+import type { JwtPayload } from 'src/jwt/jwt.payload';
 
 const CONTEXT = 'TaskController';
 
@@ -51,16 +51,12 @@ export class TaskController {
    */
   @Get('categories')
   async getCategories(
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, 'カテゴリ一覧取得リクエスト');
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     const categories = await this.taskService.findAllCategories(
-      requestUser.username,
+      currentUser.username,
     );
     return response.status(HttpStatus.OK).json(categories);
   }
@@ -71,15 +67,11 @@ export class TaskController {
    */
   @Get()
   async findAll(
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, 'タスク一覧取得リクエスト');
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
-    const tasks = await this.taskService.findAll(requestUser.username);
+    const tasks = await this.taskService.findAll(currentUser.username);
     return response.status(HttpStatus.OK).json(tasks);
   }
 
@@ -92,14 +84,9 @@ export class TaskController {
   @UseGuards(OwnershipGuard)
   async findOne(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `タスク詳細取得リクエスト: id=${id}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     const task = await this.taskService.findById(id);
     return response.status(HttpStatus.OK).json(task);
   }
@@ -110,15 +97,11 @@ export class TaskController {
   @Post()
   async create(
     @Body() dto: CreateTaskDto,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `タスク作成リクエスト: ${dto.title}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
-    const task = await this.taskService.create(dto, requestUser.username);
+    const task = await this.taskService.create(dto, currentUser.username);
     return response
       .status(HttpStatus.CREATED)
       .json({ message: MESSAGE.TASK.CREATE_SUCCESS, task });
@@ -134,15 +117,11 @@ export class TaskController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTaskDto,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `タスク更新リクエスト: id=${id}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
-    const task = await this.taskService.update(id, dto, requestUser.username);
+    const task = await this.taskService.update(id, dto, currentUser.username);
     return response
       .status(HttpStatus.OK)
       .json({ message: MESSAGE.TASK.QUEUE_UPDATE_SUCCESS, task });
@@ -176,14 +155,9 @@ export class TaskController {
   async addNotification(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateNotificationDto,
-    @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `通知追加リクエスト: taskId=${id}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     const notification = await this.taskNotificationService.addNotification(
       id,
       dto.notify_at,
@@ -202,14 +176,9 @@ export class TaskController {
   @UseGuards(OwnershipGuard)
   async getNotifications(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `通知一覧取得リクエスト: taskId=${id}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     const notifications =
       await this.taskNotificationService.getNotifications(id);
     return response.status(HttpStatus.OK).json(notifications);
@@ -225,17 +194,12 @@ export class TaskController {
   async removeNotification(
     @Param('id', ParseIntPipe) id: number,
     @Param('notificationId', ParseIntPipe) notificationId: number,
-    @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(
       CONTEXT,
       `通知削除リクエスト: taskId=${id}, notificationId=${notificationId}`,
     );
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     await this.taskNotificationService.removeNotification(notificationId);
     return response
       .status(HttpStatus.OK)
@@ -248,17 +212,13 @@ export class TaskController {
   @Get(':id/permissions')
   async getPermissions(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `タスク権限一覧取得リクエスト: taskId=${id}`);
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     const permissions = await this.taskPermissionService.findAll(
       id,
-      requestUser.username,
+      currentUser.username,
     );
     return response.status(HttpStatus.OK).json(permissions);
   }
@@ -270,21 +230,17 @@ export class TaskController {
   async addPermission(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreatePermissionDto,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(
       CONTEXT,
       `タスク権限付与リクエスト: taskId=${id}, target=${dto.username}`,
     );
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     const permission = await this.taskPermissionService.add(
       id,
       dto,
-      requestUser.username,
+      currentUser.username,
     );
     return response
       .status(HttpStatus.CREATED)
@@ -298,21 +254,17 @@ export class TaskController {
   async removePermission(
     @Param('id', ParseIntPipe) id: number,
     @Param('username') targetUsername: string,
-    @Req() req: Request,
+    @CurrentUser() currentUser: JwtPayload,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(
       CONTEXT,
       `タスク権限削除リクエスト: taskId=${id}, target=${targetUsername}`,
     );
-    const requestUser = req.user;
-    if (!requestUser) {
-      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
-    }
     await this.taskPermissionService.remove(
       id,
       targetUsername,
-      requestUser.username,
+      currentUser.username,
     );
     return response
       .status(HttpStatus.OK)
