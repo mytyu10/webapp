@@ -4,7 +4,6 @@ import {
   createTask,
   updateTask,
   fetchTask,
-  getCurrentUsername,
   addNotification,
   Priority,
 } from '../api/taskApi';
@@ -192,12 +191,6 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
         savedTaskId = updated.id;
         logger.info(CONTEXT, `タスク更新成功: id=${id}`);
       } else {
-        const username = getCurrentUsername();
-        if (!username) {
-          setApiError('ログイン情報が取得できません。再度ログインしてください。');
-          setLoading(false);
-          return;
-        }
         const input = {
           title: values.title,
           description: values.description,
@@ -206,7 +199,6 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
           priority: values.priority,
           category: values.category || undefined,
           parent_id: parentId,
-          created_by: username,
         };
         logger.info(CONTEXT, `タスク作成送信: ${input.title}`);
         const created = await createTask(input);
@@ -225,13 +217,7 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
         }
       }
 
-      if (isEditMode && id !== undefined) {
-        navigate(`/tasks`);
-      } else if (parentId !== undefined) {
-        navigate("/tasks");
-      } else {
-        navigate('/tasks');
-      }
+      navigate('/tasks');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'サーバーへの接続に失敗しました。';
       logger.warn(CONTEXT, `タスクフォーム送信失敗: ${message}`);

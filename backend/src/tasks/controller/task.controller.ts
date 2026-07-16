@@ -85,27 +85,40 @@ export class TaskController {
 
   /**
    * タスク詳細取得エンドポイント
+   * 作成者・担当者・権限保持者のみアクセス可能（OwnershipGuard）
    */
   @Get(':id')
+  @CheckOwnership('task')
+  @UseGuards(OwnershipGuard)
   async findOne(
     @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `タスク詳細取得リクエスト: id=${id}`);
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
     const task = await this.taskService.findById(id);
     return response.status(HttpStatus.OK).json(task);
   }
 
   /**
-   * タスク作成エンドポイント
+   * タスク作成エンドポイント。作成者はJWT認証済みユーザー名を使用する
    */
   @Post()
   async create(
     @Body() dto: CreateTaskDto,
+    @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `タスク作成リクエスト: ${dto.title}`);
-    const task = await this.taskService.create(dto);
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
+    const task = await this.taskService.create(dto, requestUser.username);
     return response
       .status(HttpStatus.CREATED)
       .json({ message: MESSAGE.TASK.CREATE_SUCCESS, task });
@@ -155,14 +168,22 @@ export class TaskController {
 
   /**
    * タスク通知追加エンドポイント
+   * 作成者・担当者・WRITE権限保持者のみ操作可能（OwnershipGuard）
    */
   @Post(':id/notifications')
+  @CheckOwnership('task')
+  @UseGuards(OwnershipGuard)
   async addNotification(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateNotificationDto,
+    @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `通知追加リクエスト: taskId=${id}`);
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
     const notification = await this.taskNotificationService.addNotification(
       id,
       dto.notify_at,
@@ -174,13 +195,21 @@ export class TaskController {
 
   /**
    * タスク通知一覧取得エンドポイント
+   * 作成者・担当者・権限保持者のみアクセス可能（OwnershipGuard）
    */
   @Get(':id/notifications')
+  @CheckOwnership('task')
+  @UseGuards(OwnershipGuard)
   async getNotifications(
     @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `通知一覧取得リクエスト: taskId=${id}`);
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
     const notifications =
       await this.taskNotificationService.getNotifications(id);
     return response.status(HttpStatus.OK).json(notifications);
@@ -188,17 +217,25 @@ export class TaskController {
 
   /**
    * タスク通知削除エンドポイント
+   * 作成者・担当者・WRITE権限保持者のみ操作可能（OwnershipGuard）
    */
   @Delete(':id/notifications/:notificationId')
+  @CheckOwnership('task')
+  @UseGuards(OwnershipGuard)
   async removeNotification(
     @Param('id', ParseIntPipe) id: number,
     @Param('notificationId', ParseIntPipe) notificationId: number,
+    @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(
       CONTEXT,
       `通知削除リクエスト: taskId=${id}, notificationId=${notificationId}`,
     );
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
     await this.taskNotificationService.removeNotification(notificationId);
     return response
       .status(HttpStatus.OK)

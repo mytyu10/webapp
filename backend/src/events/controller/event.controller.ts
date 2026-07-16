@@ -62,13 +62,21 @@ export class EventController {
 
   /**
    * 予定詳細取得エンドポイント
+   * 作成者のみアクセス可能（OwnershipGuard）
    */
   @Get(':id')
+  @CheckOwnership('event')
+  @UseGuards(OwnershipGuard)
   async findOne(
     @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request,
     @Res() response: Response,
   ): Promise<Response> {
     this.logger.log(CONTEXT, `予定詳細取得リクエスト: id=${id}`);
+    const requestUser = req.user;
+    if (!requestUser) {
+      throw new InternalServerErrorException(MESSAGE.AUTH.AUTH_INFO_FAILED);
+    }
     const event = await this.eventService.findById(id);
     return response.status(HttpStatus.OK).json(event);
   }

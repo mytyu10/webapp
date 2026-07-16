@@ -69,7 +69,7 @@ describe('TaskService', () => {
     it('タスク一覧を返す', async () => {
       mockTaskRepository.findAll.mockResolvedValue([mockTask]);
 
-      const result = await service.findAll();
+      const result = await service.findAll('testuser');
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe(1);
@@ -80,7 +80,7 @@ describe('TaskService', () => {
     it('タスクが存在しない場合は空配列を返す', async () => {
       mockTaskRepository.findAll.mockResolvedValue([]);
 
-      const result = await service.findAll();
+      const result = await service.findAll('testuser');
 
       expect(result).toHaveLength(0);
     });
@@ -88,7 +88,7 @@ describe('TaskService', () => {
     it('findAll の戻り値に is_completed が含まれる', async () => {
       mockTaskRepository.findAll.mockResolvedValue([mockTask]);
 
-      const result = await service.findAll();
+      const result = await service.findAll('testuser');
 
       expect(result[0]).toHaveProperty('is_completed');
       expect(result[0].is_completed).toBe(false);
@@ -98,7 +98,7 @@ describe('TaskService', () => {
       const completedTask = { ...mockTask, is_completed: true };
       mockTaskRepository.findAll.mockResolvedValue([completedTask]);
 
-      const result = await service.findAll();
+      const result = await service.findAll('testuser');
 
       expect(result[0].is_completed).toBe(true);
     });
@@ -106,7 +106,7 @@ describe('TaskService', () => {
     it('findAll の戻り値に notifications が含まれる', async () => {
       mockTaskRepository.findAll.mockResolvedValue([mockTask]);
 
-      const result = await service.findAll();
+      const result = await service.findAll('testuser');
 
       expect(result[0]).toHaveProperty('notifications');
       expect(result[0].notifications).toEqual([]);
@@ -126,7 +126,7 @@ describe('TaskService', () => {
       };
       mockTaskRepository.findAll.mockResolvedValue([taskWithNotification]);
 
-      const result = await service.findAll();
+      const result = await service.findAll('testuser');
 
       expect(result[0].notifications).toHaveLength(1);
       expect(result[0].notifications[0].id).toBe(10);
@@ -184,10 +184,10 @@ describe('TaskService', () => {
         description: 'テスト説明',
         due_date: '2026-12-31T23:59:59.000Z',
         assignees: ['testuser'],
-        created_by: 'testuser',
       };
+      const createdBy = 'testuser';
 
-      const result = await service.create(dto);
+      const result = await service.create(dto, createdBy);
 
       expect(result.title).toBe('テストタスク');
       expect(mockTaskRepository.create).toHaveBeenCalledWith({
@@ -197,7 +197,7 @@ describe('TaskService', () => {
         priority: 'MEDIUM',
         category: null,
         parent_id: null,
-        created_by: dto.created_by,
+        created_by: createdBy,
         assignees: ['testuser'],
       });
     });
@@ -210,10 +210,9 @@ describe('TaskService', () => {
         description: 'テスト説明',
         due_date: '2026-12-31T23:59:59.000Z',
         assignees: [],
-        created_by: 'testuser',
       };
 
-      await expect(service.create(dto)).rejects.toThrow(
+      await expect(service.create(dto, 'testuser')).rejects.toThrow(
         InternalServerErrorException,
       );
     });
