@@ -24,16 +24,23 @@ import { MESSAGE } from '../src/common/type/message';
  * 3. GET /tasks（JWT付き）→ タスク一覧取得
  * 4. POST /tasks（JWT付き）→ タスク作成
  * 5. GET /events（JWT付き）→ イベント一覧取得
+ * 6. 権限・通知系の認可テスト
  *
  * Rate Limiting はテスト環境でオーバーライドして無効化する
  */
 describe('App E2E', () => {
   let app: INestApplication;
   let jwtToken: string;
+  let otherJwtToken: string;
+  let createdTaskId: number;
+  let createdEventId: number;
 
   // テスト用ユーザー名（タイムスタンプで衝突を回避。username は10文字以内）
   const testUsername = `e${Date.now()}`.slice(0, 10);
   const testPassword = 'testpass1';
+  // 別ユーザー（権限なし）
+  const otherUsername = `o${Date.now()}`.slice(0, 10);
+  const otherPassword = 'testpass2';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -75,6 +82,15 @@ describe('App E2E', () => {
       expect(res.body.message).toBeDefined();
     });
 
+    it('別ユーザーを登録できる（201）', async () => {
+      const res = await supertest(app.getHttpServer())
+        .post('/accounts/regist')
+        .send({ username: otherUsername, password: otherPassword })
+        .expect(201);
+
+      expect(res.body.message).toBeDefined();
+    });
+
     it('同じユーザー名で再登録すると409が返る', async () => {
       await supertest(app.getHttpServer())
         .post('/accounts/regist')
@@ -102,6 +118,16 @@ describe('App E2E', () => {
 
       expect(res.body.token).toBeDefined();
       jwtToken = res.body.token as string;
+    });
+
+    it('別ユーザーのJWTを取得する', async () => {
+      const res = await supertest(app.getHttpServer())
+        .post('/accounts/login')
+        .send({ username: otherUsername, password: otherPassword })
+        .expect(200);
+
+      expect(res.body.token).toBeDefined();
+      otherJwtToken = res.body.token as string;
     });
 
     it('パスワードが間違っている場合は400が返る', async () => {
@@ -157,6 +183,7 @@ describe('App E2E', () => {
 
       expect(res.body.task).toBeDefined();
       expect(res.body.task.title).toBe('E2Eテストタスク');
+      createdTaskId = res.body.task.id as number;
     });
 
     it('タイトルなしのタスク作成は400が返る', async () => {
@@ -199,6 +226,54 @@ describe('App E2E', () => {
 
     it('JWTなしでは401が返る', async () => {
       await supertest(app.getHttpServer()).get('/events').expect(401);
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // 5b. イベント作成（権限テスト用）
+  // ----------------------------------------------------------------
+  describe('POST /events（権限テスト用）', () => {
+    it('JWT付きでイベントを作成できる（201）', async () => {
+      const res = await supertest(app.getHttpServer())
+        .post('/events')
+        .set('Authorization', `Bearer ${jwtToken}`)
+        .send({
+          title: 'E2Eテストイベント',
+          description: 'E2Eテスト用のイベントです',
+          start_at: '2026-12-31T10:00:00.000Z',
+          end_at: '2026-12-31T11:00:00.000Z',
+        })
+        .expect(201);
+
+      expect(res.body.event).toBeDefined();
+      createdEventId = res.body.event.id as number;
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // 6. 権限・通知系の認可テスト
+  // ----------------------------------------------------------------
+  describe('認可テスト', () => {
+    it('他ユーザーが GET /tasks/:id にアクセスすると403が返る', async () => {
+      await supertest(app.getHttpServer())
+        .get(`/tasks/${createdTaskId}`)
+        .set('Authorization', `Bearer ${otherJwtToken}`)
+        .expect(403);
+    });
+
+    it('他ユーザーが POST /tasks/:id/notifications にアクセスすると403が返る', async () => {
+      await supertest(app.getHttpServer())
+        .post(`/tasks/${createdTaskId}/notifications`)
+        .set('Authorization', `Bearer ${otherJwtToken}`)
+        .send({ notify_at: '2026-12-30T09:00:00.000Z' })
+        .expect(403);
+    });
+
+    it('他ユーザーが GET /events/:id にアクセスすると403が返る', async () => {
+      await supertest(app.getHttpServer())
+        .get(`/events/${createdEventId}`)
+        .set('Authorization', `Bearer ${otherJwtToken}`)
+        .expect(403);
     });
   });
 });

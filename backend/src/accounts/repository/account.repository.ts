@@ -16,10 +16,12 @@ export class AccountRepository {
   }
 
   /**
-   * 全アカウント一覧を取得する（username 昇順）
+   * 全アカウント一覧を取得する（username 昇順）。
+   * hashed_password は返さない
    */
-  async findAll(): Promise<Account[]> {
+  async findAll(): Promise<{ username: string }[]> {
     return this.prisma.account.findMany({
+      select: { username: true },
       orderBy: { username: 'asc' },
     });
   }

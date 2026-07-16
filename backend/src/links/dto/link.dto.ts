@@ -6,6 +6,7 @@ import {
   IsPositive,
   MaxLength,
   IsIn,
+  IsUrl,
 } from 'class-validator';
 
 /** LinkItem のタイプ有効値 */
@@ -23,7 +24,7 @@ export class CreateLinkItemDto {
   title: string;
 
   /** URL（type="LINK" の場合のみ必須） */
-  @IsString()
+  @IsUrl({}, { message: '正しいURL形式で入力してください' })
   @IsOptional()
   @MaxLength(2000, { message: 'URLは2000文字以内で入力してください' })
   url?: string;
@@ -62,7 +63,7 @@ export class UpdateLinkItemDto {
   title?: string;
 
   /** URL */
-  @IsString()
+  @IsUrl({}, { message: '正しいURL形式で入力してください' })
   @IsOptional()
   @MaxLength(2000, { message: 'URLは2000文字以内で入力してください' })
   url?: string;
