@@ -33,6 +33,7 @@ export const MESSAGE = {
     DELETE_SUCCESS: '通知を削除しました',
     FETCH_SUCCESS: '通知一覧を取得しました',
     NOT_FOUND: '指定された通知が見つかりません',
+    INVALID_TASK: '通知が見つからないか指定タスクに属していません',
     CREATE_FAILED: '通知の追加に失敗しました',
     DELETE_FAILED: '通知の削除に失敗しました',
     FETCH_FAILED: '通知一覧の取得に失敗しました',
@@ -66,7 +67,8 @@ export const MESSAGE = {
     PROXY_GRANT_REMOVE_SUCCESS: '代理登録権限を削除しました',
     PROXY_GRANT_REMOVE_FAILED: '代理登録権限の削除に失敗しました',
     PROXY_GRANT_FETCH_FAILED: '代理登録権限一覧の取得に失敗しました',
-    PROXY_GRANT_SELF_FORBIDDEN: '自分自身に代理登録権限を付与することはできません',
+    PROXY_GRANT_SELF_FORBIDDEN:
+      '自分自身に代理登録権限を付与することはできません',
     PROXY_GRANT_NOT_FOUND: '指定された代理登録権限が見つかりません',
     PROXY_GRANT_FORBIDDEN: 'この予定に代理登録する権限がありません',
   },

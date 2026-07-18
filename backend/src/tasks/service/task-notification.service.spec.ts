@@ -118,22 +118,35 @@ describe('TaskNotificationService', () => {
 
   describe('removeNotification', () => {
     it('通知を削除する', async () => {
-      mockNotificationRepository.delete.mockResolvedValue(undefined);
+      mockNotificationRepository.delete.mockResolvedValue(1);
 
-      await expect(service.removeNotification(1)).resolves.toBeUndefined();
-      expect(mockNotificationRepository.delete).toHaveBeenCalledWith(1);
+      await expect(
+        service.removeNotification(1, 10),
+      ).resolves.toBeUndefined();
+      expect(mockNotificationRepository.delete).toHaveBeenCalledWith(1, 10);
     });
 
-    it('削除失敗時は NotFoundException をスローする', async () => {
-      mockNotificationRepository.delete.mockRejectedValue(
-        new Error('Not found'),
-      );
+    it('notificationId が taskId に属さない場合は NotFoundException をスローする', async () => {
+      mockNotificationRepository.delete.mockResolvedValue(0);
 
-      await expect(service.removeNotification(999)).rejects.toThrow(
+      await expect(service.removeNotification(999, 10)).rejects.toThrow(
         NotFoundException,
       );
-      await expect(service.removeNotification(999)).rejects.toThrow(
-        MESSAGE.NOTIFICATION.NOT_FOUND,
+      await expect(service.removeNotification(999, 10)).rejects.toThrow(
+        MESSAGE.NOTIFICATION.INVALID_TASK,
+      );
+    });
+
+    it('DBエラー時は InternalServerErrorException をスローする', async () => {
+      mockNotificationRepository.delete.mockRejectedValue(
+        new Error('DB error'),
+      );
+
+      await expect(service.removeNotification(1, 10)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+      await expect(service.removeNotification(1, 10)).rejects.toThrow(
+        MESSAGE.NOTIFICATION.DELETE_FAILED,
       );
     });
   });

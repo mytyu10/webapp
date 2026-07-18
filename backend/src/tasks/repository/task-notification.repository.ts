@@ -39,12 +39,14 @@ export class TaskNotificationRepository {
   }
 
   /**
-   * 指定IDの通知を削除する
+   * 指定IDかつ指定タスクに属する通知を削除する。
+   * 削除件数を返す（0の場合は通知が存在しないかタスクに属していない）
    */
-  async delete(notificationId: number): Promise<void> {
-    await this.prisma.taskNotification.delete({
-      where: { id: notificationId },
+  async delete(notificationId: number, taskId: number): Promise<number> {
+    const result = await this.prisma.taskNotification.deleteMany({
+      where: { id: notificationId, task_id: taskId },
     });
+    return result.count;
   }
 
   /**

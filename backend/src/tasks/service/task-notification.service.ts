@@ -56,19 +56,36 @@ export class TaskNotificationService {
   }
 
   /**
-   * 通知を削除する
+   * 通知を削除する。notificationId が taskId に属さない場合は NotFoundException を投げる
    */
-  async removeNotification(notificationId: number): Promise<void> {
-    this.logger.log(CONTEXT, `通知削除開始: id=${notificationId}`);
+  async removeNotification(
+    notificationId: number,
+    taskId: number,
+  ): Promise<void> {
+    this.logger.log(
+      CONTEXT,
+      `通知削除開始: id=${notificationId}, taskId=${taskId}`,
+    );
     try {
-      await this.notificationRepository.delete(notificationId);
+      const deletedCount = await this.notificationRepository.delete(
+        notificationId,
+        taskId,
+      );
+      if (deletedCount === 0) {
+        throw new NotFoundException(MESSAGE.NOTIFICATION.INVALID_TASK);
+      }
       this.logger.log(CONTEXT, `通知削除完了: id=${notificationId}`);
     } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
       this.logger.error(
         CONTEXT,
         `通知削除失敗: id=${notificationId} - ${String(error)}`,
       );
-      throw new NotFoundException(MESSAGE.NOTIFICATION.NOT_FOUND);
+      throw new InternalServerErrorException(
+        MESSAGE.NOTIFICATION.DELETE_FAILED,
+      );
     }
   }
 

@@ -187,6 +187,7 @@ export class TaskController {
   /**
    * タスク通知削除エンドポイント
    * 作成者・担当者・WRITE権限保持者のみ操作可能（OwnershipGuard）
+   * notificationId が id（taskId）に属するか検証する（IDOR対策）
    */
   @Delete(':id/notifications/:notificationId')
   @CheckOwnership('task')
@@ -200,7 +201,7 @@ export class TaskController {
       CONTEXT,
       `通知削除リクエスト: taskId=${id}, notificationId=${notificationId}`,
     );
-    await this.taskNotificationService.removeNotification(notificationId);
+    await this.taskNotificationService.removeNotification(notificationId, id);
     return response
       .status(HttpStatus.OK)
       .json({ message: MESSAGE.NOTIFICATION.DELETE_SUCCESS });
