@@ -35,12 +35,15 @@ function TaskFormPage() {
     loading,
     isEditMode,
     notifications,
+    availableUsers,
+    usersLoading,
     setTitle,
     setDescription,
     setDueDate,
-    setAssigneesText,
     setPriority,
     setCategory,
+    addAssignee,
+    removeAssignee,
     addNotificationDatetime,
     removeNotificationDatetime,
     handleSubmit,
@@ -71,11 +74,24 @@ function TaskFormPage() {
     setNotificationInput('');
   }
 
+  /** 担当者を選択して追加する */
+  function handleAssigneeSelect(e: React.ChangeEvent<HTMLSelectElement>): void {
+    const username = e.target.value;
+    if (!username) return;
+    addAssignee(username);
+    e.target.value = '';
+  }
+
   /** 優先度の選択肢を生成する */
   const priorityOptions = PRIORITY_VALUES.map((p) => ({
     value: p,
     label: PRIORITY_LABELS[p],
   }));
+
+  /** まだ選択されていないユーザーのみ選択肢に表示する */
+  const selectableUsers = availableUsers.filter(
+    (u) => !values.assignees.includes(u.username)
+  );
 
   return (
     <div className="max-w-xl mx-auto">
@@ -135,14 +151,49 @@ function TaskFormPage() {
           maxLength={100}
         />
 
-        <FormField
-          id="assignees"
-          label="担当者（カンマ区切りで複数入力）"
-          value={values.assigneesText}
-          onChange={setAssigneesText}
-          error={errors.assignees}
-          disabled={loading}
-        />
+        {/* 担当者セクション */}
+        <div>
+          <p className="block text-sm font-medium text-slate-300 mb-1">担当者</p>
+          <select
+            onChange={handleAssigneeSelect}
+            disabled={loading || usersLoading}
+            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-sm text-slate-200 outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/30 disabled:opacity-50 mb-2"
+            defaultValue=""
+          >
+            <option value="" disabled>
+              {usersLoading ? '読み込み中...' : 'ユーザーを選択してください'}
+            </option>
+            {selectableUsers.map((u) => (
+              <option key={u.username} value={u.username}>
+                {u.username}
+              </option>
+            ))}
+          </select>
+          {values.assignees.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-1">
+              {values.assignees.map((username, index) => (
+                <span
+                  key={username}
+                  className="flex items-center gap-1 px-2 py-1 bg-sky-800 border border-sky-600 rounded-full text-xs text-sky-100"
+                >
+                  {username}
+                  <button
+                    type="button"
+                    onClick={() => removeAssignee(index)}
+                    disabled={loading}
+                    className="ml-1 text-sky-300 hover:text-white disabled:opacity-50 leading-none"
+                    aria-label={`${username}を担当者から削除`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          {errors.assignees && (
+            <p className="mt-1 text-xs text-red-400">{errors.assignees}</p>
+          )}
+        </div>
 
         {/* 通知日時セクション */}
         <div>

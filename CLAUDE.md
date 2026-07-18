@@ -118,7 +118,7 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/components/SidebarLayout.tsx` — サイドバー付きレイアウト（Outlet使用）。`isSidebarOpen` ステートを管理し、`onToggle` コールバックを `Sidebar` に渡す。トグルボタンは `Sidebar` 内部に配置するため `fixed` 位置のボタンは持たない。外側 div は `h-screen overflow-hidden` でブラウザウィンドウの縦スクロールバーを出さない。`main` は `flex-1 h-full overflow-y-auto` で各ページのコンテンツスクロールを担う
 - `src/pages/LoginPage.tsx` — login form, posts to backend `/accounts/login`, stores JWT in `localStorage`
 - `src/pages/TaskListPage.tsx` — タスク一覧・階層表示・カテゴリフィルター・削除確認モーダル・完了セクション折りたたみ。削除は作成者のみ表示・編集は全ユーザー表示。「詳細」ボタン押下時に `awaitToggle` で完了 PATCH の完了を待機してから右側のサイドパネル（`TaskDetailPanel`）を開く（ページ遷移なし・URL変更なし）。パネル表示中は flex 左右分割（左: 一覧、右: 詳細パネル）。スマホ（640px未満）ではパネル開時に一覧を非表示にしてパネルを全画面表示する。`handleDeleteNotification` で通知削除 API を呼び出して `reload()` し `TaskDetailPanel` に `onDeleteNotification` として渡す
-- `src/pages/TaskFormPage.tsx` — タスク作成・編集・子タスク作成（URLクエリ`parent_id`で切り替え）。通知日時を複数追加できる UI を提供（`DateTimeField` + 追加ボタン + 削除ボタン付きリスト）
+- `src/pages/TaskFormPage.tsx` — タスク作成・編集・子タスク作成（URLクエリ`parent_id`で切り替え）。担当者は `GET /chat/users` + ログインユーザー自身で構築したユーザー一覧セレクトから選択する形式（複数追加可・バッジ表示・× で削除）。通知日時を複数追加できる UI を提供（`DateTimeField` + 追加ボタン + 削除ボタン付きリスト）
 - `src/pages/TaskDetailPage.tsx` — タスク詳細・完了/未完了ボタン・完了スタイル（緑枠・バナー・取り消し線）・`closed_by`表示・子タスク一覧・子タスク作成ボタン。編集ボタンは全ユーザーに表示。直リンク（`/tasks/:id`）対応のため引き続き存在する
 - `src/pages/LinkListPage.tsx` — リンク集一覧ページ。エクスプローラー風ツリー表示。`LinkTreeNode` コンポーネントで再帰レンダリング。フォルダクリックで展開/折りたたみ。リンククリックで別タブを開く。追加ボタンで `LinkFormModal` を開く。削除は作成者のみ表示。フォルダ削除時に「配下の全リンク・フォルダも削除されます」という警告を表示する。作成者のみ「共有」ボタンを表示し、クリックで `fetchLinkPermissions` を呼び出して `PermissionModal` を開く（`ModalMode` に `permission` タイプを追加）
 - `src/pages/CalendarPage.tsx` — カレンダーページ。FullCalendarを使用して予定の表示・作成・編集・削除を提供する。新規作成時は「通常」「複数日付」「繰り返し」の3モードを選択できる。繰り返しグループ予定の編集時は「この予定のみ」「繰り返し全て」の選択ができる。日表示のみタスクを表示し、マウスオーバーでタスク詳細をツールチップ表示する。作成者のみ「共有設定」ボタンで `PermissionModal` を開ける（予定の権限管理）。「代理登録設定」ボタンで `ProxyGrantModal` を開ける（代理登録権限管理）
@@ -130,13 +130,13 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/api/chatApi.ts` — チャットAPI通信（`fetchContacts`, `fetchAllUsers`, `fetchMessages`, `sendMessage`）。`ChatMessage`・`ChatContact` インターフェースを定義。全通信は REST API で行う
 - `src/hooks/useTaskList.ts` — タスク一覧・削除・カテゴリフィルタリング・階層ツリー構築（incompleteTrees/completedTrees）フック。`togglingIds`（PATCH処理中のタスクID集合）と `awaitToggle`（PATCH完了を外から待てる関数）を提供する
 - `src/hooks/useTaskDetail.ts` — タスク詳細取得・完了切り替えフック
-- `src/hooks/useTaskForm.ts` — タスクフォーム（作成/編集/子タスク作成モード対応）フック。`notifications: string[]`（datetime-local形式）状態を管理し、`addNotificationDatetime`・`removeNotificationDatetime` を提供。フォーム送信後に通知日時を `addNotification` API へ順次送信する。編集モード時は既存通知を datetime-local 形式に変換して初期値として読み込む。作成・編集・子タスク作成のいずれの場合も送信後は `/tasks` へ遷移する。`created_by` はサーバー側で JWT から設定するため送信しない
+- `src/hooks/useTaskForm.ts` — タスクフォーム（作成/編集/子タスク作成モード対応）フック。担当者は `fetchAllUsers` + `getCurrentUsername` で全ユーザー一覧（自分含む）を取得し `availableUsers` として提供。`addAssignee(username)`・`removeAssignee(index)` で配列管理。`notifications: string[]`（datetime-local形式）状態を管理し、`addNotificationDatetime`・`removeNotificationDatetime` を提供。フォーム送信後に通知日時を `addNotification` API へ順次送信する。編集モード時は既存通知を datetime-local 形式に変換して初期値として読み込む。作成・編集・子タスク作成のいずれの場合も送信後は `/tasks` へ遷移する。`created_by` はサーバー側で JWT から設定するため送信しない
 - `src/hooks/useLinkList.ts` — リンク集一覧取得・フォルダ展開/折りたたみ状態管理（expandedIds: Set<number>）・削除処理・リロードを提供するフック
 - `src/hooks/useLinkForm.ts` — リンク/フォルダ作成・編集フォームを管理するフック。editItem 指定で編集モード。type が FOLDER に変更されたら url をクリアする
 - `src/hooks/useCalendar.ts` — カレンダー予定・タスク表示・ビュー切り替えを管理するフック。`CreateEventOptions`（`proxyUsername?`・`sharePermissions?`）インターフェースを定義し、`handleCreateEvent`/`handleCreateMultipleEvents`/`handleCreateRepeatEvent` の第2引数として渡す。代理登録時は `created_by` を payload に追加し、共有登録時は作成後に `applySharePermissions` で EventPermission を付与する。タスクのカレンダー表示は日表示（timeGridDay）のみ。`EVENT_COLOR_MAP`（色識別子→bg/text色マップ）と `resolveEventColor` で `calendarEventToEventInput` の背景色・テキスト色を一元管理する
 - `src/hooks/useChat.ts` — チャット機能を管理するカスタムフック。3秒ポーリングによるメッセージ自動更新・メッセージ送信（REST API）・連絡先一覧（REST API）を管理する。`pollingTimerRef` でポーリングタイマーを保持し、`selectedUserRef` でポーリングコールバック内のクロージャ問題を回避する。選択ユーザー変更時にポーリングを再起動し、コンポーネントアンマウント時に `clearInterval` で停止する
 - `src/hooks/useIsMobile.ts` — 画面幅が640px未満かどうかをリアクティブに返すカスタムフック。`window.resize` イベントで追従する
-- `src/validation/taskValidation.ts` — タスクフォームバリデーション（priority/category含む）。担当者は1人以上必須
+- `src/validation/taskValidation.ts` — タスクフォームバリデーション（priority/category含む）。`TaskFormValues.assignees` は `string[]` 型（旧 `assigneesText: string` から変更）。担当者は1人以上必須
 - `src/validation/linkValidation.ts` — リンク/フォルダフォームバリデーション。title必須。type="LINK" の場合は url も必須
 - `src/components/ConfirmModal.tsx` — 削除確認モーダル
 - `src/components/PermissionModal.tsx` — 権限共有モーダル。`GET /chat/users` で全ユーザー一覧を取得し、既に権限付与済みのユーザーを除外してセレクトに表示。READ/WRITE 選択 + 付与ボタン + 既存権限一覧（削除ボタン付き）。タスク・リンク集・予定の3リソースで共通使用する
@@ -153,7 +153,7 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/components/ColorPicker.tsx` — 色選択パレットコンポーネント。`EVENT_COLORS` 定数（6色）と `ColorPicker` コンポーネントを提供する
 - `src/validation/eventValidation.ts` — カレンダー予定フォームのバリデーション。`validateEventForm`（通常）・`validateMultipleEventForm`（複数日付: 各ペアで end_time > start_time を検証）・`validateRepeatEventForm`（繰り返し: end_at > start_at を検証）の3種類を提供。`MultipleEventFormValues` は `start_times`/`end_times` 配列、`RepeatEventFormValues` は `end_at` を持つ。全フォーム値型に `color: string` フィールドを含む
 - `src/components/CancelButton.tsx` — キャンセルボタン共通コンポーネント
-- `src/components/TaskEditForm.tsx` — タスクインライン編集フォームコンポーネント。`TaskDetailPanel` 内で使用し、タイトル・説明・期限・優先度・カテゴリ・担当者を編集する。`onSave(id, input)` / `onCancel()` コールバックで親と通信する
+- `src/components/TaskEditForm.tsx` — タスクインライン編集フォームコンポーネント。`TaskDetailPanel` 内で使用し、タイトル・説明・期限・優先度・カテゴリ・担当者を編集する。担当者はマウント時に `fetchAllUsers` + `getCurrentUsername` でユーザー一覧を取得し、セレクトから複数選択できる（バッジ表示・× で削除）。`onSave(id, input)` / `onCancel()` コールバックで親と通信する
 - `src/components/LinkTreeNode.tsx` — リンクツリーの1ノードを再帰的にレンダリングするコンポーネント。FOLDER タイプは展開/折りたたみ可能で子要素を再帰レンダリング。LINK タイプは別タブでリンクを開く。`LinkListPage` から独立ファイルとして抽出
 
 API base URL is built from env vars: `REACT_APP_API_SCHEME`, `REACT_APP_API_HOST`, `REACT_APP_API_PORT`.

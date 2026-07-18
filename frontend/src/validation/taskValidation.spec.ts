@@ -1,11 +1,11 @@
-import { validateTaskForm, parseAssignees, TaskFormValues } from './taskValidation';
+import { validateTaskForm, TaskFormValues } from './taskValidation';
 
 /** テスト用の有効なフォーム値 */
 const validValues: TaskFormValues = {
   title: 'テストタスク',
   description: 'テスト説明文',
   due_date: '2026-12-31T23:59',
-  assigneesText: 'user1, user2',
+  assignees: ['user1', 'user2'],
   priority: 'MEDIUM',
   category: '',
 };
@@ -74,19 +74,19 @@ describe('validateTaskForm', () => {
 
   describe('assignees', () => {
     it('担当者が空の場合はエラーになる', () => {
-      const errors = validateTaskForm({ ...validValues, assigneesText: '' });
+      const errors = validateTaskForm({ ...validValues, assignees: [] });
       expect(errors.assignees).toBeDefined();
     });
 
     it('担当者が50人以内の場合はエラーなし', () => {
-      const assigneesText = Array.from({ length: 50 }, (_, i) => `user${i}`).join(', ');
-      const errors = validateTaskForm({ ...validValues, assigneesText });
+      const assignees = Array.from({ length: 50 }, (_, i) => `user${i}`);
+      const errors = validateTaskForm({ ...validValues, assignees });
       expect(errors.assignees).toBeUndefined();
     });
 
     it('担当者が51人以上の場合はエラーを返す', () => {
-      const assigneesText = Array.from({ length: 51 }, (_, i) => `user${i}`).join(', ');
-      const errors = validateTaskForm({ ...validValues, assigneesText });
+      const assignees = Array.from({ length: 51 }, (_, i) => `user${i}`);
+      const errors = validateTaskForm({ ...validValues, assignees });
       expect(errors.assignees).toBeTruthy();
     });
   });
@@ -123,23 +123,5 @@ describe('validateTaskForm', () => {
       const errors = validateTaskForm({ ...validValues, category: 'a'.repeat(101) });
       expect(errors.category).toBeTruthy();
     });
-  });
-});
-
-describe('parseAssignees', () => {
-  it('カンマ区切り文字列をユーザー名リストに変換する', () => {
-    expect(parseAssignees('user1, user2, user3')).toEqual(['user1', 'user2', 'user3']);
-  });
-
-  it('前後の空白をトリムする', () => {
-    expect(parseAssignees('  user1  ,  user2  ')).toEqual(['user1', 'user2']);
-  });
-
-  it('空文字列の場合は空配列を返す', () => {
-    expect(parseAssignees('')).toEqual([]);
-  });
-
-  it('空白のみのエントリーを除外する', () => {
-    expect(parseAssignees('user1,,user2')).toEqual(['user1', 'user2']);
   });
 });

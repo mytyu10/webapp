@@ -7,11 +7,12 @@ import {
   addNotification,
   deleteNotification,
   fetchNotifications,
+  getCurrentUsername,
   Priority,
 } from '../api/taskApi';
+import { fetchAllUsers, ChatContact } from '../api/chatApi';
 import {
   validateTaskForm,
-  parseAssignees,
   TaskFormErrors,
   TaskFormValues,
 } from '../validation/taskValidation';
@@ -36,12 +37,19 @@ interface UseTaskFormReturn {
   isEditMode: boolean;
   /** 追加済み通知日時リスト（ISO8601文字列） */
   notifications: string[];
+  /** 選択可能なユーザー一覧（自分自身を含む全ユーザー） */
+  availableUsers: ChatContact[];
+  /** ユーザー一覧取得中フラグ */
+  usersLoading: boolean;
   setTitle: (v: string) => void;
   setDescription: (v: string) => void;
   setDueDate: (v: string) => void;
-  setAssigneesText: (v: string) => void;
   setPriority: (v: Priority) => void;
   setCategory: (v: string) => void;
+  /** 担当者を追加する */
+  addAssignee: (username: string) => void;
+  /** 指定インデックスの担当者を削除する */
+  removeAssignee: (index: number) => void;
   /** 通知日時を追加する（datetime-local形式の文字列） */
   addNotificationDatetime: (datetime: string) => void;
   /** 指定インデックスの通知を削除する */
@@ -54,6 +62,7 @@ interface UseTaskFormReturn {
  * 作成・編集・子タスク作成モードを統一管理する
  * idが渡された場合は編集モード、parentIdが渡された場合は子タスク作成モードになる
  * 通知日時の追加・削除も管理し、タスク作成/更新後に通知APIへ送信する
+ * 担当者はユーザー一覧から選択する形式で管理する
  */
 export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskFormReturn {
   const navigate = useNavigate();
@@ -63,7 +72,7 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
     title: '',
     description: '',
     due_date: '',
-    assigneesText: '',
+    assignees: [],
     priority: 'MEDIUM',
     category: '',
   });
@@ -71,6 +80,35 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
   const [apiError, setApiError] = useState('');
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState<string[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<ChatContact[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+
+  /**
+   * 全ユーザー一覧を取得する（マウント時に1回のみ）
+   * GET /chat/users は自分を除くため、ログインユーザーも先頭に追加する
+   */
+  useEffect(() => {
+    async function loadUsers(): Promise<void> {
+      setUsersLoading(true);
+      try {
+        logger.info(CONTEXT, 'ユーザー一覧取得');
+        const users = await fetchAllUsers();
+        const currentUsername = getCurrentUsername();
+        if (currentUsername) {
+          setAvailableUsers([{ username: currentUsername }, ...users]);
+        } else {
+          setAvailableUsers(users);
+        }
+        logger.info(CONTEXT, 'ユーザー一覧取得成功');
+      } catch (err) {
+        logger.warn(CONTEXT, `ユーザー一覧取得失敗: ${err instanceof Error ? err.message : '不明なエラー'}`);
+      } finally {
+        setUsersLoading(false);
+      }
+    }
+
+    void loadUsers();
+  }, []);
 
   /**
    * 子タスク作成モード時は親タスクのカテゴリを初期値として設定する
@@ -116,7 +154,7 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
           title: task.title,
           description: task.description,
           due_date: formattedDate,
-          assigneesText: task.assignees.join(', '),
+          assignees: task.assignees,
           priority: task.priority,
           category: task.category ?? '',
         });
@@ -143,6 +181,27 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
 
     void loadTask();
   }, [id, isEditMode]);
+
+  /**
+   * 担当者を追加する（重複は無視）
+   */
+  function addAssignee(username: string): void {
+    if (!username) return;
+    setValues((prev) => {
+      if (prev.assignees.includes(username)) return prev;
+      return { ...prev, assignees: [...prev.assignees, username] };
+    });
+  }
+
+  /**
+   * 指定インデックスの担当者を削除する
+   */
+  function removeAssignee(index: number): void {
+    setValues((prev) => ({
+      ...prev,
+      assignees: prev.assignees.filter((_, i) => i !== index),
+    }));
+  }
 
   /**
    * 通知日時を追加する
@@ -184,7 +243,7 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
           title: values.title,
           description: values.description,
           due_date: new Date(values.due_date).toISOString(),
-          assignees: parseAssignees(values.assigneesText),
+          assignees: values.assignees,
           priority: values.priority,
           category: values.category || undefined,
         };
@@ -208,7 +267,7 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
           title: values.title,
           description: values.description,
           due_date: new Date(values.due_date).toISOString(),
-          assignees: parseAssignees(values.assigneesText),
+          assignees: values.assignees,
           priority: values.priority,
           category: values.category || undefined,
           parent_id: parentId,
@@ -247,12 +306,15 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
     loading,
     isEditMode,
     notifications,
+    availableUsers,
+    usersLoading,
     setTitle: (v) => setValues((prev) => ({ ...prev, title: v })),
     setDescription: (v) => setValues((prev) => ({ ...prev, description: v })),
     setDueDate: (v) => setValues((prev) => ({ ...prev, due_date: v })),
-    setAssigneesText: (v) => setValues((prev) => ({ ...prev, assigneesText: v })),
     setPriority: (v) => setValues((prev) => ({ ...prev, priority: v })),
     setCategory: (v) => setValues((prev) => ({ ...prev, category: v })),
+    addAssignee,
+    removeAssignee,
     addNotificationDatetime,
     removeNotificationDatetime,
     handleSubmit,
