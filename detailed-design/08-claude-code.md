@@ -71,6 +71,47 @@ claude "質問"   # 一言で聞く
 └─────────────────────┘
 ```
 
+障害修正は `incident-fix-agent` に Issue番号を渡して呼び出す（`/implement` フローとは独立）。
+調査のみを行いたい場合は `incident-investigator-agent` を直接呼び出す。
+
+```
+incident-fix-agent（障害修正オーケストレーター）
+  ├── GitHub Issue番号を受け取る
+  ├── gh issue view でIssue詳細を取得
+  ├── incident-investigator-agent → 根本原因・修正方針の調査
+  ├── issue-updater-agent         → 調査結果を Issue にコメント + in-progress ラベル付与
+  ├── ✅ 承認ゲート1: 修正を実施するか確認
+  ├── backend/frontend-generator-agent → 修正実装（障害修正のみ・新機能追加なし）
+  ├── source-review-agent         → ソースレビュー（Critical/Major は最大2回自動差し戻し）
+  ├── ✅ 承認ゲート2: レビュー結果確認 → コミット可否の確認
+  ├── commit-agent                → fix: prefix でコミット
+  └── issue-updater-agent         → 修正完了コメント + fixed ラベル付与 + クローズ
+```
+
+```
+incident-investigator-agent（調査専門）
+  ├── GitHub Issue番号 または 障害説明文を受け取る
+  ├── gh issue view でIssue詳細を取得（Issue番号がある場合）
+  ├── カテゴリ判定（CI障害 / テスト失敗 / ソースレビュー指摘）
+  ├── カテゴリ別ローカル調査（lint/test/build/e2e 実行・ファイル読み込み）
+  ├── git log で原因コミットの特定を試みる
+  └── agent-work/results/YYYY-MM-DD-incident-<number>.md にレポート保存
+```
+
+Issue操作（コメント投稿・ラベル更新・クローズ）は `issue-updater-agent` に委譲する。
+
+```
+issue-updater-agent（incident-fix-agentから呼び出される）
+  ├── gh auth status で認証確認
+  ├── in-progress / fixed ラベルを冪等に作成
+  ├── 操作別に gh コマンドを実行
+  │     comment           → gh issue comment
+  │     label             → gh issue edit --add-label / --remove-label
+  │     close             → gh issue close
+  │     close-with-comment → comment + ラベル更新 + close
+  └── 完了URL または 失敗メッセージを親エージェントに返す
+```
+
 ---
 
 ## 承認ゲートへの応答方法
