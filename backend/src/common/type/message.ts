@@ -28,16 +28,6 @@ export const MESSAGE = {
     CATEGORIES_FETCH_FAILED: 'カテゴリ一覧の取得に失敗しました',
     FORBIDDEN: 'このタスクを操作する権限がありません',
   },
-  NOTIFICATION: {
-    CREATE_SUCCESS: '通知を追加しました',
-    DELETE_SUCCESS: '通知を削除しました',
-    FETCH_SUCCESS: '通知一覧を取得しました',
-    NOT_FOUND: '指定された通知が見つかりません',
-    INVALID_TASK: '通知が見つからないか指定タスクに属していません',
-    CREATE_FAILED: '通知の追加に失敗しました',
-    DELETE_FAILED: '通知の削除に失敗しました',
-    FETCH_FAILED: '通知一覧の取得に失敗しました',
-  },
   EVENT: {
     CREATE_SUCCESS: '予定を作成しました',
     UPDATE_SUCCESS: '予定を更新しました',

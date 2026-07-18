@@ -4,9 +4,6 @@ import {
   createTask,
   updateTask,
   fetchTask,
-  addNotification,
-  deleteNotification,
-  fetchNotifications,
   getCurrentUsername,
   Priority,
 } from '../api/taskApi';
@@ -35,8 +32,6 @@ interface UseTaskFormReturn {
   apiError: string;
   loading: boolean;
   isEditMode: boolean;
-  /** 追加済み通知日時リスト（ISO8601文字列） */
-  notifications: string[];
   /** 選択可能なユーザー一覧（自分自身を含む全ユーザー） */
   availableUsers: ChatContact[];
   /** ユーザー一覧取得中フラグ */
@@ -50,10 +45,6 @@ interface UseTaskFormReturn {
   addAssignee: (username: string) => void;
   /** 指定インデックスの担当者を削除する */
   removeAssignee: (index: number) => void;
-  /** 通知日時を追加する（datetime-local形式の文字列） */
-  addNotificationDatetime: (datetime: string) => void;
-  /** 指定インデックスの通知を削除する */
-  removeNotificationDatetime: (index: number) => void;
   handleSubmit: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
 }
 
@@ -61,7 +52,6 @@ interface UseTaskFormReturn {
  * タスクフォームカスタムフック
  * 作成・編集・子タスク作成モードを統一管理する
  * idが渡された場合は編集モード、parentIdが渡された場合は子タスク作成モードになる
- * 通知日時の追加・削除も管理し、タスク作成/更新後に通知APIへ送信する
  * 担当者はユーザー一覧から選択する形式で管理する
  */
 export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskFormReturn {
@@ -79,7 +69,6 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
   const [errors, setErrors] = useState<TaskFormErrors>({});
   const [apiError, setApiError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [notifications, setNotifications] = useState<string[]>([]);
   const [availableUsers, setAvailableUsers] = useState<ChatContact[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
 
@@ -159,16 +148,6 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
           category: task.category ?? '',
         });
 
-        /** 既存の通知日時を datetime-local 形式で読み込む */
-        if (task.notifications && task.notifications.length > 0) {
-          const existingNotifications = task.notifications.map((n) => {
-            const d = new Date(n.notify_at);
-            const pad2 = (v: number): string => String(v).padStart(2, '0');
-            return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-          });
-          setNotifications(existingNotifications);
-        }
-
         logger.info(CONTEXT, `既存タスク読み込み完了: id=${id}`);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'タスクの読み込みに失敗しました。';
@@ -204,24 +183,8 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
   }
 
   /**
-   * 通知日時を追加する
-   */
-  function addNotificationDatetime(datetime: string): void {
-    if (!datetime) return;
-    setNotifications((prev) => [...prev, datetime]);
-  }
-
-  /**
-   * 指定インデックスの通知日時を削除する
-   */
-  function removeNotificationDatetime(index: number): void {
-    setNotifications((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  /**
    * フォーム送信処理
    * バリデーション後、作成または更新APIを呼び出す
-   * 編集モードでは既存通知を全削除してからフォームの通知を再登録する
    */
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
@@ -236,8 +199,6 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
     setLoading(true);
 
     try {
-      let savedTaskId: number;
-
       if (isEditMode && id !== undefined) {
         const input = {
           title: values.title,
@@ -248,20 +209,8 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
           category: values.category || undefined,
         };
         logger.info(CONTEXT, `タスク更新送信: id=${id}`);
-        const updated = await updateTask(id, input);
-        savedTaskId = updated.id;
+        await updateTask(id, input);
         logger.info(CONTEXT, `タスク更新成功: id=${id}`);
-
-        /** 編集モード: 既存通知を全削除してからフォームの通知を再登録する */
-        try {
-          const existingNotifications = await fetchNotifications(savedTaskId);
-          for (const notif of existingNotifications) {
-            await deleteNotification(savedTaskId, notif.id);
-            logger.info(CONTEXT, `既存通知削除: taskId=${savedTaskId}, notificationId=${notif.id}`);
-          }
-        } catch (notifErr) {
-          logger.warn(CONTEXT, `既存通知削除失敗: ${notifErr instanceof Error ? notifErr.message : '不明なエラー'}`);
-        }
       } else {
         const input = {
           title: values.title,
@@ -273,20 +222,8 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
           parent_id: parentId,
         };
         logger.info(CONTEXT, `タスク作成送信: ${input.title}`);
-        const created = await createTask(input);
-        savedTaskId = created.id;
+        await createTask(input);
         logger.info(CONTEXT, 'タスク作成成功');
-      }
-
-      /** 通知日時をAPIに順次送信する */
-      for (const datetime of notifications) {
-        try {
-          const isoString = new Date(datetime).toISOString();
-          await addNotification(savedTaskId, isoString);
-          logger.info(CONTEXT, `通知追加成功: taskId=${savedTaskId}, notify_at=${isoString}`);
-        } catch (notifErr) {
-          logger.warn(CONTEXT, `通知追加失敗: ${notifErr instanceof Error ? notifErr.message : '不明なエラー'}`);
-        }
       }
 
       navigate('/tasks');
@@ -305,7 +242,6 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
     apiError,
     loading,
     isEditMode,
-    notifications,
     availableUsers,
     usersLoading,
     setTitle: (v) => setValues((prev) => ({ ...prev, title: v })),
@@ -315,8 +251,6 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
     setCategory: (v) => setValues((prev) => ({ ...prev, category: v })),
     addAssignee,
     removeAssignee,
-    addNotificationDatetime,
-    removeNotificationDatetime,
     handleSubmit,
   };
 }

@@ -1,16 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { Task, TaskAssignee, TaskNotification } from '@prisma/client';
+import { Task, TaskAssignee } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Priority } from '../dto/task.dto';
 
-/** タスクとアサイニー・子タスク・通知を含む型 */
+/** タスクとアサイニー・子タスクを含む型 */
 export type TaskWithRelations = Task & {
   assignees: TaskAssignee[];
   children: (Task & {
     assignees: TaskAssignee[];
-    notifications: TaskNotification[];
   })[];
-  notifications: TaskNotification[];
 };
 
 @Injectable()
@@ -19,7 +17,7 @@ export class TaskRepository {
 
   /**
    * 指定ユーザーが作成者・担当者・権限付与済み（TaskPermission）であるタスクを
-   * 担当者・子タスク・通知情報込みで取得する。子タスクは一覧に含めない
+   * 担当者・子タスク情報込みで取得する。子タスクは一覧に含めない
    */
   async findAll(username: string): Promise<TaskWithRelations[]> {
     return this.prisma.task.findMany({
@@ -33,11 +31,9 @@ export class TaskRepository {
       },
       include: {
         assignees: true,
-        notifications: { orderBy: { notify_at: 'asc' } },
         children: {
           include: {
             assignees: true,
-            notifications: { orderBy: { notify_at: 'asc' } },
           },
         },
       },
@@ -46,18 +42,16 @@ export class TaskRepository {
   }
 
   /**
-   * 指定IDのタスクを担当者・子タスク・通知情報込みで取得する
+   * 指定IDのタスクを担当者・子タスク情報込みで取得する
    */
   async findById(id: number): Promise<TaskWithRelations | null> {
     return this.prisma.task.findUnique({
       where: { id },
       include: {
         assignees: true,
-        notifications: { orderBy: { notify_at: 'asc' } },
         children: {
           include: {
             assignees: true,
-            notifications: { orderBy: { notify_at: 'asc' } },
           },
         },
       },
@@ -92,11 +86,9 @@ export class TaskRepository {
       },
       include: {
         assignees: true,
-        notifications: { orderBy: { notify_at: 'asc' } },
         children: {
           include: {
             assignees: true,
-            notifications: { orderBy: { notify_at: 'asc' } },
           },
         },
       },
@@ -148,11 +140,9 @@ export class TaskRepository {
         },
         include: {
           assignees: true,
-          notifications: { orderBy: { notify_at: 'asc' } },
           children: {
             include: {
               assignees: true,
-              notifications: { orderBy: { notify_at: 'asc' } },
             },
           },
         },

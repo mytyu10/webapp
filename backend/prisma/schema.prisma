@@ -23,24 +23,23 @@ model Account {
 }
 
 model Task {
-  id            Int                @id @default(autoincrement())
+  id            Int              @id @default(autoincrement())
   title         String
   description   String
   due_date      DateTime
-  priority      String             @default("MEDIUM")
+  priority      String           @default("MEDIUM")
   category      String?
   parent_id     Int?
   created_by    String
-  created_at    DateTime           @default(now())
-  updated_at    DateTime           @updatedAt
-  is_completed  Boolean            @default(false)
+  created_at    DateTime         @default(now())
+  updated_at    DateTime         @updatedAt
+  is_completed  Boolean          @default(false)
   closed_by     String?
   assignees     TaskAssignee[]
-  notifications TaskNotification[]
   permissions   TaskPermission[]
-  creator       Account            @relation("TaskCreator", fields: [created_by], references: [username])
-  parent        Task?              @relation("TaskChildren", fields: [parent_id], references: [id])
-  children      Task[]             @relation("TaskChildren")
+  creator       Account          @relation("TaskCreator", fields: [created_by], references: [username])
+  parent        Task?            @relation("TaskChildren", fields: [parent_id], references: [id])
+  children      Task[]           @relation("TaskChildren")
 
   @@index([created_by])
   @@index([parent_id])
@@ -55,14 +54,6 @@ model TaskAssignee {
 
   @@id([task_id, username])
   @@index([username])
-}
-
-model TaskNotification {
-  id        Int      @id @default(autoincrement())
-  task_id   Int
-  notify_at DateTime
-  is_sent   Boolean  @default(false)
-  task      Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
 }
 
 model TaskPermission {

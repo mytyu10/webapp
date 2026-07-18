@@ -11,14 +11,12 @@ import {
   CreateTaskDto,
   UpdateTaskDto,
   TaskResponseDto,
-  NotificationResponseDto,
   Priority,
   PRIORITY_VALUES,
 } from '../dto/task.dto';
 import { MESSAGE } from 'src/common/type/message';
 import { LoggerService } from 'src/common/service/logger.service';
 import { BatchQueueService } from 'src/common/service/batch-queue.service';
-import { TaskNotification } from '@prisma/client';
 
 const CONTEXT = 'TaskService';
 
@@ -195,18 +193,6 @@ export class TaskService {
   }
 
   /**
-   * TaskNotification を NotificationResponseDto に変換する
-   */
-  private toNotificationDto(n: TaskNotification): NotificationResponseDto {
-    return {
-      id: n.id,
-      task_id: n.task_id,
-      notify_at: n.notify_at.toISOString(),
-      is_sent: n.is_sent,
-    };
-  }
-
-  /**
    * TaskWithRelations を TaskResponseDto に変換する
    */
   private toResponseDto(task: TaskWithRelations): TaskResponseDto {
@@ -224,7 +210,6 @@ export class TaskService {
       is_completed: task.is_completed,
       closed_by: task.closed_by,
       assignees: task.assignees.map((a) => a.username),
-      notifications: task.notifications.map((n) => this.toNotificationDto(n)),
       children: task.children.map((child) => ({
         id: child.id,
         title: child.title,
@@ -239,9 +224,6 @@ export class TaskService {
         is_completed: child.is_completed,
         closed_by: child.closed_by,
         assignees: child.assignees.map((a) => a.username),
-        notifications: child.notifications.map((n) =>
-          this.toNotificationDto(n),
-        ),
         children: [],
       })),
     };

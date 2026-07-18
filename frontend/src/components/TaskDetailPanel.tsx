@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   Task,
   TaskInput,
-  TaskNotification,
   PRIORITY_BADGE_CLASSES,
   PRIORITY_LABELS,
 } from '../api/taskApi';
@@ -40,8 +39,6 @@ interface TaskDetailPanelProps {
   onDeleteClick: (id: number) => void;
   /** タスク更新コールバック（useTaskList と共有） */
   onUpdate: (id: number, input: Partial<TaskInput>) => Promise<Task>;
-  /** 通知削除コールバック（削除後の一覧更新も含めて親が担当） */
-  onDeleteNotification: (taskId: number, notificationId: number) => Promise<void>;
 }
 
 /**
@@ -51,7 +48,6 @@ interface TaskDetailPanelProps {
  * 編集・削除・子タスク作成・権限共有のアクションを提供する。
  * 「編集する」ボタン押下でパネル内にインライン編集フォーム（TaskEditForm）を表示する。
  * スマホ（isMobile=true）時は「← 一覧へ戻る」ボタンを表示し、閉じるボタンを拡大する。
- * 通知一覧を表示し、各通知に削除ボタンを提供する。
  * 作成者のみ「共有」ボタンを表示し、PermissionModal で権限管理を行う。
  */
 function TaskDetailPanel({
@@ -64,12 +60,10 @@ function TaskDetailPanel({
   onSelectTask,
   onDeleteClick,
   onUpdate,
-  onDeleteNotification,
 }: TaskDetailPanelProps) {
   const navigate = useNavigate();
 
   const [isEditing, setIsEditing] = useState(false);
-  const [deletingNotificationId, setDeletingNotificationId] = useState<number | null>(null);
 
   /** 権限モーダルの表示状態 */
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
@@ -80,22 +74,6 @@ function TaskDetailPanel({
     setIsEditing(false);
     setIsPermissionModalOpen(false);
   }, [task?.id]);
-
-  /**
-   * 通知削除を親コンポーネントに委譲する
-   */
-  async function handleDeleteNotification(notification: TaskNotification): Promise<void> {
-    if (!task) return;
-    setDeletingNotificationId(notification.id);
-    try {
-      await onDeleteNotification(task.id, notification.id);
-      logger.info(CONTEXT, `通知削除成功: notificationId=${notification.id}`);
-    } catch (err) {
-      logger.warn(CONTEXT, `通知削除失敗: ${err instanceof Error ? err.message : '不明なエラー'}`);
-    } finally {
-      setDeletingNotificationId(null);
-    }
-  }
 
   /**
    * 権限モーダルを開く（権限一覧を取得してから表示する）
@@ -308,46 +286,6 @@ function TaskDetailPanel({
                     })}
                   </p>
                 </div>
-
-                {/* 通知一覧 */}
-                {task.notifications && task.notifications.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">通知設定</p>
-                    <div className="space-y-1">
-                      {task.notifications.map((notification) => (
-                        <div
-                          key={notification.id}
-                          className="flex items-center justify-between px-3 py-2 bg-slate-600 border border-slate-500 rounded-md"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-slate-200">
-                              {new Date(notification.notify_at).toLocaleString('ja-JP', {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </span>
-                            {notification.is_sent && (
-                              <span className="px-1.5 py-0.5 text-xs font-medium bg-green-900 text-green-400 rounded">
-                                送信済み
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => void handleDeleteNotification(notification)}
-                            disabled={deletingNotificationId === notification.id}
-                            className="ml-2 text-red-400 hover:text-red-300 disabled:opacity-50 text-xs font-medium transition-colors"
-                          >
-                            {deletingNotificationId === notification.id ? '削除中...' : '削除'}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 {/* 子タスク一覧 */}
                 {task.children.length > 0 && (
