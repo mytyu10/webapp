@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { EventService } from './event.service';
 import { EventRepository } from '../repository/event.repository';
+import { EventProxyGrantRepository } from '../repository/event-proxy-grant.repository';
 import { LoggerService } from 'src/common/service/logger.service';
 import { MESSAGE } from 'src/common/type/message';
 import { RepeatType } from '../dto/event.dto';
@@ -18,10 +19,12 @@ const mockEvent = {
   description: 'テスト説明',
   start_at: new Date('2026-06-01T10:00:00.000Z'),
   end_at: new Date('2026-06-01T11:00:00.000Z'),
+  color: 'cyan',
   repeat_group_id: null as string | null,
   created_by: 'testuser',
   created_at: new Date('2026-01-01T00:00:00.000Z'),
   updated_at: new Date('2026-01-01T00:00:00.000Z'),
+  permissions: [],
 };
 
 const mockEventRepository = {
@@ -32,6 +35,14 @@ const mockEventRepository = {
   createMany: jest.fn(),
   update: jest.fn(),
   updateMany: jest.fn(),
+  delete: jest.fn(),
+};
+
+const mockEventProxyGrantRepository = {
+  findAllGrantees: jest.fn(),
+  findAllGranters: jest.fn(),
+  findOne: jest.fn(),
+  upsert: jest.fn(),
   delete: jest.fn(),
 };
 
@@ -49,6 +60,7 @@ describe('EventService', () => {
       providers: [
         EventService,
         { provide: EventRepository, useValue: mockEventRepository },
+        { provide: EventProxyGrantRepository, useValue: mockEventProxyGrantRepository },
         { provide: LoggerService, useValue: mockLoggerService },
       ],
     }).compile();
@@ -119,6 +131,7 @@ describe('EventService', () => {
   // ────────────────────────────────────────────────
   describe('create', () => {
     it('予定を作成して EventResponseDto を返す', async () => {
+      mockEventProxyGrantRepository.findOne.mockResolvedValue(null);
       mockEventRepository.create.mockResolvedValue(mockEvent);
 
       const dto = {
@@ -139,6 +152,7 @@ describe('EventService', () => {
     });
 
     it('DB エラー時は InternalServerErrorException をスローする', async () => {
+      mockEventProxyGrantRepository.findOne.mockResolvedValue(null);
       mockEventRepository.create.mockRejectedValue(new Error('DB error'));
 
       await expect(
@@ -172,6 +186,7 @@ describe('EventService', () => {
     });
 
     it('start_times と end_times の件数分の予定を一括作成して EventResponseDto[] を返す', async () => {
+      mockEventProxyGrantRepository.findOne.mockResolvedValue(null);
       const events = [makeMultipleEvent(1, 0), makeMultipleEvent(2, 86400000)];
       mockEventRepository.createMany.mockResolvedValue(events);
 
@@ -193,6 +208,7 @@ describe('EventService', () => {
     });
 
     it('各行の end_at が対応する end_times の値になる', async () => {
+      mockEventProxyGrantRepository.findOne.mockResolvedValue(null);
       mockEventRepository.createMany.mockResolvedValue([
         makeMultipleEvent(1, 0),
       ]);
@@ -265,6 +281,7 @@ describe('EventService', () => {
     });
 
     it('DB エラー時は InternalServerErrorException をスローする', async () => {
+      mockEventProxyGrantRepository.findOne.mockResolvedValue(null);
       mockEventRepository.createMany.mockRejectedValue(new Error('DB error'));
 
       const dto = {
@@ -292,6 +309,7 @@ describe('EventService', () => {
 
     describe('毎日繰り返し (daily)', () => {
       it('count=3, interval=1 の場合3件の予定が作成される', async () => {
+        mockEventProxyGrantRepository.findOne.mockResolvedValue(null);
         mockEventRepository.createMany.mockResolvedValue(makeMockEvents(3));
 
         const dto = {
@@ -324,6 +342,7 @@ describe('EventService', () => {
       });
 
       it('繰り返し作成時に同じ repeat_group_id が全件に付与される', async () => {
+        mockEventProxyGrantRepository.findOne.mockResolvedValue(null);
         mockEventRepository.createMany.mockResolvedValue(makeMockEvents(2));
 
         const dto = {
@@ -347,6 +366,7 @@ describe('EventService', () => {
       });
 
       it('end_at - start_at の差分が各繰り返し予定の duration になる', async () => {
+        mockEventProxyGrantRepository.findOne.mockResolvedValue(null);
         mockEventRepository.createMany.mockResolvedValue(makeMockEvents(2));
 
         const dto = {
@@ -374,6 +394,7 @@ describe('EventService', () => {
       });
 
       it('interval=2 の場合2日おきに繰り返す', async () => {
+        mockEventProxyGrantRepository.findOne.mockResolvedValue(null);
         mockEventRepository.createMany.mockResolvedValue(makeMockEvents(2));
 
         const dto = {
@@ -402,6 +423,7 @@ describe('EventService', () => {
       });
 
       it('end_date が指定された場合はその日付までの予定が生成される', async () => {
+        mockEventProxyGrantRepository.findOne.mockResolvedValue(null);
         mockEventRepository.createMany.mockImplementation((data: unknown[]) =>
           Promise.resolve(makeMockEvents(data.length)),
         );
@@ -426,6 +448,7 @@ describe('EventService', () => {
 
     describe('毎週繰り返し (weekly)', () => {
       it('days_of_week 未指定の場合 start_at の曜日で毎週繰り返す', async () => {
+        mockEventProxyGrantRepository.findOne.mockResolvedValue(null);
         mockEventRepository.createMany.mockResolvedValue(makeMockEvents(3));
 
         // 2026-06-01 は月曜日
@@ -458,6 +481,7 @@ describe('EventService', () => {
       });
 
       it('days_of_week=[1,3] の場合 月・水 に繰り返す', async () => {
+        mockEventProxyGrantRepository.findOne.mockResolvedValue(null);
         mockEventRepository.createMany.mockImplementation((data: unknown[]) =>
           Promise.resolve(makeMockEvents(data.length)),
         );
@@ -484,6 +508,7 @@ describe('EventService', () => {
 
     describe('毎月繰り返し (monthly)', () => {
       it('count=3, interval=1 の場合 毎月同日に3件の予定が作成される', async () => {
+        mockEventProxyGrantRepository.findOne.mockResolvedValue(null);
         mockEventRepository.createMany.mockResolvedValue(makeMockEvents(3));
 
         const dto = {
@@ -515,6 +540,7 @@ describe('EventService', () => {
       });
 
       it('月末補正: 31日指定で2月は28日（非閏年）になる', async () => {
+        mockEventProxyGrantRepository.findOne.mockResolvedValue(null);
         mockEventRepository.createMany.mockImplementation((data: unknown[]) =>
           Promise.resolve(makeMockEvents(data.length)),
         );

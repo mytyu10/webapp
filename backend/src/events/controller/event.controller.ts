@@ -12,13 +12,17 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { EventService } from '../service/event.service';
+import { EventPermissionService } from '../service/event-permission.service';
+import { EventProxyGrantService } from '../service/event-proxy-grant.service';
 import {
   CreateEventDto,
   CreateMultipleEventsDto,
   CreateRepeatEventDto,
   UpdateEventDto,
   UpdateRepeatGroupEventDto,
+  CreateProxyGrantDto,
 } from '../dto/event.dto';
+import { CreatePermissionDto } from 'src/permissions/permission.dto';
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
 import { OwnershipGuard } from 'src/common/guards/ownership.guard';
 import { CheckOwnership } from 'src/common/decorators/check-ownership.decorator';
@@ -39,12 +43,14 @@ const CONTEXT = 'EventController';
 export class EventController {
   constructor(
     private readonly eventService: EventService,
+    private readonly eventPermissionService: EventPermissionService,
+    private readonly eventProxyGrantService: EventProxyGrantService,
     private readonly logger: LoggerService,
   ) {}
 
   /**
    * 予定一覧取得エンドポイント
-   * ログインユーザーが作成者である予定のみ返す
+   * ログインユーザーが作成者または権限付与済みである予定のみ返す
    */
   @Get()
   async findAll(
@@ -57,8 +63,86 @@ export class EventController {
   }
 
   /**
+   * 代理登録可能なユーザー一覧取得エンドポイント（自分が代理登録できるユーザー）。
+   * 固定パスルートのため :id より前に定義する
+   */
+  @Get('proxy-grants/granters')
+  async getProxyGranters(
+    @CurrentUser() currentUser: JwtPayload,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(CONTEXT, '代理登録可能ユーザー一覧取得リクエスト');
+    const granters = await this.eventProxyGrantService.findGranters(
+      currentUser.username,
+    );
+    return response.status(HttpStatus.OK).json(granters);
+  }
+
+  /**
+   * 自分が代理登録を許可しているユーザー一覧取得エンドポイント。
+   * 固定パスルートのため :id より前に定義する
+   */
+  @Get('proxy-grants/grantees')
+  async getProxyGrantees(
+    @CurrentUser() currentUser: JwtPayload,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(CONTEXT, '代理登録許可ユーザー一覧取得リクエスト');
+    const grantees = await this.eventProxyGrantService.findGrantees(
+      currentUser.username,
+    );
+    return response.status(HttpStatus.OK).json(grantees);
+  }
+
+  /**
+   * 代理登録権限付与エンドポイント（自分の予定への代理登録を許可する）。
+   * 固定パスルートのため :id より前に定義する
+   */
+  @Post('proxy-grants')
+  async addProxyGrant(
+    @Body() dto: CreateProxyGrantDto,
+    @CurrentUser() currentUser: JwtPayload,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(
+      CONTEXT,
+      `代理登録権限付与リクエスト: grantee=${dto.grantee_username}`,
+    );
+    const grant = await this.eventProxyGrantService.add(
+      currentUser.username,
+      dto.grantee_username,
+    );
+    return response
+      .status(HttpStatus.CREATED)
+      .json({ message: MESSAGE.EVENT.PROXY_GRANT_ADD_SUCCESS, grant });
+  }
+
+  /**
+   * 代理登録権限削除エンドポイント。
+   * 固定パスルートのため :id より前に定義する
+   */
+  @Delete('proxy-grants/:granteeUsername')
+  async removeProxyGrant(
+    @Param('granteeUsername') granteeUsername: string,
+    @CurrentUser() currentUser: JwtPayload,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(
+      CONTEXT,
+      `代理登録権限削除リクエスト: grantee=${granteeUsername}`,
+    );
+    await this.eventProxyGrantService.remove(
+      currentUser.username,
+      granteeUsername,
+    );
+    return response
+      .status(HttpStatus.OK)
+      .json({ message: MESSAGE.EVENT.PROXY_GRANT_REMOVE_SUCCESS });
+  }
+
+  /**
    * 予定詳細取得エンドポイント
-   * 作成者のみアクセス可能（OwnershipGuard）
+   * 作成者・権限保持者（READ/WRITE）のみアクセス可能（OwnershipGuard）
    */
   @Get(':id')
   @CheckOwnership('event')
@@ -73,7 +157,9 @@ export class EventController {
   }
 
   /**
-   * 予定作成エンドポイント。作成者はJWT認証済みユーザー名を使用する
+   * 予定作成エンドポイント。
+   * created_by が未指定の場合はJWT認証済みユーザー名を使用する。
+   * created_by が指定された場合は代理登録として扱い、EventProxyGrant権限を確認する
    */
   @Post()
   async create(
@@ -155,7 +241,7 @@ export class EventController {
   }
 
   /**
-   * 予定更新エンドポイント（作成者のみ、OwnershipGuard で認可）
+   * 予定更新エンドポイント（作成者・WRITE権限保持者、OwnershipGuard で認可）
    */
   @Patch(':id')
   @CheckOwnership('event')
@@ -173,7 +259,7 @@ export class EventController {
   }
 
   /**
-   * 予定削除エンドポイント（作成者のみ、OwnershipGuard で認可）
+   * 予定削除エンドポイント（作成者・WRITE権限保持者、OwnershipGuard で認可）
    */
   @Delete(':id')
   @CheckOwnership('event')
@@ -187,5 +273,66 @@ export class EventController {
     return response
       .status(HttpStatus.OK)
       .json({ message: MESSAGE.EVENT.DELETE_SUCCESS });
+  }
+
+  /**
+   * 予定の権限一覧取得エンドポイント（作成者のみ）
+   */
+  @Get(':id/permissions')
+  async getPermissions(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() currentUser: JwtPayload,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(CONTEXT, `予定権限一覧取得リクエスト: id=${id}`);
+    const permissions = await this.eventPermissionService.findAll(
+      id,
+      currentUser.username,
+    );
+    return response.status(HttpStatus.OK).json(permissions);
+  }
+
+  /**
+   * 予定への権限付与エンドポイント（作成者のみ）
+   */
+  @Post(':id/permissions')
+  async addPermission(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreatePermissionDto,
+    @CurrentUser() currentUser: JwtPayload,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(
+      CONTEXT,
+      `予定権限付与リクエスト: id=${id}, target=${dto.username}`,
+    );
+    const permission = await this.eventPermissionService.add(
+      id,
+      dto,
+      currentUser.username,
+    );
+    return response
+      .status(HttpStatus.CREATED)
+      .json({ message: MESSAGE.EVENT.PERMISSION_ADD_SUCCESS, permission });
+  }
+
+  /**
+   * 予定の権限削除エンドポイント（作成者のみ）
+   */
+  @Delete(':id/permissions/:username')
+  async removePermission(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('username') username: string,
+    @CurrentUser() currentUser: JwtPayload,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(
+      CONTEXT,
+      `予定権限削除リクエスト: id=${id}, target=${username}`,
+    );
+    await this.eventPermissionService.remove(id, username, currentUser.username);
+    return response
+      .status(HttpStatus.OK)
+      .json({ message: MESSAGE.EVENT.PERMISSION_REMOVE_SUCCESS });
   }
 }

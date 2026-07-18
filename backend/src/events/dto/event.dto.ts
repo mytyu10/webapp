@@ -15,6 +15,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PermissionType } from 'src/permissions/permission.dto';
 
 /** 予定の色識別子有効値 */
 const EVENT_COLORS = [
@@ -137,6 +138,21 @@ export class CreateEventDto {
   })
   @IsOptional()
   color?: string;
+
+  /**
+   * 代理登録時の作成者ユーザー名。
+   * 指定した場合はサービス層でEventProxyGrant権限チェックを行い、許可されていれば created_by として採用する。
+   * 未指定時はJWTのユーザー名を使用する
+   */
+  @ApiPropertyOptional({
+    description:
+      '代理登録時の作成者ユーザー名。EventProxyGrant権限が必要。未指定時はJWT認証済みユーザー名を使用',
+    example: 'alice',
+  })
+  @IsString()
+  @IsNotEmpty({ message: '代理登録先ユーザー名を入力してください' })
+  @IsOptional()
+  created_by?: string;
 }
 
 /** 複数日付一括作成リクエストDTO */
@@ -198,6 +214,19 @@ export class CreateMultipleEventsDto {
   })
   @IsOptional()
   color?: string;
+
+  /**
+   * 代理登録時の作成者ユーザー名。
+   * 未指定時はJWTのユーザー名を使用する
+   */
+  @ApiPropertyOptional({
+    description: '代理登録時の作成者ユーザー名',
+    example: 'alice',
+  })
+  @IsString()
+  @IsNotEmpty({ message: '代理登録先ユーザー名を入力してください' })
+  @IsOptional()
+  created_by?: string;
 }
 
 /** 繰り返し予定作成リクエストDTO */
@@ -255,6 +284,19 @@ export class CreateRepeatEventDto {
   })
   @IsOptional()
   color?: string;
+
+  /**
+   * 代理登録時の作成者ユーザー名。
+   * 未指定時はJWTのユーザー名を使用する
+   */
+  @ApiPropertyOptional({
+    description: '代理登録時の作成者ユーザー名',
+    example: 'alice',
+  })
+  @IsString()
+  @IsNotEmpty({ message: '代理登録先ユーザー名を入力してください' })
+  @IsOptional()
+  created_by?: string;
 }
 
 /** 予定更新リクエストDTO */
@@ -359,6 +401,29 @@ export class UpdateRepeatGroupEventDto {
   color?: string;
 }
 
+/** 代理登録権限付与リクエストDTO */
+export class CreateProxyGrantDto {
+  /** 代理登録を許可するユーザー名 */
+  @ApiProperty({
+    description: '代理登録を許可するユーザー名',
+    example: 'bob',
+  })
+  @IsString()
+  @IsNotEmpty({ message: 'ユーザー名を入力してください' })
+  grantee_username: string;
+}
+
+/** 予定権限レスポンスDTO */
+export interface EventPermissionResponseDto {
+  username: string;
+  permission: PermissionType;
+}
+
+/** 代理登録権限レスポンスDTO */
+export interface ProxyGrantResponseDto {
+  username: string;
+}
+
 /** 予定レスポンスDTO */
 export interface EventResponseDto {
   id: number;
@@ -371,4 +436,6 @@ export interface EventResponseDto {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** 権限一覧（共有された予定の場合に含む） */
+  permissions?: EventPermissionResponseDto[];
 }

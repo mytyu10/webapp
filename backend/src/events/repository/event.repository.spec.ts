@@ -2,16 +2,19 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { EventRepository } from './event.repository';
 import { PrismaService } from 'src/prisma/prisma.service';
 
-/** モック用予定データ */
+/** モック用予定データ（permissionsを含む） */
 const mockEvent = {
   id: 1,
   title: 'テスト予定',
   description: 'テスト説明',
   start_at: new Date('2026-06-01T10:00:00.000Z'),
   end_at: new Date('2026-06-01T11:00:00.000Z'),
+  color: 'cyan',
+  repeat_group_id: null,
   created_by: 'testuser',
   created_at: new Date('2026-01-01T00:00:00.000Z'),
   updated_at: new Date('2026-01-01T00:00:00.000Z'),
+  permissions: [],
 };
 
 /** PrismaService のモック */
@@ -44,14 +47,19 @@ describe('EventRepository', () => {
   // findAll
   // ────────────────────────────────────────────────
   describe('findAll', () => {
-    it('prisma.event.findMany が where: { created_by: username } を含む引数で呼ばれる', async () => {
+    it('prisma.event.findMany が OR条件（created_by または permissions）を含む引数で呼ばれる', async () => {
       mockPrismaService.event.findMany.mockResolvedValue([mockEvent]);
 
       await repository.findAll('testuser');
 
       expect(mockPrismaService.event.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { created_by: 'testuser' },
+          where: {
+            OR: [
+              { created_by: 'testuser' },
+              { permissions: { some: { username: 'testuser' } } },
+            ],
+          },
         }),
       );
     });
@@ -64,6 +72,18 @@ describe('EventRepository', () => {
       expect(mockPrismaService.event.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           orderBy: { start_at: 'asc' },
+        }),
+      );
+    });
+
+    it('prisma.event.findMany が include: { permissions: true } を含む引数で呼ばれる', async () => {
+      mockPrismaService.event.findMany.mockResolvedValue([mockEvent]);
+
+      await repository.findAll('testuser');
+
+      expect(mockPrismaService.event.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: { permissions: true },
         }),
       );
     });
@@ -109,13 +129,14 @@ describe('EventRepository', () => {
       expect(result).toBeNull();
     });
 
-    it('prisma.event.findUnique が where: { id } で呼ばれる', async () => {
+    it('prisma.event.findUnique が where: { id } と include: { permissions: true } で呼ばれる', async () => {
       mockPrismaService.event.findUnique.mockResolvedValue(mockEvent);
 
       await repository.findById(1);
 
       expect(mockPrismaService.event.findUnique).toHaveBeenCalledWith({
         where: { id: 1 },
+        include: { permissions: true },
       });
     });
   });
@@ -141,7 +162,7 @@ describe('EventRepository', () => {
       expect(result.title).toBe('テスト予定');
     });
 
-    it('prisma.event.create が正しいデータで呼ばれる', async () => {
+    it('prisma.event.create が正しいデータと include: { permissions: true } で呼ばれる', async () => {
       mockPrismaService.event.create.mockResolvedValue(mockEvent);
 
       const data = {
@@ -162,6 +183,7 @@ describe('EventRepository', () => {
           end_at: data.end_at,
           created_by: data.created_by,
         },
+        include: { permissions: true },
       });
     });
   });

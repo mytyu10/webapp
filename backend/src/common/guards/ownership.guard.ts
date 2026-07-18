@@ -54,7 +54,8 @@ export class OwnershipGuard implements CanActivate {
     } else if (resource === 'link') {
       return this.checkLinkOwnership(id, user.username);
     } else if (resource === 'event') {
-      return this.checkEventOwnership(id, user.username);
+      const method = request.method.toUpperCase();
+      return this.checkEventOwnership(id, user.username, method);
     }
 
     return true;
@@ -129,14 +130,20 @@ export class OwnershipGuard implements CanActivate {
 
   /**
    * 予定の認可チェック。
-   * 作成者であれば許可する
+   * - GET: 作成者 / EventPermission（READ または WRITE）を許可する
+   * - PATCH / DELETE: 作成者 / EventPermission（WRITE のみ）を許可する
+   * - その他のメソッド: 作成者のみ許可する
    */
   private async checkEventOwnership(
     eventId: number,
     username: string,
+    method: string,
   ): Promise<boolean> {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
+      include: {
+        permissions: { where: { username } },
+      },
     });
 
     if (!event) {
@@ -145,6 +152,22 @@ export class OwnershipGuard implements CanActivate {
 
     if (event.created_by === username) {
       return true;
+    }
+
+    const permission = event.permissions[0];
+
+    if (method === 'GET') {
+      // GET は READ または WRITE 権限のいずれかがあれば許可する
+      if (permission) {
+        return true;
+      }
+    } else if (method === 'PATCH' || method === 'DELETE') {
+      // PATCH / DELETE は WRITE 権限のみ許可する
+      if (permission && permission.permission === 'WRITE') {
+        return true;
+      }
+    } else {
+      // その他のメソッドは作成者のみ（上のチェックで通っていない場合は拒否）
     }
 
     throw new ForbiddenException(MESSAGE.EVENT.FORBIDDEN);

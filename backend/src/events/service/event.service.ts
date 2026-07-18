@@ -6,8 +6,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { Event } from '@prisma/client';
 import { EventRepository } from '../repository/event.repository';
+import { EventProxyGrantRepository } from '../repository/event-proxy-grant.repository';
 import {
   CreateEventDto,
   CreateMultipleEventsDto,
@@ -16,9 +16,11 @@ import {
   UpdateEventDto,
   UpdateRepeatGroupEventDto,
   EventResponseDto,
+  EventPermissionResponseDto,
 } from '../dto/event.dto';
 import { MESSAGE } from 'src/common/type/message';
 import { LoggerService } from 'src/common/service/logger.service';
+import type { EventPermission } from '@prisma/client';
 
 const CONTEXT = 'EventService';
 
@@ -32,11 +34,12 @@ const DEFAULT_EVENT_COLOR = 'cyan';
 export class EventService {
   constructor(
     private readonly eventRepository: EventRepository,
+    private readonly eventProxyGrantRepository: EventProxyGrantRepository,
     private readonly logger: LoggerService,
   ) {}
 
   /**
-   * 指定ユーザーが作成者である予定一覧を取得する
+   * 指定ユーザーが作成者または権限付与済みである予定一覧を取得する
    */
   async findAll(username: string): Promise<EventResponseDto[]> {
     this.logger.log(CONTEXT, `予定一覧取得開始: user=${username}`);
@@ -58,13 +61,20 @@ export class EventService {
   }
 
   /**
-   * 予定を作成する。作成者はControllerから渡されたJWT認証済みユーザー名を使用する
+   * 予定を作成する。
+   * dto に created_by が指定されている場合は代理登録として扱い、
+   * EventProxyGrant で requestUsername が代理登録権限を持つか確認する。
+   * 未指定時は requestUsername を created_by として使用する
    */
   async create(
     dto: CreateEventDto,
-    createdBy: string,
+    requestUsername: string,
   ): Promise<EventResponseDto> {
     this.logger.log(CONTEXT, `予定作成開始: ${dto.title}`);
+    const createdBy = await this.resolveCreatedBy(
+      dto.created_by,
+      requestUsername,
+    );
     try {
       const event = await this.eventRepository.create({
         title: dto.title,
@@ -84,11 +94,12 @@ export class EventService {
 
   /**
    * 複数の開始日時と終了日時を指定して同じタイトル・説明の予定を一括作成する。
-   * start_times と end_times は同件数である必要がある
+   * start_times と end_times は同件数である必要がある。
+   * 代理登録に対応する
    */
   async createMultiple(
     dto: CreateMultipleEventsDto,
-    createdBy: string,
+    requestUsername: string,
   ): Promise<EventResponseDto[]> {
     this.logger.log(
       CONTEXT,
@@ -108,6 +119,11 @@ export class EventService {
     if (dto.start_times.length > REPEAT_MAX_COUNT) {
       throw new BadRequestException(MESSAGE.EVENT.REPEAT_LIMIT_EXCEEDED);
     }
+
+    const createdBy = await this.resolveCreatedBy(
+      dto.created_by,
+      requestUsername,
+    );
 
     try {
       const color = dto.color ?? DEFAULT_EVENT_COLOR;
@@ -132,7 +148,7 @@ export class EventService {
   }
 
   /**
-   * 繰り返しルールに基づいて予定を一括作成する。
+   * 繰り返しルールに基づいて予定を一括作成する。代理登録に対応する。
    * end_at - start_at の差分ミリ秒を保持し、各繰り返し日の end_at を算出する。
    * 同一グループの繰り返し予定には同じ repeat_group_id（UUID）を付与する。
    * - daily: interval 日ごとに繰り返す。days_of_week は無視する
@@ -141,7 +157,7 @@ export class EventService {
    */
   async createRepeat(
     dto: CreateRepeatEventDto,
-    createdBy: string,
+    requestUsername: string,
   ): Promise<EventResponseDto[]> {
     this.logger.log(
       CONTEXT,
@@ -157,6 +173,11 @@ export class EventService {
     if (startTimes.length > REPEAT_MAX_COUNT) {
       throw new BadRequestException(MESSAGE.EVENT.REPEAT_LIMIT_EXCEEDED);
     }
+
+    const createdBy = await this.resolveCreatedBy(
+      dto.created_by,
+      requestUsername,
+    );
 
     try {
       const baseStart = new Date(dto.start_at);
@@ -483,10 +504,52 @@ export class EventService {
   }
 
   /**
+   * 代理登録の created_by を解決する。
+   * dto.created_by が指定されている場合は EventProxyGrant で権限確認を行い、
+   * 許可されていれば dto.created_by を返す。
+   * 未指定の場合は requestUsername をそのまま返す
+   */
+  private async resolveCreatedBy(
+    dtoCreatedBy: string | undefined,
+    requestUsername: string,
+  ): Promise<string> {
+    if (!dtoCreatedBy) {
+      return requestUsername;
+    }
+
+    // 代理登録: requestUsername が dtoCreatedBy の予定を代理登録できるか確認する
+    const grant = await this.eventProxyGrantRepository.findOne(
+      dtoCreatedBy,
+      requestUsername,
+    );
+    if (!grant) {
+      this.logger.warn(
+        CONTEXT,
+        `代理登録権限なし: requestUser=${requestUsername}, targetUser=${dtoCreatedBy}`,
+      );
+      throw new ForbiddenException(MESSAGE.EVENT.PROXY_GRANT_FORBIDDEN);
+    }
+
+    return dtoCreatedBy;
+  }
+
+  /**
    * Prisma の Event モデルを EventResponseDto に変換する
    */
-  private toResponseDto(event: Event): EventResponseDto {
-    return {
+  private toResponseDto(event: {
+    id: number;
+    title: string;
+    description: string;
+    start_at: Date;
+    end_at: Date;
+    color: string;
+    repeat_group_id: string | null;
+    created_by: string;
+    created_at: Date;
+    updated_at: Date;
+    permissions?: EventPermission[];
+  }): EventResponseDto {
+    const dto: EventResponseDto = {
       id: event.id,
       title: event.title,
       description: event.description,
@@ -498,5 +561,12 @@ export class EventService {
       created_at: event.created_at.toISOString(),
       updated_at: event.updated_at.toISOString(),
     };
+    if (event.permissions && event.permissions.length > 0) {
+      dto.permissions = event.permissions.map((p) => ({
+        username: p.username,
+        permission: p.permission as EventPermissionResponseDto['permission'],
+      }));
+    }
+    return dto;
   }
 }
