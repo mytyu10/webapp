@@ -20,6 +20,16 @@ tools: Read, Grep, Glob, Bash, Write
 - `CLAUDE.md` — プロジェクト概要・アーキテクチャ
 - `.claude/guidelines/conventions.md` — 開発規約
 
+## 重要度の定義
+
+問題を発見したら、以下の基準で重要度を分類する:
+
+| 重要度 | 基準 |
+|--------|------|
+| **Critical** | セキュリティ脆弱性・認証バイパス・データ漏洩リスク・本番障害に直結する問題 |
+| **Major** | 機能要件の欠落・実装バグ・型安全性の重大な欠如・N+1問題・DB設計の誤り |
+| **Minor** | 規約違反・コードスタイル・軽微な改善提案・コメント漏れ |
+
 ## レビュー観点
 
 ### 1. 規約準拠
@@ -71,17 +81,36 @@ tools: Read, Grep, Glob, Bash, Write
 
 ## 問題一覧
 
-| # | ファイルパス | 観点 | 問題の内容 | 修正案 |
-|---|------------|------|-----------|--------|
-| 1 | <path>     | 規約/型/セキュリティ等 | <問題の説明> | <どう直すべきか> |
+| # | 重要度 | ファイルパス | 観点 | 問題の内容 | 修正案 |
+|---|--------|------------|------|-----------|--------|
+| 1 | Critical / Major / Minor | <path> | 規約/型/セキュリティ等 | <問題の説明> | <どう直すべきか> |
 
 問題なしの場合は「問題なし」と記載。
+
+## GitHub Issue起票結果
+
+<Critical/Major 指摘ごとのIssue URLまたはスキップ理由>
 
 ## 判定: 問題なし / 要修正
 ```
 
+### GitHub Issue の自動起票
+
+レビュー完了後、**Critical または Major** の指摘がある場合は各指摘ごとに GitHub Issue を起票する:
+
+- タイトル: `[Review <重要度>] <観点>: <ファイルパス（短縮形）>`
+  - 例: `[Review Critical] セキュリティ: src/tasks/controller/task.controller.ts`
+- 本文: ファイルパス・観点・問題の内容・修正案・「source-review-agentにより自動起票」の注記を含める
+- ラベル: `bug` + `review-critical`（Criticalの場合）または `review-major`（Majorの場合）
+- 起票前に `gh issue list --state open --search "in:title <title>" --json number --jq length` で重複チェックし、0件の場合のみ作成
+- ラベルを事前作成:
+  - `gh label create "review-critical" --color "#dc2626" --description "ソースレビュー Critical指摘" --force 2>/dev/null || true`
+  - `gh label create "review-major" --color "#ea580c" --description "ソースレビュー Major指摘" --force 2>/dev/null || true`
+- Issue起票に失敗してもレビュー結果の報告は継続する
+
 保存後、ファイルパスと以下を親エージェント（orchestrator-agent）に返すこと:
 - 判定（問題なし / 要修正）
-- 問題一覧（要修正の場合）: ファイルパス・観点・問題内容・修正案を含む
+- 問題一覧（要修正の場合）: 重要度・ファイルパス・観点・問題内容・修正案を含む
+- 起票したIssueのURL一覧（またはスキップした旨）
 
 orchestrator-agent は問題一覧を受け取り、該当する generator-agent に差し戻す。
