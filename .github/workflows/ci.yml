@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -52,13 +53,16 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
-      - name: Lint
+      - id: lint
+        name: Lint
         run: npm run lint
 
-      - name: Unit tests
+      - id: unit-test
+        name: Unit tests
         run: npm run test -- --runInBand
 
-      - name: Build
+      - id: build
+        name: Build
         run: npm run build
 
       - name: Reset E2E database
@@ -67,8 +71,37 @@ jobs:
       - name: Apply Prisma migrations
         run: npx prisma migrate deploy
 
-      - name: E2E tests
+      - id: e2e
+        name: E2E tests
         run: npm run test:e2e -- --runInBand
+
+      - name: CI障害をGitHub Issueに起票する
+        if: failure() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: .
+        run: |
+          if   [ "${{ steps.lint.outcome }}"      = "failure" ]; then STEP="Lint"
+          elif [ "${{ steps.unit-test.outcome }}" = "failure" ]; then STEP="Unit Test"
+          elif [ "${{ steps.build.outcome }}"     = "failure" ]; then STEP="Build"
+          elif [ "${{ steps.e2e.outcome }}"       = "failure" ]; then STEP="E2E Test"
+          else STEP="Unknown"
+          fi
+
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          TITLE="[CI Failure] Backend ${STEP}: ${{ github.ref_name }} @ ${SHORT_SHA}"
+
+          gh label create "ci-failure" --color "#7c3aed" --description "CI pipeline 失敗" --force 2>/dev/null || true
+
+          EXISTING=$(gh issue list --state open --search "in:title [CI Failure] Backend" --json number --jq length 2>/dev/null || echo "0")
+          if [ "$EXISTING" = "0" ]; then
+            BODY=$(printf "## CI 障害レポート\n\n**ジョブ**: Backend\n**失敗ステップ**: %s\n**ブランチ**: \`%s\`\n**コミット**: \`%s\`\n**実行ログ**: %s\n\n*このIssueはGitHub Actionsにより自動起票されました*" \
+              "$STEP" \
+              "${{ github.ref_name }}" \
+              "${{ github.sha }}" \
+              "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+            gh issue create --title "$TITLE" --body "$BODY" --label "bug" --label "ci-failure"
+          fi
 
   frontend:
     name: Frontend
@@ -93,11 +126,41 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
+      - id: lint
+        name: Lint
         run: npm run lint
 
-      - name: Test
+      - id: test
+        name: Test
         run: npm test -- --watchAll=false
 
-      - name: Build
+      - id: build
+        name: Build
         run: npm run build
+
+      - name: CI障害をGitHub Issueに起票する
+        if: failure() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: .
+        run: |
+          if   [ "${{ steps.lint.outcome }}"  = "failure" ]; then STEP="Lint"
+          elif [ "${{ steps.test.outcome }}"  = "failure" ]; then STEP="Test"
+          elif [ "${{ steps.build.outcome }}" = "failure" ]; then STEP="Build"
+          else STEP="Unknown"
+          fi
+
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          TITLE="[CI Failure] Frontend ${STEP}: ${{ github.ref_name }} @ ${SHORT_SHA}"
+
+          gh label create "ci-failure" --color "#7c3aed" --description "CI pipeline 失敗" --force 2>/dev/null || true
+
+          EXISTING=$(gh issue list --state open --search "in:title [CI Failure] Frontend" --json number --jq length 2>/dev/null || echo "0")
+          if [ "$EXISTING" = "0" ]; then
+            BODY=$(printf "## CI 障害レポート\n\n**ジョブ**: Frontend\n**失敗ステップ**: %s\n**ブランチ**: \`%s\`\n**コミット**: \`%s\`\n**実行ログ**: %s\n\n*このIssueはGitHub Actionsにより自動起票されました*" \
+              "$STEP" \
+              "${{ github.ref_name }}" \
+              "${{ github.sha }}" \
+              "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+            gh issue create --title "$TITLE" --body "$BODY" --label "bug" --label "ci-failure"
+          fi

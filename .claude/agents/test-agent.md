@@ -64,7 +64,16 @@ cd backend && npm run test -- --testPathPattern=<テスト対象パス>
 2. `npm run test` を実行する
 3. 失敗したテストがある場合:
    - 実装バグか、テストの誤りかを判断する
-   - 実装バグと判断した場合はユーザーに報告して指示を仰ぐ
+   - 実装バグと判断した場合:
+     1. **GitHub Issue を起票する**（重複チェック込み）:
+        - タイトル: `[Test Failure] <テストファイル名>: <失敗テスト名（複数あれば代表1件）>`
+        - 本文: テストファイルパス・失敗テスト数・エラーメッセージ（抜粋）・再現コマンド・「test-agentにより自動起票」の注記を含める
+        - ラベル: `bug`, `test-failure`
+        - 起票前に `gh issue list --state open --search "in:title <title>" --json number --jq length` で重複チェックし、0件の場合のみ作成
+        - `gh label create "test-failure" --color "#f59e0b" --description "テスト失敗による障害" --force 2>/dev/null || true` でラベルを事前作成
+        - `gh issue create --title "..." --body "..." --label "bug" --label "test-failure"` で起票
+     2. 起票したIssueのURL（または重複スキップの旨）を結果レポートと親エージェントへの報告に含める
+     3. ユーザーに報告して指示を仰ぐ
    - テストの誤りの場合は修正して再実行する
    - 3回以上失敗が続く場合はユーザーに報告して指示を仰ぐ
 
