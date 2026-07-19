@@ -25,7 +25,9 @@ export class EventProxyGrantService {
   /**
    * 自分（granter）が代理登録を許可しているユーザー一覧を取得する
    */
-  async findGrantees(granterUsername: string): Promise<ProxyGrantResponseDto[]> {
+  async findGrantees(
+    granterUsername: string,
+  ): Promise<ProxyGrantResponseDto[]> {
     this.logger.log(
       CONTEXT,
       `代理登録許可ユーザー一覧取得開始: granter=${granterUsername}`,
@@ -48,7 +50,9 @@ export class EventProxyGrantService {
   /**
    * 自分（grantee）が代理登録できるユーザー一覧を取得する
    */
-  async findGranters(granteeUsername: string): Promise<ProxyGrantResponseDto[]> {
+  async findGranters(
+    granteeUsername: string,
+  ): Promise<ProxyGrantResponseDto[]> {
     this.logger.log(
       CONTEXT,
       `代理登録可能ユーザー一覧取得開始: grantee=${granteeUsername}`,
@@ -95,10 +99,7 @@ export class EventProxyGrantService {
       );
       return { username: record.grantee_username };
     } catch (error) {
-      this.logger.error(
-        CONTEXT,
-        `代理登録権限付与失敗: ${String(error)}`,
-      );
+      this.logger.error(CONTEXT, `代理登録権限付与失敗: ${String(error)}`);
       throw new InternalServerErrorException(
         MESSAGE.EVENT.PROXY_GRANT_ADD_FAILED,
       );
@@ -135,10 +136,7 @@ export class EventProxyGrantService {
         `代理登録権限削除完了: granter=${granterUsername}, grantee=${granteeUsername}`,
       );
     } catch (error) {
-      this.logger.error(
-        CONTEXT,
-        `代理登録権限削除失敗: ${String(error)}`,
-      );
+      this.logger.error(CONTEXT, `代理登録権限削除失敗: ${String(error)}`);
       throw new InternalServerErrorException(
         MESSAGE.EVENT.PROXY_GRANT_REMOVE_FAILED,
       );

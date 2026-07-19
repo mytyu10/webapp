@@ -13,10 +13,7 @@ import {
 import type { Response } from 'express';
 import { TaskService } from '../service/task.service';
 import { TaskPermissionService } from '../service/task-permission.service';
-import {
-  CreateTaskDto,
-  UpdateTaskDto,
-} from '../dto/task.dto';
+import { CreateTaskDto, UpdateTaskDto } from '../dto/task.dto';
 import { CreatePermissionDto } from 'src/permissions/permission.dto';
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
 import { OwnershipGuard } from 'src/common/guards/ownership.guard';

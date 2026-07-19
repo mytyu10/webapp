@@ -17,10 +17,7 @@ export class EventRepository {
   async findAll(username: string): Promise<EventWithPermissions[]> {
     return this.prisma.event.findMany({
       where: {
-        OR: [
-          { created_by: username },
-          { permissions: { some: { username } } },
-        ],
+        OR: [{ created_by: username }, { permissions: { some: { username } } }],
       },
       include: {
         permissions: true,
@@ -54,7 +51,9 @@ export class EventRepository {
   /**
    * 予定を作成する。Prismaの生成する型（EventUncheckedCreateInput）を使用して型の乖離を防ぐ
    */
-  async create(data: Prisma.EventUncheckedCreateInput): Promise<EventWithPermissions> {
+  async create(
+    data: Prisma.EventUncheckedCreateInput,
+  ): Promise<EventWithPermissions> {
     return this.prisma.event.create({
       data,
       include: { permissions: true },
@@ -66,7 +65,9 @@ export class EventRepository {
    * SQLite では createMany の戻り値が count のみで個別IDが取れないため、
    * $transaction + 個別 create の配列実行で全件レコードを返す
    */
-  async createMany(data: Prisma.EventUncheckedCreateInput[]): Promise<EventWithPermissions[]> {
+  async createMany(
+    data: Prisma.EventUncheckedCreateInput[],
+  ): Promise<EventWithPermissions[]> {
     return this.prisma.$transaction(
       data.map((item) =>
         this.prisma.event.create({

@@ -60,7 +60,10 @@ describe('EventService', () => {
       providers: [
         EventService,
         { provide: EventRepository, useValue: mockEventRepository },
-        { provide: EventProxyGrantRepository, useValue: mockEventProxyGrantRepository },
+        {
+          provide: EventProxyGrantRepository,
+          useValue: mockEventProxyGrantRepository,
+        },
         { provide: LoggerService, useValue: mockLoggerService },
       ],
     }).compile();

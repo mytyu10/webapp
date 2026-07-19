@@ -330,7 +330,11 @@ export class EventController {
       CONTEXT,
       `予定権限削除リクエスト: id=${id}, target=${username}`,
     );
-    await this.eventPermissionService.remove(id, username, currentUser.username);
+    await this.eventPermissionService.remove(
+      id,
+      username,
+      currentUser.username,
+    );
     return response
       .status(HttpStatus.OK)
       .json({ message: MESSAGE.EVENT.PERMISSION_REMOVE_SUCCESS });
