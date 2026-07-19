@@ -419,11 +419,6 @@ export interface EventPermissionResponseDto {
   permission: PermissionType;
 }
 
-/** 代理登録権限レスポンスDTO */
-export interface ProxyGrantResponseDto {
-  username: string;
-}
-
 /** 予定レスポンスDTO */
 export interface EventResponseDto {
   id: number;

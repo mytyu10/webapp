@@ -1,7 +1,6 @@
 /** メッセージを管理する定数ファイル */
 export const MESSAGE = {
   AUTH: {
-    LOGIN_SUCCESS: 'ログイン成功',
     LOGIN_FAILED: 'ユーザーネームまたはパスワードが間違っています',
     REGIST_SUCCESS: 'アカウントの登録に成功しました',
     REGIST_FAILED: 'アカウントの作成に失敗しました',
@@ -18,7 +17,6 @@ export const MESSAGE = {
   },
   TASK: {
     CREATE_SUCCESS: 'タスクを作成しました',
-    UPDATE_SUCCESS: 'タスクを更新しました',
     QUEUE_UPDATE_SUCCESS: 'タスクをキューで処理し更新しました',
     DELETE_SUCCESS: 'タスクを削除しました',
     NOT_FOUND: '指定されたタスクが見つかりません',
@@ -78,7 +76,6 @@ export const MESSAGE = {
   PERMISSION: {
     ADD_SUCCESS: '権限を付与しました',
     REMOVE_SUCCESS: '権限を削除しました',
-    FETCH_SUCCESS: '権限一覧を取得しました',
     NOT_FOUND: '指定された権限が見つかりません',
     ADD_FAILED: '権限の付与に失敗しました',
     REMOVE_FAILED: '権限の削除に失敗しました',
