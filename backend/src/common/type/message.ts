@@ -8,12 +8,27 @@ export const MESSAGE = {
     UNAUTHORIZED: '認証が必要です',
     AUTH_INFO_FAILED: '認証情報の取得に失敗しました',
     ME_FETCH_FAILED: 'ユーザー情報の取得に失敗しました',
+    NOT_FOUND: '指定されたユーザーが見つかりません',
   },
   DB: {
     DB_ERROR: 'データベースエラーが発生しました',
   },
   VALIDATION: {
     INVALID_INPUT: '入力値が不正です',
+  },
+  WEBAUTHN: {
+    REGISTRATION_START_SUCCESS: '顔認証の登録を開始しました',
+    REGISTRATION_SUCCESS: '顔認証の登録が完了しました',
+    REGISTRATION_FAILED: '顔認証の登録に失敗しました',
+    AUTHENTICATION_START_SUCCESS: '顔認証の認証を開始しました',
+    AUTHENTICATION_SUCCESS: '顔認証による認証が完了しました',
+    AUTHENTICATION_FAILED: '顔認証による認証に失敗しました',
+    CHALLENGE_NOT_FOUND:
+      '認証チャレンジが見つかりません。もう一度お試しください',
+    CHALLENGE_EXPIRED:
+      '認証チャレンジの有効期限が切れました。もう一度お試しください',
+    NO_CREDENTIALS: '顔認証が登録されていません。先に顔認証を登録してください',
+    CREDENTIAL_ALREADY_EXISTS: 'この認証器はすでに登録されています',
   },
   TASK: {
     CREATE_SUCCESS: 'タスクを作成しました',

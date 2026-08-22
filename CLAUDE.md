@@ -60,9 +60,9 @@ npx prisma generate           # regenerate Prisma client
 
 Layered module structure: **Controller → Service → Repository → Prisma**.
 
-- `src/accounts/controller/` — REST endpoints (`POST /accounts/login`, `POST /accounts/regist`, `GET /accounts/me`)。`POST /accounts/login` と `POST /accounts/regist` には `@Throttle({ default: { ttl: 60000, limit: 5 } })` で1分5回のレートリミットを適用する
-- `src/accounts/service/` — business logic（ログイン・登録・ログインユーザー情報取得）。`login()` は bcrypt でパスワードを照合し、一致した場合に JWT を発行する
-- `src/accounts/repository/` — Prisma queries（`findAll()` で全ユーザー一覧取得）
+- `src/accounts/controller/` — REST endpoints (`POST /accounts/login`, `POST /accounts/regist`, `GET /accounts/me`, `POST /accounts/webauthn/registration/start`, `POST /accounts/webauthn/registration/finish`, `POST /accounts/webauthn/authentication/start`, `POST /accounts/webauthn/authentication/finish`)。`POST /accounts/login` と `POST /accounts/regist` には `@Throttle({ default: { ttl: 60000, limit: 5 } })` で1分5回のレートリミットを適用する。WebAuthn エンドポイントにも同様のレートリミットを適用する
+- `src/accounts/service/` — business logic（ログイン・登録・ログインユーザー情報取得）。`login()` は bcrypt でパスワードを照合し、一致した場合に JWT を発行する。`webauthn.service.ts` は WebAuthn（FIDO2）認証の登録・認証フローを提供する（`startRegistration` / `finishRegistration` / `startAuthentication` / `finishAuthentication`）。チャレンジTTL5分・カウンター管理でリプレイアタックを防止する。RP設定は環境変数 `WEBAUTHN_RP_ID`・`WEBAUTHN_RP_NAME`・`WEBAUTHN_ORIGIN` で管理する
+- `src/accounts/repository/` — Prisma queries（`findAll()` で全ユーザー一覧取得）。`webauthn.repository.ts` は WebAuthnCredential（公開鍵クレデンシャル）と WebAuthnChallenge（一時チャレンジ）の CRUD を提供する
 - `src/accounts/dto/account.dto.ts` — validation DTOs (class-validator)。`AccountMeResponseDto`（usernameのみ）を定義
 - `src/tasks/controller/` — REST endpoints (`GET /tasks`, `GET /tasks/categories`, `GET /tasks/:id`, `POST /tasks`, `PATCH /tasks/:id`, `DELETE /tasks/:id`, `GET /tasks/:id/permissions`, `POST /tasks/:id/permissions`, `DELETE /tasks/:id/permissions/:username`) — JwtAuthGuard適用済み。`GET /tasks` と `GET /tasks/categories` は `req.user.username` をサービスに渡してログインユーザーのタスクのみ取得する。`POST /tasks` は `req.user.username` をサービスに渡して `created_by` をサーバー側でセット（リクエストボディでの指定は不可）。`GET :id` / `PATCH :id` / `DELETE :id` は `@CheckOwnership('task')` + `OwnershipGuard` で作成者・担当者・WRITE権限保持者のみ許可する
 - `src/tasks/service/` — タスクのビジネスロジック（`task.service.ts`）・バッチ更新処理（`task-queue.service.ts`: 100msウィンドウ内のリクエストをバッファリングして順次処理）・権限CRUD（`task-permission.service.ts`: 作成者のみ操作可能）。`findAll(username)` / `findAllCategories(username)` はユーザー名をリポジトリに伝播する。`create(dto, createdBy)` は `createdBy` 引数でサーバー側から作成者を設定する
@@ -87,7 +87,7 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 - `src/prisma/prisma.service.ts` — Prisma client singleton
 - `src/common/service/hash.service.ts` — bcrypt（rounds=10）によるパスワードハッシュ化。`createHash(value)` → bcrypt ハッシュ（async）、`compareHash(value, hashed)` → bcrypt 照合（async）
 - `src/common/service/logger.service.ts` — ロガーサービス
-- `src/common/type/message.ts` — Japanese message constants (centralised)。`AUTH`・`LINK`（リンク集CRUD・権限エラー）・`CHAT`（チャット送受信・ユーザー取得）・`PERMISSION`（権限CRUD・作成者のみ・未存在エラー）・`EVENT`（予定CRUD・権限・代理登録権限メッセージ）・`TASK`（タスクCRUD）セクションを含む
+- `src/common/type/message.ts` — Japanese message constants (centralised)。`AUTH`・`WEBAUTHN`（顔認証登録・認証・チャレンジエラー）・`LINK`（リンク集CRUD・権限エラー）・`CHAT`（チャット送受信・ユーザー取得）・`PERMISSION`（権限CRUD・作成者のみ・未存在エラー）・`EVENT`（予定CRUD・権限・代理登録権限メッセージ）・`TASK`（タスクCRUD）セクションを含む
 - `src/common/type/status.enum.ts` — HTTP status enums
 - `src/common/decorators/check-ownership.decorator.ts` — `@CheckOwnership(resource)` デコレータ。`OwnershipResourceType`（'task' | 'link' | 'event'）を SetMetadata でハンドラーに付与する
 - `src/common/guards/ownership.guard.ts` — `OwnershipGuard` (`CanActivate`)。`@CheckOwnership` メタデータを読み込み、リソースタイプに応じてタスク/リンク/予定の所有者チェックを行う。タスク: 作成者 or 担当者 or WRITE権限保持者。リンク: 作成者 or WRITE権限保持者。予定: HTTPメソッドに応じて判定（GET は作成者 or EventPermission（READ/WRITE）を許可、PATCH/DELETE は作成者 or EventPermission（WRITE のみ）を許可）。未存在は 404、権限なしは 403
@@ -108,21 +108,26 @@ Layered module structure: **Controller → Service → Repository → Prisma**.
 
 **代理登録権限フロー**: `POST /events/proxy-grants` でユーザーが自分の予定への代理登録を別ユーザーに許可する（EventProxyGrant テーブル管理）。代理登録者は `POST /events` に `created_by` を指定して他ユーザー名義の予定を作成できる（EventProxyGrantRepository.findOne で権限確認）。自分自身への代理登録許可は BadRequestException で禁止する。`GET /events/proxy-grants/granters` で自分が代理登録できるユーザー一覧、`GET /events/proxy-grants/grantees` で自分が許可したユーザー一覧を取得できる。
 
+**WebAuthn（顔認証）フロー**: 登録は `POST /accounts/webauthn/registration/start`（チャレンジ発行）→ ブラウザ生体認証 → `POST /accounts/webauthn/registration/finish`（クレデンシャル保存）。認証は `POST /accounts/webauthn/authentication/start`（チャレンジ発行）→ ブラウザ生体認証 → `POST /accounts/webauthn/authentication/finish`（JWT発行）。チャレンジTTL5分・カウンター更新でリプレイアタックを防止する。RP設定は環境変数で管理（`WEBAUTHN_RP_ID`/`WEBAUTHN_RP_NAME`/`WEBAUTHN_ORIGIN`）。フロントエンドは `@simplewebauthn/browser` の `startRegistration`/`startAuthentication` でブラウザAPIを呼び出す。顔認証登録ページは `/webauthn/register`（PrivateRoute内）。既存パスワードログインと並存する（顔認証未登録ユーザーはパスワードでログイン）。
+
 **チャットフロー**: 全通信は REST API で行う。メッセージ送信は `POST /chat/messages`（REST）。メッセージ一覧は `GET /chat/messages` を3秒ごとにポーリングして自動更新する。`GET /chat/users` で全ユーザー一覧を取得してチャット相手を選択する。WebSocket（Socket.io）は使用しない。
 
 ### Frontend (React + CRA)
 
-- `src/App.tsx` — router: `/` → `HomePage`（タスク一覧へリダイレクト）, `/login` → `LoginPage`, `/tasks` → `TaskListPage`, `/tasks/new` → `TaskFormPage`, `/calendar` → `CalendarPage`, `/links` → `LinkListPage`, `/chat` → `ChatPage`
+- `src/App.tsx` — router: `/` → `HomePage`（タスク一覧へリダイレクト）, `/login` → `LoginPage`, `/tasks` → `TaskListPage`, `/tasks/new` → `TaskFormPage`, `/calendar` → `CalendarPage`, `/links` → `LinkListPage`, `/chat` → `ChatPage`, `/webauthn/register` → `WebAuthnRegisterPage`（PrivateRoute内）
 - `src/components/PrivateRoute.tsx` — JWT存在チェック + exp有効期限検証。無効時は`/login`へリダイレクト
-- `src/components/Sidebar.tsx` — サイドバーコンポーネント（タスク管理・カレンダー・リンク集・チャットリンク・ログアウト）。NAV_LINKSに `/tasks`・`/calendar`・`/links`・`/chat` を定義。`isOpen: boolean` と `onToggle: () => void` プロパティを受け取る。`isOpen=false` のとき PC ではコンテンツを `sm:hidden` で非表示にし、サイドバー幅を `sm:w-8` に縮小してトグルボタンのみ見えるようにする（モバイルは常に全幅表示）。トグルボタンはサイドバー上部に `hidden sm:flex` で PC のみ表示
+- `src/components/Sidebar.tsx` — サイドバーコンポーネント（タスク管理・カレンダー・リンク集・チャット・顔認証設定・ログアウト）。NAV_LINKSに `/tasks`・`/calendar`・`/links`・`/chat`・`/webauthn/register` を定義。`isOpen: boolean` と `onToggle: () => void` プロパティを受け取る。`isOpen=false` のとき PC ではコンテンツを `sm:hidden` で非表示にし、サイドバー幅を `sm:w-8` に縮小してトグルボタンのみ見えるようにする（モバイルは常に全幅表示）。トグルボタンはサイドバー上部に `hidden sm:flex` で PC のみ表示
 - `src/components/SidebarLayout.tsx` — サイドバー付きレイアウト（Outlet使用）。`isSidebarOpen` ステートを管理し、`onToggle` コールバックを `Sidebar` に渡す。トグルボタンは `Sidebar` 内部に配置するため `fixed` 位置のボタンは持たない。外側 div は `h-screen overflow-hidden` でブラウザウィンドウの縦スクロールバーを出さない。`main` は `flex-1 h-full overflow-y-auto` で各ページのコンテンツスクロールを担う
-- `src/pages/LoginPage.tsx` — login form, posts to backend `/accounts/login`, stores JWT in `localStorage`
+- `src/pages/LoginPage.tsx` — login form, posts to backend `/accounts/login`, stores JWT in `localStorage`。ユーザー名入力後に「顔認証でログイン」ボタンを表示し、`useWebAuthn` フックで WebAuthn 認証フローを呼び出す
 - `src/pages/TaskListPage.tsx` — タスク一覧・階層表示・カテゴリフィルター・削除確認モーダル・完了セクション折りたたみ。削除は作成者のみ表示・編集は全ユーザー表示。「詳細」ボタン押下時に `awaitToggle` で完了 PATCH の完了を待機してから右側のサイドパネル（`TaskDetailPanel`）を開く（ページ遷移なし・URL変更なし）。パネル表示中は flex 左右分割（左: 一覧、右: 詳細パネル）。スマホ（640px未満）ではパネル開時に一覧を非表示にしてパネルを全画面表示する
 - `src/pages/TaskFormPage.tsx` — タスク作成・編集・子タスク作成（URLクエリ`parent_id`で切り替え）。担当者は `GET /chat/users` + ログインユーザー自身で構築したユーザー一覧セレクトから選択する形式（複数追加可・バッジ表示・× で削除）
 - `src/pages/TaskDetailPage.tsx` — タスク詳細・完了/未完了ボタン・完了スタイル（緑枠・バナー・取り消し線）・`closed_by`表示・子タスク一覧・子タスク作成ボタン。編集ボタンは全ユーザーに表示。直リンク（`/tasks/:id`）対応のため引き続き存在する
 - `src/pages/LinkListPage.tsx` — リンク集一覧ページ。エクスプローラー風ツリー表示。`LinkTreeNode` コンポーネントで再帰レンダリング。フォルダクリックで展開/折りたたみ。リンククリックで別タブを開く。追加ボタンで `LinkFormModal` を開く。削除は作成者のみ表示。フォルダ削除時に「配下の全リンク・フォルダも削除されます」という警告を表示する。作成者のみ「共有」ボタンを表示し、クリックで `fetchLinkPermissions` を呼び出して `PermissionModal` を開く（`ModalMode` に `permission` タイプを追加）
 - `src/pages/CalendarPage.tsx` — カレンダーページ。FullCalendarを使用して予定の表示・作成・編集・削除を提供する。新規作成時は「通常」「複数日付」「繰り返し」の3モードを選択できる。繰り返しグループ予定の編集時は「この予定のみ」「繰り返し全て」の選択ができる。日表示のみタスクを表示し、マウスオーバーでタスク詳細をツールチップ表示する。作成者のみ「共有設定」ボタンで `PermissionModal` を開ける（予定の権限管理）。「代理登録設定」ボタンで `ProxyGrantModal` を開ける（代理登録権限管理）
 - `src/pages/ChatPage.tsx` — チャット画面。左ペイン: ユーザーリスト（最近の会話 + 未会話ユーザー）、右ペイン: メッセージ一覧（自分のメッセージは右寄せ・空色バブル、相手は左寄せ・slate バブル）+ 入力欄。Enter で送信・Shift+Enter で改行。メッセージ更新時に末尾へ自動スクロール
+- `src/api/accountApi.ts` — アカウントAPI通信（`loginRequest`, `registRequest`）。WebAuthn API（`startWebAuthnRegistration`, `finishWebAuthnRegistration`, `startWebAuthnAuthentication`, `finishWebAuthnAuthentication`）を追加
+- `src/hooks/useWebAuthn.ts` — WebAuthn登録・認証フロー管理カスタムフック。`registerWebAuthn(username)`（登録）・`authenticateWithWebAuthn(username)`（認証・JWTをlocalStorageに保存）・`loading`・`error`・`clearError` を提供する
+- `src/pages/WebAuthnRegisterPage.tsx` — 顔認証登録ページ（`/webauthn/register`）。ログイン済みユーザーが生体認証を登録できる
 - `src/api/taskApi.ts` — タスクAPI通信（`fetchTasks`, `fetchTask`, `fetchCategories`, `createTask`, `updateTask`, `toggleTaskCompletion`, `deleteTask`, `getCurrentUsername`）。`Task` インターフェースを定義
 - `src/api/eventApi.ts` — カレンダー予定API通信（`fetchEvents`, `createEvent`, `createMultipleEvents`, `createRepeatEvent`, `updateEvent`, `updateRepeatGroupEvent`, `deleteEvent`, `fetchEventPermissions`, `addEventPermission`, `deleteEventPermission`, `fetchProxyGrantees`, `fetchProxyGranters`, `addProxyGrant`, `deleteProxyGrant`）。`CalendarEvent`（repeat_group_id・color・permissions?含む）・`EventInput`（color?・created_by?含む）・`MultipleEventInput`・`RepeatEventInput`・`UpdateRepeatGroupInput`・`RepeatRule`・`RepeatType`・`EventPermission`・`EventPermissionInput`・`ProxyGrantUser` インターフェースを定義
 - `src/api/linkApi.ts` — リンク集API通信（`fetchLinks`, `createLink`, `updateLink`, `deleteLink`）。`LinkItem` インターフェース（children: LinkItem[] を含む再帰型）・`LinkItemInput` インターフェース・`LinkItemType`（"FOLDER" | "LINK"）を定義
@@ -167,24 +172,54 @@ Prisma config file: `backend/prisma.config.ts` (uses dotenv, loads `prisma/schem
 **Environment variables (`backend/.env`):**
 - `JWT_SECRET` — JWT署名シークレット
 - `FRONTEND_URL` — フロントエンドのベースURL（例: `http://localhost:3000`）
+- `WEBAUTHN_RP_ID` — WebAuthn Relying Party ID（デフォルト: `localhost`）
+- `WEBAUTHN_RP_NAME` — WebAuthn Relying Party Name（デフォルト: `webapp`）
+- `WEBAUTHN_ORIGIN` — WebAuthn 検証対象 Origin（デフォルト: `http://localhost:3000`）
 
 **Schema:**
 
 ```prisma
 model Account {
-  username              String            @id
+  username              String              @id
   hashed_password       String
   task_assignees        TaskAssignee[]
   task_permissions      TaskPermission[]
   link_permissions      LinkPermission[]
   event_permissions     EventPermission[]
-  proxy_grants_given    EventProxyGrant[] @relation("ProxyGranter")
-  proxy_grants_received EventProxyGrant[] @relation("ProxyGrantee")
-  created_tasks         Task[]            @relation("TaskCreator")
-  created_events        Event[]           @relation("EventCreator")
-  created_links         LinkItem[]        @relation("LinkCreator")
-  sent_messages         ChatMessage[]     @relation("ChatSender")
-  received_messages     ChatMessage[]     @relation("ChatReceiver")
+  proxy_grants_given    EventProxyGrant[]   @relation("ProxyGranter")
+  proxy_grants_received EventProxyGrant[]   @relation("ProxyGrantee")
+  created_tasks         Task[]              @relation("TaskCreator")
+  created_events        Event[]             @relation("EventCreator")
+  created_links         LinkItem[]          @relation("LinkCreator")
+  sent_messages         ChatMessage[]       @relation("ChatSender")
+  received_messages     ChatMessage[]       @relation("ChatReceiver")
+  webauthn_credentials  WebAuthnCredential[]
+}
+
+model WebAuthnCredential {
+  id          String   @id                        // credential ID（base64url）
+  username    String
+  public_key  Bytes                               // 公開鍵（COSE形式）
+  counter     Int      @default(0)                // リプレイアタック防止用カウンター
+  device_type String   @default("singleDevice")
+  backed_up   Boolean  @default(false)
+  transports  String?                             // JSON配列シリアライズ
+  created_at  DateTime @default(now())
+  account     Account  @relation(fields: [username], references: [username], onDelete: Cascade)
+
+  @@index([username])
+}
+
+model WebAuthnChallenge {
+  id         String   @id @default(cuid())
+  username   String
+  challenge  String                               // base64url チャレンジ
+  type       String                               // "registration" | "authentication"
+  expires_at DateTime                             // TTL: 5分
+  created_at DateTime @default(now())
+
+  @@index([username])
+  @@index([expires_at])
 }
 
 model Task {

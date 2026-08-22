@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { to: '/calendar', label: 'カレンダー' },
   { to: '/links', label: 'リンク集' },
   { to: '/chat', label: 'チャット' },
+  { to: '/webauthn/register', label: '顔認証設定' },
 ] as const;
 
 interface SidebarProps {

@@ -7,19 +7,46 @@ datasource db {
 }
 
 model Account {
-  username              String              @id
+  username              String                @id
   hashed_password       String
   task_assignees        TaskAssignee[]
-  created_tasks         Task[]              @relation("TaskCreator")
-  created_events        Event[]             @relation("EventCreator")
-  created_links         LinkItem[]          @relation("LinkCreator")
-  sent_messages         ChatMessage[]       @relation("ChatSender")
-  received_messages     ChatMessage[]       @relation("ChatReceiver")
+  created_tasks         Task[]                @relation("TaskCreator")
+  created_events        Event[]               @relation("EventCreator")
+  created_links         LinkItem[]            @relation("LinkCreator")
+  sent_messages         ChatMessage[]         @relation("ChatSender")
+  received_messages     ChatMessage[]         @relation("ChatReceiver")
   task_permissions      TaskPermission[]
   link_permissions      LinkPermission[]
   event_permissions     EventPermission[]
-  proxy_grants_given    EventProxyGrant[]   @relation("ProxyGranter")
-  proxy_grants_received EventProxyGrant[]   @relation("ProxyGrantee")
+  proxy_grants_given    EventProxyGrant[]     @relation("ProxyGranter")
+  proxy_grants_received EventProxyGrant[]     @relation("ProxyGrantee")
+  webauthn_credentials  WebAuthnCredential[]
+}
+
+model WebAuthnCredential {
+  id          String   @id                        // credential ID（base64url）
+  username    String
+  public_key  Bytes                               // 公開鍵（COSE形式）
+  counter     Int      @default(0)                // リプレイアタック防止用カウンター
+  device_type String   @default("singleDevice")   // singleDevice | multiDevice
+  backed_up   Boolean  @default(false)
+  transports  String?                             // JSON配列シリアライズ
+  created_at  DateTime @default(now())
+  account     Account  @relation(fields: [username], references: [username], onDelete: Cascade)
+
+  @@index([username])
+}
+
+model WebAuthnChallenge {
+  id         String   @id @default(cuid())
+  username   String
+  challenge  String                               // base64url チャレンジ
+  type       String                               // "registration" | "authentication"
+  expires_at DateTime                             // TTL: 5分
+  created_at DateTime @default(now())
+
+  @@index([username])
+  @@index([expires_at])
 }
 
 model Task {
