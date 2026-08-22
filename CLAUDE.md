@@ -61,6 +61,7 @@ Layered structure: **Controller → Service → Repository → Prisma**.
 - `src/links/` — リンク集・フォルダ管理・権限管理
 - `src/chat/` — チャット（REST ポーリング、WebSocket不使用）
 - `src/github/` — GitHub OAuth 連携・リポジトリ管理・Issue 取得。`GET /github/oauth/start`（認可URL取得・JwtAuthGuard適用）・`GET /github/oauth/callback`（公開エンドポイント・state パラメータから username を復元してトークンを DB 保存・フロントへリダイレクト）・`GET /github/status`・`GET /github/repos`・`POST /github/repos`・`DELETE /github/repos/:id`・`GET /github/issues`（全連携リポジトリのopenなIssueをGitHub REST API経由で取得・PR除外）。`GitHubToken`（アクセストークン保存）・`GitHubRepository`（連携リポジトリ設定）の2テーブルを管理する
+- `src/voice/` — 音声コマンド。`POST /voice/command`（JwtAuthGuard適用）で音声認識テキストを受け取り、Claude API（`@anthropic-ai/sdk`・モデル: claude-3-5-haiku-20241022）で意図解析して `{ action, params }` 形式のJSONを返す。action種別: `navigate`（画面遷移）・`create_task`（タスク作成）・`complete_task`（タスク完了）・`create_event`（予定作成）・`unknown`（認識不能）。APIキーは環境変数 `ANTHROPIC_API_KEY` で管理。フロントエンドは `useVoiceCommand` フック（`frontend/src/hooks/useVoiceCommand.ts`）と `Sidebar.tsx` のマイクボタンで操作する（Web Speech API・lang: ja-JP）
 - `src/common/` — OwnershipGuard・ハッシュ・ロガー・共通型
 
 ### フロントエンド主要ページ
@@ -80,6 +81,7 @@ Layered structure: **Controller → Service → Repository → Prisma**.
 | `GITHUB_CLIENT_ID` | GitHub OAuth App のクライアントID |
 | `GITHUB_CLIENT_SECRET` | GitHub OAuth App のクライアントシークレット |
 | `GITHUB_CALLBACK_URL` | OAuth コールバック URL（例: `http://localhost:8000/github/oauth/callback`）|
+| `ANTHROPIC_API_KEY` | Claude API キー（音声コマンド機能で使用） |
 
 ## 開発規約
 

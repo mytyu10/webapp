@@ -124,4 +124,8 @@ export const MESSAGE = {
     CONTACTS_FETCH_FAILED: 'チャット相手一覧の取得に失敗しました',
     USERS_FETCH_FAILED: 'ユーザー一覧の取得に失敗しました',
   },
+  VOICE: {
+    COMMAND_FAILED: '音声コマンドの解析に失敗しました',
+    COMMAND_INVALID: '音声コマンドを認識できませんでした',
+  },
 };

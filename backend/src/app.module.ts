@@ -10,6 +10,7 @@ import { CommonModule } from './common/common.module';
 import { LinkModule } from './links/link.module';
 import { ChatModule } from './chat/chat.module';
 import { GitHubModule } from './github/github.module';
+import { VoiceModule } from './voice/voice.module';
 
 /**
  * アプリケーションルートモジュール
@@ -25,6 +26,7 @@ import { GitHubModule } from './github/github.module';
     LinkModule,
     ChatModule,
     GitHubModule,
+    VoiceModule,
   ],
   controllers: [AppController],
   providers: [
