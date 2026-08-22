@@ -4,6 +4,10 @@
 
 - [2026-07-14] チャット機能のリアルタイム更新はWebSocket（Socket.io）ではなくポーリングで実装すること。WebSocketは不安定なため採用しない
 
+### TypeScript・React型付け
+
+- [2026-08-22] `React.FormEvent` には必ず型パラメーターを付与すること（例: `React.FormEvent<HTMLFormElement>`）。型パラメーターの省略は TypeScript の型警告を引き起こす
+
 ### DTO・バリデーション
 
 - [2026-08-22] DTOの `Record<string, unknown>` 型フィールドには必ず `@IsObject()` デコレータを付与すること（class-validatorによるバリデーションが効かなくなるため省略不可）
