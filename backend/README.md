@@ -57,16 +57,3 @@ npx prisma generate           # Prismaクライアント再生成
 ## アーキテクチャ
 
 詳細は **[../detailed-design/02-architecture.md](../detailed-design/02-architecture.md)** を参照。
-
-```
-Controller → Service → Repository → Prisma
-```
-
-- `src/accounts/` — アカウント管理・JWT 認証・WebAuthn（顔認証）
-- `src/tasks/`    — タスク管理・権限管理
-- `src/events/`   — カレンダー予定・権限管理・代理登録
-- `src/links/`    — リンク集・フォルダ管理・権限管理
-- `src/chat/`     — チャット（REST ポーリング）
-- `src/jwt/`      — JWT 生成・認証ガード
-- `src/common/`   — ハッシュサービス・ロガー・共通型・OwnershipGuard
-- `src/prisma/`   — Prisma クライアント singleton

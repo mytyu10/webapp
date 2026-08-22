@@ -119,22 +119,3 @@ npx prisma generate             # Prismaクライアント再生成
 
 > スキーマ・モデル定義 → [detailed-design/03-database.md](detailed-design/03-database.md)
 
----
-
-## ディレクトリ構成
-
-```
-webapp/
-├── backend/              # NestJS バックエンド（ポート 8000）
-│   ├── src/
-│   ├── prisma/           # スキーマ・マイグレーション・SQLiteファイル
-│   ├── .env              # 環境変数（Git管理外）
-│   └── Dockerfile
-├── frontend/             # React フロントエンド（ポート 3000）
-│   ├── src/
-│   └── Dockerfile
-├── detailed-design/      # 詳細設計書
-├── .claude/              # Claude Code エージェント設定
-├── docker-compose.yml
-└── README.md
-```

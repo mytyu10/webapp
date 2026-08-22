@@ -27,42 +27,6 @@ npm run build        # 本番ビルド
 | `REACT_APP_API_HOST` | バックエンドホスト | `localhost` |
 | `REACT_APP_API_PORT` | バックエンドポート | `8000` |
 
-## ディレクトリ構成
-
-```
-src/
-├── App.tsx                  # ルーター定義
-├── api/                     # バックエンド API 通信
-│   ├── accountApi.ts
-│   ├── taskApi.ts
-│   ├── eventApi.ts
-│   ├── linkApi.ts
-│   ├── permissionApi.ts
-│   └── chatApi.ts
-├── hooks/                   # カスタムフック
-│   ├── useTaskList.ts
-│   ├── useTaskForm.ts
-│   ├── useTaskDetail.ts
-│   ├── useCalendar.ts
-│   ├── useLinkList.ts
-│   ├── useLinkForm.ts
-│   ├── useChat.ts
-│   ├── useWebAuthn.ts
-│   └── useIsMobile.ts
-├── pages/                   # ページコンポーネント
-│   ├── LoginPage.tsx
-│   ├── TaskListPage.tsx
-│   ├── TaskFormPage.tsx
-│   ├── TaskDetailPage.tsx
-│   ├── CalendarPage.tsx
-│   ├── LinkListPage.tsx
-│   ├── ChatPage.tsx
-│   └── WebAuthnRegisterPage.tsx
-├── components/              # 共通コンポーネント
-├── validation/              # フォームバリデーション
-└── types/                   # 型定義
-```
-
 ## アーキテクチャ
 
 詳細は **[../detailed-design/05-frontend.md](../detailed-design/05-frontend.md)** を参照。
