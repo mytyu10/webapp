@@ -31,22 +31,23 @@ export class CreateTaskDto {
   title: string;
 
   /** タスク説明文 */
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'タスク説明文（1000文字以内）',
     example: '月次レポートの作成と提出',
   })
   @IsString()
-  @IsNotEmpty({ message: '説明文を入力してください' })
   @MaxLength(1000, { message: '説明文は1000文字以内で入力してください' })
-  description: string;
+  @IsOptional()
+  description?: string;
 
   /** タスク期限（ISO8601形式） */
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'タスク期限（ISO8601形式）',
     example: '2026-08-01T12:00:00.000Z',
   })
   @IsDateString({}, { message: '正しい日時形式で入力してください' })
-  due_date: string;
+  @IsOptional()
+  due_date?: string;
 
   /** 担当者ユーザー名リスト */
   @ApiPropertyOptional({
@@ -170,7 +171,7 @@ export interface TaskResponseDto {
   id: number;
   title: string;
   description: string;
-  due_date: string;
+  due_date: string | null;
   priority: Priority;
   category: string | null;
   parent_id: number | null;

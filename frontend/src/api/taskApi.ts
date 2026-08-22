@@ -31,7 +31,7 @@ export interface Task {
   id: number;
   title: string;
   description: string;
-  due_date: string;
+  due_date: string | null;
   priority: Priority;
   category: string | null;
   parent_id: number | null;
@@ -48,9 +48,9 @@ export interface Task {
 /** タスク作成・更新リクエスト型 */
 export interface TaskInput {
   title: string;
-  description: string;
-  due_date: string;
-  assignees: string[];
+  description?: string;
+  due_date?: string;
+  assignees?: string[];
   priority?: Priority;
   category?: string;
   parent_id?: number;

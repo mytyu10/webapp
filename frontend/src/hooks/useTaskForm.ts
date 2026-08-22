@@ -134,10 +134,13 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
       try {
         logger.info(CONTEXT, `既存タスク読み込み: id=${id}`);
         const task = await fetchTask(id);
-        /** due_dateをdatetime-local inputに合わせてYYYY-MM-DDThh:mm形式に変換 */
-        const localDate = new Date(task.due_date);
-        const pad = (n: number): string => String(n).padStart(2, '0');
-        const formattedDate = `${localDate.getFullYear()}-${pad(localDate.getMonth() + 1)}-${pad(localDate.getDate())}T${pad(localDate.getHours())}:${pad(localDate.getMinutes())}`;
+        /** due_dateをdatetime-local inputに合わせてYYYY-MM-DDThh:mm形式に変換（nullの場合は空文字） */
+        let formattedDate = '';
+        if (task.due_date) {
+          const localDate = new Date(task.due_date);
+          const pad = (n: number): string => String(n).padStart(2, '0');
+          formattedDate = `${localDate.getFullYear()}-${pad(localDate.getMonth() + 1)}-${pad(localDate.getDate())}T${pad(localDate.getHours())}:${pad(localDate.getMinutes())}`;
+        }
 
         setValues({
           title: task.title,
@@ -202,9 +205,9 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
       if (isEditMode && id !== undefined) {
         const input = {
           title: values.title,
-          description: values.description,
-          due_date: new Date(values.due_date).toISOString(),
-          assignees: values.assignees,
+          description: values.description || undefined,
+          due_date: values.due_date ? new Date(values.due_date).toISOString() : undefined,
+          assignees: values.assignees.length > 0 ? values.assignees : undefined,
           priority: values.priority,
           category: values.category || undefined,
         };
@@ -214,9 +217,9 @@ export function useTaskForm({ id, parentId }: UseTaskFormOptions = {}): UseTaskF
       } else {
         const input = {
           title: values.title,
-          description: values.description,
-          due_date: new Date(values.due_date).toISOString(),
-          assignees: values.assignees,
+          description: values.description || undefined,
+          due_date: values.due_date ? new Date(values.due_date).toISOString() : undefined,
+          assignees: values.assignees.length > 0 ? values.assignees : undefined,
           priority: values.priority,
           category: values.category || undefined,
           parent_id: parentId,
