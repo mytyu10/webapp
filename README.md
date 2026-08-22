@@ -1,6 +1,6 @@
 # webapp
 
-タスク管理・カレンダー・LINE通知機能を持つフルスタックWebアプリケーション。
+タスク管理・カレンダー・リンク集・チャット・顔認証（WebAuthn）機能を持つフルスタック Web アプリケーション。
 React フロントエンド + NestJS バックエンド + SQLite で構成される。
 
 ## ドキュメント
@@ -26,7 +26,7 @@ docker compose up
 | サービス | URL |
 |---------|-----|
 | Frontend | http://localhost:3001 |
-| Backend | http://localhost:8001 |
+| Backend  | http://localhost:8001 |
 
 > ポートマッピング詳細 → [detailed-design/07-docker.md](detailed-design/07-docker.md)
 
@@ -41,7 +41,7 @@ docker compose down -v     # 停止＋DBデータ削除
 
 ### ローカル（Docker不使用）
 
-前提: Node.js 18以上、`backend/.env` が設定済みであること。
+前提: Node.js 20以上、`backend/.env` が設定済みであること。
 
 **バックエンド起動**
 
@@ -63,7 +63,7 @@ npm start
 | サービス | URL |
 |---------|-----|
 | Frontend | http://localhost:3000 |
-| Backend | http://localhost:8000 |
+| Backend  | http://localhost:8000 |
 
 > 環境変数の設定内容 → [detailed-design/01-overview.md](detailed-design/01-overview.md#環境変数)
 
@@ -134,6 +134,7 @@ webapp/
 │   ├── src/
 │   └── Dockerfile
 ├── detailed-design/      # 詳細設計書
+├── .claude/              # Claude Code エージェント設定
 ├── docker-compose.yml
 └── README.md
 ```
