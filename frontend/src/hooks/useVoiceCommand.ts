@@ -225,6 +225,12 @@ export function useVoiceCommand(onSuccess?: () => void): UseVoiceCommandReturn {
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       logger.warn(CONTEXT, `音声認識エラー: ${event.error}`);
+      if (event.error === 'aborted') {
+        // Chrome の初回マイク初期化タイミング問題。自動リトライする
+        logger.info(CONTEXT, '音声認識 aborted: リトライします');
+        setTimeout(() => recognition.start(), 100);
+        return;
+      }
       if (event.error === 'no-speech') {
         setError('音声が認識されませんでした。もう一度お試しください');
       } else if (event.error === 'not-allowed') {
