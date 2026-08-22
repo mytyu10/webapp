@@ -90,7 +90,7 @@ function ProfilePage() {
     }
   }, [searchParams, setSearchParams]);
 
-  async function handleSave(e: React.FormEvent): Promise<void> {
+  async function handleSave(e: React.FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
     setProfileSuccess('');
     setProfileError('');
@@ -124,7 +124,7 @@ function ProfilePage() {
     }
   }
 
-  async function handleAddRepo(e: React.FormEvent): Promise<void> {
+  async function handleAddRepo(e: React.FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
     const owner = repoOwner.trim();
     const repo = repoName.trim();
