@@ -32,6 +32,18 @@ import type {
 
 const CONTEXT = 'AccountsController';
 
+/**
+ * 認証系エンドポイントのレートリミット設定
+ * 通常: 1分間に5リクエストまで
+ * E2E テスト環境（THROTTLE_LIMIT 環境変数あり）: 環境変数の値を使用
+ */
+const AUTH_THROTTLE_LIMIT = process.env.THROTTLE_LIMIT
+  ? parseInt(process.env.THROTTLE_LIMIT, 10)
+  : 5;
+const AUTH_THROTTLE_TTL = process.env.THROTTLE_TTL
+  ? parseInt(process.env.THROTTLE_TTL, 10)
+  : 60000;
+
 @Controller('accounts')
 export class AccountsController {
   constructor(
@@ -43,10 +55,10 @@ export class AccountsController {
   /**
    * ログインエンドポイント
    * 認証成功時はJWTトークンを返す
-   * レートリミット: 1分間に5リクエストまで
+   * レートリミット: 通常1分間に5リクエストまで（THROTTLE_LIMIT 環境変数で変更可）
    */
   @Post('login')
-  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @Throttle({ default: { ttl: AUTH_THROTTLE_TTL, limit: AUTH_THROTTLE_LIMIT } })
   async checkAccount(
     @Body() account: AccountDto,
     @Res() response: Response,
@@ -69,10 +81,10 @@ export class AccountsController {
   /**
    * アカウント登録エンドポイント
    * 重複ユーザー名は409、登録成功は201を返す
-   * レートリミット: 1分間に5リクエストまで
+   * レートリミット: 通常1分間に5リクエストまで（THROTTLE_LIMIT 環境変数で変更可）
    */
   @Post('regist')
-  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @Throttle({ default: { ttl: AUTH_THROTTLE_TTL, limit: AUTH_THROTTLE_LIMIT } })
   async registAccount(
     @Body() account: AccountDto,
     @Res() response: Response,
@@ -143,10 +155,10 @@ export class AccountsController {
 
   /**
    * 顔認証登録開始
-   * レートリミット: 1分間に5リクエストまで
+   * レートリミット: 通常1分間に5リクエストまで（THROTTLE_LIMIT 環境変数で変更可）
    */
   @Post('webauthn/registration/start')
-  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @Throttle({ default: { ttl: AUTH_THROTTLE_TTL, limit: AUTH_THROTTLE_LIMIT } })
   async webAuthnRegistrationStart(
     @Body() dto: WebAuthnRegistrationStartDto,
     @Res() response: Response,
@@ -158,10 +170,10 @@ export class AccountsController {
 
   /**
    * 顔認証登録完了
-   * レートリミット: 1分間に5リクエストまで
+   * レートリミット: 通常1分間に5リクエストまで（THROTTLE_LIMIT 環境変数で変更可）
    */
   @Post('webauthn/registration/finish')
-  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @Throttle({ default: { ttl: AUTH_THROTTLE_TTL, limit: AUTH_THROTTLE_LIMIT } })
   async webAuthnRegistrationFinish(
     @Body() dto: WebAuthnRegistrationFinishDto,
     @Res() response: Response,
@@ -178,10 +190,10 @@ export class AccountsController {
 
   /**
    * 顔認証開始
-   * レートリミット: 1分間に5リクエストまで
+   * レートリミット: 通常1分間に5リクエストまで（THROTTLE_LIMIT 環境変数で変更可）
    */
   @Post('webauthn/authentication/start')
-  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @Throttle({ default: { ttl: AUTH_THROTTLE_TTL, limit: AUTH_THROTTLE_LIMIT } })
   async webAuthnAuthenticationStart(
     @Body() dto: WebAuthnAuthenticationStartDto,
     @Res() response: Response,
@@ -195,10 +207,10 @@ export class AccountsController {
 
   /**
    * 顔認証完了
-   * レートリミット: 1分間に5リクエストまで
+   * レートリミット: 通常1分間に5リクエストまで（THROTTLE_LIMIT 環境変数で変更可）
    */
   @Post('webauthn/authentication/finish')
-  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @Throttle({ default: { ttl: AUTH_THROTTLE_TTL, limit: AUTH_THROTTLE_LIMIT } })
   async webAuthnAuthenticationFinish(
     @Body() dto: WebAuthnAuthenticationFinishDto,
     @Res() response: Response,

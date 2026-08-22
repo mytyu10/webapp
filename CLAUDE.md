@@ -29,6 +29,22 @@ npm run build         # production build
 npm test              # interactive test runner
 ```
 
+### Playwright E2E テスト (`cd e2e`)
+
+```bash
+npm test              # ヘッドレスで全テスト実行
+npm run test:headed   # ブラウザ表示ありで実行
+npm run test:ui       # Playwright UI モードで実行
+npm run test:debug    # デバッグモードで実行
+npm run report        # テストレポートを開く
+```
+
+事前準備:
+1. `cd backend && npm run build` — バックエンドをビルド
+2. `cd frontend && REACT_APP_API_SCHEME=http REACT_APP_API_HOST=localhost REACT_APP_API_PORT=8000 CI=false npm run build` — フロントエンドをビルド
+3. `cd backend && DATABASE_URL="file:./prisma/playwright-test.db" npx prisma migrate deploy` — テスト用DBを作成
+4. `cd e2e && DATABASE_URL="file:../backend/prisma/playwright-test.db" JWT_SECRET="..." THROTTLE_LIMIT=100 npm test`
+
 ### Database (from `backend/`)
 
 ```bash
@@ -43,8 +59,9 @@ npx prisma generate           # regenerate Prisma client
 ワークフローファイル: `.github/workflows/ci.yml`
 
 - **トリガー**: `push`（全ブランチ）、`pull_request`（main/develop）
-- **backend ジョブ**: lint → build → unit test → prisma migrate deploy → E2E test
+- **backend ジョブ**: lint → build → unit test → prisma migrate deploy → E2E test（Jest/supertest）
 - **frontend ジョブ**: build → test（`--watchAll=false --ci`）
+- **playwright ジョブ**: backend・frontend 完了後に実行。Chromium でブラウザ操作テスト。レポートを artifact として保存
 - E2E テスト用 env（`DATABASE_URL=file:./test.db`）は GitHub Actions の `env:` で設定
 
 ## Architecture
@@ -60,26 +77,35 @@ Layered structure: **Controller → Service → Repository → Prisma**.
 - `src/events/` — カレンダー予定・繰り返し・権限・代理登録
 - `src/links/` — リンク集・フォルダ管理・権限管理
 - `src/chat/` — チャット（REST ポーリング、WebSocket不使用）
-- `src/github/` — GitHub OAuth 連携・リポジトリ管理・Issue 取得。`GET /github/oauth/start`（認可URL取得・JwtAuthGuard適用）・`GET /github/oauth/callback`（公開エンドポイント・state パラメータから username を復元してトークンを DB 保存・フロントへリダイレクト）・`GET /github/status`・`GET /github/repos`・`POST /github/repos`・`DELETE /github/repos/:id`・`GET /github/issues`（全連携リポジトリのopenなIssueをGitHub REST API経由で取得・PR除外）。`GitHubToken`（アクセストークン保存）・`GitHubRepository`（連携リポジトリ設定）の2テーブルを管理する
-- `src/common/` — OwnershipGuard・ハッシュ・ロガー・共通型
+- `src/github/` — GitHub OAuth 連携・リポジトリ管理・Issue 取得。`GET /github/oauth/start`（認可URL取得・JwtAuthGuard適用）・`GET /github/oauth/callback`（公開エンドポイント・state パラメータから username を復元してトークンを DB 保存・フロントへリダイレクト）・`GET /github/status`・`GET /github/repos`・`POST /github/repos`・`DELETE /github/repos/:id`・`GET /github/issues`（全連携リポジトリのopenなIssueをGitHub REST API経由で取得・PR除外）。`GitHubToken`（アクセストークン保存）・`GitHubRepository`（連携リポジトリ設定）の2テーブルを管理する。`GitHubService`・`GitHubRepository` は `exports` に追加済みで他モジュールからの DI が可能
+- `src/log/` — フロントエンドログ収集。`POST /log`（JwtAuthGuard適用）でフロントエンドの warn/error ログを受け取り `logs/app.log` に Winston でファイル書き出しする。error レベルのとき GitHub Issue を自動起票する（GitHubToken・GitHubRepository を利用）。重複起票防止（同タイトルの open Issue が既存なら起票しない）。GitHub 未連携・リポジトリ未登録の場合はスキップ
+- `src/voice/` — 音声コマンド。`POST /voice/command`（JwtAuthGuard適用）で音声認識テキストを受け取り、Claude API（`@anthropic-ai/sdk`・モデル: claude-3-5-haiku-20241022）で意図解析して `{ action, params }` 形式のJSONを返す。action種別: `navigate`（画面遷移）・`create_task`（タスク作成）・`complete_task`（タスク完了）・`create_event`（予定作成）・`unknown`（認識不能）。APIキーは環境変数 `ANTHROPIC_API_KEY` で管理。フロントエンドは `useVoiceCommand` フック（`frontend/src/hooks/useVoiceCommand.ts`）と `Sidebar.tsx` のマイクボタンで操作する（Web Speech API・lang: ja-JP）
+- `src/common/` — OwnershipGuard・ハッシュ・ロガー（Winston）・共通型
 
 ### フロントエンド主要ページ
 
 - `/profile` — `ProfilePage.tsx`。`PATCH /accounts/me` で display_name を更新。GitHub 連携セクション（連携ボタン・リポジトリ追加・削除 UI）も提供する。OAuth コールバック後は `?github=success|error` クエリパラメータで結果を表示する
 - `/tasks` — `TaskListPage.tsx`。タスク一覧の下に `GitHubIssueSection` コンポーネントで GitHub Issues を別セクション表示する。`useGitHubIssues` フックで連携状態・リポジトリ・Issue を管理する
 
+### フロントエンド API・ユーティリティ
+
+- `src/api/logApi.ts` — ログ送信 API（`sendLog(level, context, message)`）。JWT がない場合はスキップ。失敗はサイレント処理
+- `src/logger.ts` — アプリケーション共通ロガー。warn/error 呼び出し時に `sendLog` を非同期でバックエンドに送信する。失敗はユーザーに見せない
+
 ### 環境変数 (`backend/.env`)
 
 | 変数名 | 説明 |
 |--------|------|
 | `JWT_SECRET` | JWT署名シークレット |
-| `FRONTEND_URL` | フロントエンドのベースURL |
+| `FRONTEND_URL` | フロントエンドのベースURL（CORS・WebAuthn Origin・OAuthリダイレクトに使用）|
+| `BACKEND_URL` | バックエンドのベースURL（GitHub OAuthコールバックURLの生成に使用）|
 | `WEBAUTHN_RP_ID` | WebAuthn Relying Party ID（デフォルト: `localhost`）|
 | `WEBAUTHN_RP_NAME` | WebAuthn Relying Party Name（デフォルト: `webapp`）|
-| `WEBAUTHN_ORIGIN` | WebAuthn 検証対象 Origin（デフォルト: `http://localhost:3000`）|
 | `GITHUB_CLIENT_ID` | GitHub OAuth App のクライアントID |
 | `GITHUB_CLIENT_SECRET` | GitHub OAuth App のクライアントシークレット |
-| `GITHUB_CALLBACK_URL` | OAuth コールバック URL（例: `http://localhost:8000/github/oauth/callback`）|
+| `ANTHROPIC_API_KEY` | Claude API キー（音声コマンド機能で使用） |
+| `THROTTLE_LIMIT` | レートリミット上限数（E2Eテスト時は 100 程度に設定して緩和する） |
+| `THROTTLE_TTL` | レートリミット時間窓(ms)（E2Eテスト時は 1000 程度に設定して緩和する） |
 
 ## 開発規約
 
@@ -111,9 +137,11 @@ Layered structure: **Controller → Service → Repository → Prisma**.
 - OwnershipGuard: タスク（作成者 or 担当者 or WRITE権限）、リンク（作成者 or WRITE権限）、予定GET（作成者 or READ/WRITE権限）、予定PATCH/DELETE（作成者 or WRITE権限）。未存在は404・権限なしは403
 - GitHub OAuth コールバックは JWT なしのブラウザリダイレクトで呼ばれるため JwtAuthGuard を使わない。state パラメータに username を Base64 エンコードして渡す
 - チャットは REST API のみ。WebSocket（Socket.io）は使用しない
-- Rate limiting: ThrottlerModule グローバル（1分20回）。login/regist/WebAuthn エンドポイント: 1分5回
+- Rate limiting: ThrottlerModule グローバル（1分20回）。login/regist/WebAuthn エンドポイント: 1分5回。`THROTTLE_LIMIT` / `THROTTLE_TTL` 環境変数で上書き可能（E2E テスト時に使用）
 - Backend ESLint: `no-explicit-any` 無効、`no-floating-promises` / `no-unsafe-argument` 警告
 - Prettier: single quotes, trailing commas
 - Backend `tsconfig.json`: `noImplicitAny: false`, module resolution `nodenext`
 - Swagger: `GET /api/docs`
-- E2E tests: `backend/test/app.e2e-spec.ts`。`ThrottlerGuard` を `overrideGuard` でモック
+- E2E tests（API）: `backend/test/app.e2e-spec.ts`。`ThrottlerGuard` を `overrideGuard` でモック
+- E2E tests（ブラウザ）: `e2e/` ディレクトリ。`@playwright/test` でブラウザ操作テスト。テストファイルは `e2e/tests/*.spec.ts`
+- LoggerService は NestJS Logger ではなく Winston を使用。warn/error レベルのみ `logs/app.log` にファイル出力する

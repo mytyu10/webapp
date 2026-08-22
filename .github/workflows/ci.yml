@@ -164,3 +164,151 @@ jobs:
               "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
             gh issue create --title "$TITLE" --body "$BODY" --label "bug" --label "ci-failure"
           fi
+
+  playwright:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # バックエンドとフロントエンドのビルドが成功してから実行する
+    needs: [backend, frontend]
+
+    env:
+      JWT_SECRET: test-secret-for-ci
+      DATABASE_URL: file:./prisma/e2e-playwright.db
+      FRONTEND_URL: http://localhost:3000
+      BACKEND_URL: http://localhost:8000
+      CI: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+            e2e/package-lock.json
+
+      # --- バックエンドのセットアップ ---
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Generate Prisma Client
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+
+      - name: Reset Playwright E2E database
+        working-directory: backend
+        run: rm -f prisma/e2e-playwright.db
+
+      - name: Apply Prisma migrations
+        working-directory: backend
+        run: npx prisma migrate deploy
+
+      # --- フロントエンドのセットアップ ---
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          REACT_APP_API_SCHEME: http
+          REACT_APP_API_HOST: localhost
+          REACT_APP_API_PORT: "8000"
+          GENERATE_SOURCEMAP: "false"
+        run: npm run build
+
+      # --- バックエンドをバックグラウンドで起動 ---
+      - name: Start backend server
+        working-directory: backend
+        run: npm run start:prod &
+        env:
+          JWT_SECRET: test-secret-for-ci
+          DATABASE_URL: file:./prisma/e2e-playwright.db
+          FRONTEND_URL: http://localhost:3000
+          BACKEND_URL: http://localhost:8000
+          THROTTLE_LIMIT: "100"
+          THROTTLE_TTL: "1000"
+
+      # --- フロントエンドをプロダクションビルドで serve ---
+      - name: Install serve
+        run: npm install -g serve
+
+      - name: Start frontend server
+        working-directory: frontend
+        run: serve -s build -l 3000 &
+
+      # --- サーバーが起動するまで待機 ---
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8000/api/docs > /dev/null 2>&1; then
+              echo "Backend is ready"
+              break
+            fi
+            echo "Waiting for backend... ($i/30)"
+            sleep 2
+          done
+
+      - name: Wait for frontend
+        run: |
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:3000 > /dev/null 2>&1; then
+              echo "Frontend is ready"
+              break
+            fi
+            echo "Waiting for frontend... ($i/30)"
+            sleep 2
+          done
+
+      # --- Playwright のセットアップとテスト実行 ---
+      - name: Install Playwright dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - id: playwright
+        name: Run Playwright tests
+        working-directory: e2e
+        run: npx playwright test
+
+      # --- テスト結果を artifact として保存 ---
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+
+      - name: CI障害をGitHub Issueに起票する
+        if: failure() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          TITLE="[CI Failure] Playwright E2E: ${{ github.ref_name }} @ ${SHORT_SHA}"
+
+          gh label create "ci-failure" --color "#7c3aed" --description "CI pipeline 失敗" --force 2>/dev/null || true
+
+          EXISTING=$(gh issue list --state open --search "in:title [CI Failure] Playwright" --json number --jq length 2>/dev/null || echo "0")
+          if [ "$EXISTING" = "0" ]; then
+            BODY=$(printf "## CI 障害レポート\n\n**ジョブ**: Playwright E2E\n**ブランチ**: \`%s\`\n**コミット**: \`%s\`\n**実行ログ**: %s\n\n*このIssueはGitHub Actionsにより自動起票されました*" \
+              "${{ github.ref_name }}" \
+              "${{ github.sha }}" \
+              "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+            gh issue create --title "$TITLE" --body "$BODY" --label "bug" --label "ci-failure"
+          fi

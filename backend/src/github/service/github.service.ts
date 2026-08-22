@@ -123,13 +123,11 @@ export class GitHubService {
    */
   getOAuthUrl(username: string): string {
     const clientId = process.env.GITHUB_CLIENT_ID;
-    const callbackUrl = process.env.GITHUB_CALLBACK_URL;
+    const backendUrl = process.env.BACKEND_URL ?? 'http://localhost:8000';
+    const callbackUrl = `${backendUrl}/github/oauth/callback`;
 
-    if (!clientId || !callbackUrl) {
-      this.logger.error(
-        CONTEXT,
-        'GITHUB_CLIENT_ID または GITHUB_CALLBACK_URL が未設定です',
-      );
+    if (!clientId) {
+      this.logger.error(CONTEXT, 'GITHUB_CLIENT_ID が未設定です');
       throw new InternalServerErrorException(MESSAGE.GITHUB.OAUTH_URL_FAILED);
     }
 
@@ -163,9 +161,10 @@ export class GitHubService {
 
     const clientId = process.env.GITHUB_CLIENT_ID;
     const clientSecret = process.env.GITHUB_CLIENT_SECRET;
-    const callbackUrl = process.env.GITHUB_CALLBACK_URL;
+    const backendUrl = process.env.BACKEND_URL ?? 'http://localhost:8000';
+    const callbackUrl = `${backendUrl}/github/oauth/callback`;
 
-    if (!clientId || !clientSecret || !callbackUrl) {
+    if (!clientId || !clientSecret) {
       this.logger.error(CONTEXT, 'GitHub OAuth 環境変数が未設定です');
       throw new InternalServerErrorException(MESSAGE.GITHUB.CALLBACK_FAILED);
     }
@@ -322,5 +321,60 @@ export class GitHubService {
     );
 
     return results;
+  }
+
+  /**
+   * 指定リポジトリの open な Issue タイトル一覧を取得する（重複チェック用）
+   * PR は除外する
+   */
+  async findOpenIssueTitles(
+    accessToken: string,
+    owner: string,
+    repo: string,
+  ): Promise<string[]> {
+    const issues = await httpsGet<GitHubIssueRaw[]>(
+      GITHUB_API_BASE,
+      `/repos/${owner}/${repo}/issues?state=open&per_page=100`,
+      {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+        'User-Agent': 'webapp-github-integration',
+      },
+    );
+
+    if (!Array.isArray(issues)) return [];
+    return issues
+      .filter((issue) => !issue.pull_request)
+      .map((issue) => issue.title);
+  }
+
+  /**
+   * 指定リポジトリに GitHub Issue を起票する
+   * ラベルは bug・frontend-error を付与する
+   */
+  async createIssue(
+    accessToken: string,
+    owner: string,
+    repo: string,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    const payload = JSON.stringify({
+      title,
+      body,
+      labels: ['bug', 'frontend-error'],
+    });
+
+    await httpsPost<unknown>(
+      GITHUB_API_BASE,
+      `/repos/${owner}/${repo}/issues`,
+      payload,
+      {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'webapp-github-integration',
+      },
+    );
   }
 }

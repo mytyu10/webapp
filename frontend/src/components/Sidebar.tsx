@@ -1,6 +1,7 @@
 import { NavLink, useNavigate, Link } from 'react-router-dom';
 import { logger } from '../logger';
 import { useMe } from '../hooks/useMe';
+import { useVoiceCommand, isSpeechRecognitionSupported } from '../hooks/useVoiceCommand';
 
 const CONTEXT = 'Sidebar';
 
@@ -29,6 +30,16 @@ interface SidebarProps {
 function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const navigate = useNavigate();
   const { me } = useMe();
+  const {
+    isListening,
+    isProcessing,
+    error: voiceError,
+    startListening,
+    stopListening,
+    clearError,
+  } = useVoiceCommand();
+
+  const speechSupported = isSpeechRecognitionSupported();
 
   /**
    * ログアウト処理
@@ -38,6 +49,16 @@ function Sidebar({ isOpen, onToggle }: SidebarProps) {
     logger.info(CONTEXT, 'ログアウト処理実行');
     localStorage.removeItem('token');
     navigate('/login');
+  }
+
+  /** マイクボタンのクリック処理 */
+  function handleMicClick(): void {
+    if (voiceError) clearError();
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
   }
 
   return (
@@ -110,6 +131,44 @@ function Sidebar({ isOpen, onToggle }: SidebarProps) {
         </nav>
 
         <div className="px-2 sm:px-3 py-2 sm:py-4 sm:border-t border-slate-700 flex flex-col gap-2 items-start shrink-0 min-w-0">
+          {/* 音声コマンドボタン（Web Speech API 対応ブラウザのみ表示） */}
+          {speechSupported && (
+            <div className="w-full">
+              <button
+                type="button"
+                onClick={handleMicClick}
+                disabled={isProcessing}
+                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap w-full ${
+                  isListening
+                    ? 'bg-red-700 text-white animate-pulse'
+                    : isProcessing
+                      ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+                aria-label={isListening ? '録音停止' : '音声コマンド'}
+              >
+                {isProcessing ? (
+                  <span className="inline-block w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                ) : (
+                  <span aria-hidden="true">{isListening ? '■' : '🎤'}</span>
+                )}
+                <span>
+                  {isListening
+                    ? '録音中...'
+                    : isProcessing
+                      ? '解析中...'
+                      : '音声コマンド'}
+                </span>
+              </button>
+              {/* エラー表示 */}
+              {voiceError && (
+                <p className="mt-1 px-3 text-xs text-red-400 break-words max-w-full">
+                  {voiceError}
+                </p>
+              )}
+            </div>
+          )}
+
           <button
             type="button"
             onClick={handleLogout}

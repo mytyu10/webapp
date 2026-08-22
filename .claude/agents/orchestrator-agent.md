@@ -60,6 +60,9 @@ plan-creator-agent に以下のフォーマットで委譲する:
 ```
 ## ユーザーの依頼
 <依頼内容をそのまま記載>
+
+## 関連Issue番号（任意）
+<ユーザーが明示した場合のみ記載。例: 42>
 ```
 
 ### 2. plan-review-agent への委譲
@@ -259,6 +262,25 @@ commit-agent に以下のフォーマットで委譲する:
 ## 実装内容のサマリー
 <何を実装したかの概要>
 ```
+
+commit-agent のコミット完了後、関連 Issue 番号が指定されている場合はブランチをプッシュして PR を作成する:
+
+```bash
+git push -u origin <現在のブランチ名>
+
+gh pr create \
+  --title "<feat/fix>: <機能名>" \
+  --base develop \
+  --body "$(cat <<'EOF'
+## 概要
+<実装内容サマリー>
+
+Closes #<Issue番号>
+EOF
+)"
+```
+
+関連 Issue 番号がない場合はこのステップをスキップする。
 
 ### 10. 完了報告
 

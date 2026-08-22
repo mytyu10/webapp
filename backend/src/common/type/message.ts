@@ -48,6 +48,9 @@ export const MESSAGE = {
       'リポジトリ名の形式が無効です（owner/repo 形式で指定してください）',
     STATUS_FETCH_FAILED: 'GitHub連携状態の取得に失敗しました',
   },
+  LOG: {
+    RECEIVE_FAILED: 'ログの受け取りに失敗しました',
+  },
   TASK: {
     CREATE_SUCCESS: 'タスクを作成しました',
     QUEUE_UPDATE_SUCCESS: 'タスクをキューで処理し更新しました',
@@ -123,5 +126,9 @@ export const MESSAGE = {
     FETCH_FAILED: 'メッセージの取得に失敗しました',
     CONTACTS_FETCH_FAILED: 'チャット相手一覧の取得に失敗しました',
     USERS_FETCH_FAILED: 'ユーザー一覧の取得に失敗しました',
+  },
+  VOICE: {
+    COMMAND_FAILED: '音声コマンドの解析に失敗しました',
+    COMMAND_INVALID: '音声コマンドを認識できませんでした',
   },
 };
