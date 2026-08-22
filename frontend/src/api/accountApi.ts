@@ -91,6 +91,34 @@ export async function fetchMe(): Promise<AccountMe> {
   return response.json();
 }
 
+/**
+ * ログインユーザーのプロフィール更新APIリクエスト
+ * display_name を更新して最新のユーザー情報を返す
+ */
+export async function updateMe(displayName: string | null): Promise<AccountMe> {
+  logger.info(CONTEXT, 'プロフィール更新リクエスト送信');
+
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_BASE}/accounts/me`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ display_name: displayName }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = data.message || 'プロフィールの更新に失敗しました。';
+    logger.warn(CONTEXT, `プロフィール更新失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, 'プロフィール更新成功');
+  return response.json();
+}
+
 // ─── WebAuthn API ─────────────────────────────────────────────────────────────
 
 /**

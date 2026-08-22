@@ -1,9 +1,18 @@
-import { Body, Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Patch,
+  Post,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AccountService } from 'src/accounts/service/account.service';
 import { WebAuthnService } from 'src/accounts/service/webauthn.service';
 import { AccountDto } from 'src/accounts/dto/account';
+import { UpdateMeDto } from 'src/accounts/dto/account.dto';
 import {
   WebAuthnRegistrationStartDto,
   WebAuthnRegistrationFinishDto,
@@ -106,6 +115,28 @@ export class AccountsController {
     this.logger.log(CONTEXT, 'ユーザー情報取得リクエスト');
     const me = await this.accountService.getMe(currentUser.username);
     return response.status(HttpStatus.OK).json(me);
+  }
+
+  /**
+   * ログインユーザーのプロフィール更新エンドポイント
+   * display_name を更新して最新のユーザー情報を返す
+   */
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  async updateMe(
+    @CurrentUser() currentUser: JwtPayload,
+    @Body() dto: UpdateMeDto,
+    @Res() response: Response,
+  ): Promise<Response> {
+    this.logger.log(
+      CONTEXT,
+      `プロフィール更新リクエスト: ${currentUser.username}`,
+    );
+    const me = await this.accountService.updateMe(currentUser.username, dto);
+    this.logger.log(CONTEXT, `プロフィール更新成功: ${currentUser.username}`);
+    return response
+      .status(HttpStatus.OK)
+      .json({ ...me, message: MESSAGE.AUTH.UPDATE_ME_SUCCESS });
   }
 
   // ─── WebAuthn エンドポイント ───────────────────────────────────────────────

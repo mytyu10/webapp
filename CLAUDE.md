@@ -55,12 +55,16 @@ Layered structure: **Controller → Service → Repository → Prisma**.
 
 ### 主要モジュール
 
-- `src/accounts/` — アカウント管理・JWT 認証・WebAuthn（顔認証）
+- `src/accounts/` — アカウント管理・JWT 認証・WebAuthn（顔認証）。`GET /accounts/me`（ログインユーザー情報取得）・`PATCH /accounts/me`（display_name 更新）を提供。`UpdateMeDto`（`display_name?: string | null`）で入力検証
 - `src/tasks/` — タスク管理・権限管理
 - `src/events/` — カレンダー予定・繰り返し・権限・代理登録
 - `src/links/` — リンク集・フォルダ管理・権限管理
 - `src/chat/` — チャット（REST ポーリング、WebSocket不使用）
 - `src/common/` — OwnershipGuard・ハッシュ・ロガー・共通型
+
+### フロントエンド主要ページ
+
+- `/profile` — `ProfilePage.tsx`。`PATCH /accounts/me` で display_name を更新。保存後に `useMe().refetch()` でサイドバーの表示名を更新する
 
 ### 環境変数 (`backend/.env`)
 

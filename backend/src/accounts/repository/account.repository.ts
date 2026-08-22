@@ -34,4 +34,18 @@ export class AccountRepository {
   async createUser(data: Prisma.AccountCreateInput): Promise<Account> {
     return this.prisma.account.create({ data });
   }
+
+  /**
+   * 表示名を更新する
+   * displayName に null を渡すと表示名を削除する
+   */
+  async updateDisplayName(
+    username: string,
+    displayName: string | null | undefined,
+  ): Promise<Account> {
+    return this.prisma.account.update({
+      where: { username },
+      data: { display_name: displayName ?? null },
+    });
+  }
 }

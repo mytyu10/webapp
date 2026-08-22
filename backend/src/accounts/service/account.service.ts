@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { AccountDto } from '../dto/account';
-import { AccountMeResponseDto } from '../dto/account.dto';
+import { AccountMeResponseDto, UpdateMeDto } from '../dto/account.dto';
 import { HashService } from '../../common/service/hash.service';
 import { AccountRepository } from '../repository/account.repository';
 import { JwtService } from 'src/jwt/jwt.service';
@@ -102,5 +102,33 @@ export class AccountService {
       username: account.username,
       display_name: account.display_name,
     };
+  }
+
+  /**
+   * ログインユーザーのプロフィールを更新する
+   * display_name のみ更新可能
+   */
+  async updateMe(
+    username: string,
+    dto: UpdateMeDto,
+  ): Promise<AccountMeResponseDto> {
+    this.logger.log(CONTEXT, `プロフィール更新: ${username}`);
+
+    try {
+      const updated = await this.accountRepository.updateDisplayName(
+        username,
+        dto.display_name,
+      );
+      return {
+        username: updated.username,
+        display_name: updated.display_name,
+      };
+    } catch (error) {
+      this.logger.warn(
+        CONTEXT,
+        `プロフィール更新エラー: ${username} - ${String(error)}`,
+      );
+      throw new InternalServerErrorException(MESSAGE.AUTH.UPDATE_ME_FAILED);
+    }
   }
 }

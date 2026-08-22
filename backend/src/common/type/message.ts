@@ -9,6 +9,8 @@ export const MESSAGE = {
     AUTH_INFO_FAILED: '認証情報の取得に失敗しました',
     ME_FETCH_FAILED: 'ユーザー情報の取得に失敗しました',
     NOT_FOUND: '指定されたユーザーが見つかりません',
+    UPDATE_ME_SUCCESS: 'プロフィールを更新しました',
+    UPDATE_ME_FAILED: 'プロフィールの更新に失敗しました',
   },
   DB: {
     DB_ERROR: 'データベースエラーが発生しました',
