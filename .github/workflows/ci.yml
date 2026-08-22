@@ -76,7 +76,7 @@ jobs:
         run: npm run test:e2e -- --runInBand
 
       - name: CI障害をGitHub Issueに起票する
-        if: failure() && github.event_name == 'push'
+        if: failure() && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         working-directory: .
@@ -139,7 +139,7 @@ jobs:
         run: npm run build
 
       - name: CI障害をGitHub Issueに起票する
-        if: failure() && github.event_name == 'push'
+        if: failure() && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         working-directory: .
@@ -295,7 +295,7 @@ jobs:
           retention-days: 7
 
       - name: CI障害をGitHub Issueに起票する
-        if: failure() && github.event_name == 'push'
+        if: failure() && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
