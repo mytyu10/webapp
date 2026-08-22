@@ -8,7 +8,8 @@ services:
       - ./backend/.env
     environment:
       DATABASE_URL: file:/data/dev.db
-      CORS_ORIGIN: http://localhost:3001   # フロントエンドのMac側ポートに合わせる
+      CORS_ORIGIN: http://localhost:3001
+      WEBAUTHN_ORIGIN: http://localhost:3001
     volumes:
       - ./backend/src:/app/src
       - db-data:/data
