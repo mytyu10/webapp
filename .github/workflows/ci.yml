@@ -1,10 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
-      - develop
   pull_request:
     branches:
       - main
@@ -239,6 +235,9 @@ jobs:
           BACKEND_URL: http://localhost:8000
           THROTTLE_LIMIT: "100"
           THROTTLE_TTL: "1000"
+          # Playwright E2E では音声コマンドエンドポイントをテストしないため、
+          # バックエンドの起動ガードを通過させるためにダミー値を設定する
+          ANTHROPIC_API_KEY: dummy-key-for-e2e-ci
 
       # --- フロントエンドをプロダクションビルドで serve ---
       - name: Install serve

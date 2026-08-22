@@ -18,6 +18,7 @@ export type VoiceActionType =
 export interface VoiceCommandResponse {
   action: VoiceActionType;
   params: Record<string, unknown>;
+  reply: string;
 }
 
 /**

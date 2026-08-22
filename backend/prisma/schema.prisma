@@ -75,8 +75,8 @@ model GitHubRepository {
 model Task {
   id            Int              @id @default(autoincrement())
   title         String
-  description   String
-  due_date      DateTime
+  description   String   @default("")
+  due_date      DateTime?
   priority      String           @default("MEDIUM")
   category      String?
   parent_id     Int?

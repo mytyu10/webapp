@@ -20,6 +20,9 @@ async function bootstrap() {
   if (!process.env.DATABASE_URL) {
     throw new Error('環境変数 DATABASE_URL が設定されていません');
   }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('環境変数 ANTHROPIC_API_KEY が設定されていません');
+  }
 
   const app = await NestFactory.create(AppModule);
 

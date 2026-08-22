@@ -90,6 +90,9 @@ export default defineConfig({
         DATABASE_URL: process.env.DATABASE_URL ?? 'file:../backend/prisma/playwright-test.db',
         JWT_SECRET: process.env.JWT_SECRET ?? 'playwright-e2e-secret',
         FRONTEND_URL: 'http://localhost:3000',
+        /* Playwright E2E では音声コマンドエンドポイントをテストしないため、
+         * ANTHROPIC_API_KEY が未設定の場合はダミー値を使用して起動ガードを通過させる */
+        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? 'dummy-key-for-e2e',
       },
     },
     {

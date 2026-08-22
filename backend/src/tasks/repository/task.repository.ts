@@ -64,7 +64,7 @@ export class TaskRepository {
   async create(data: {
     title: string;
     description: string;
-    due_date: Date;
+    due_date: Date | null;
     priority: Priority;
     category: string | null;
     parent_id: number | null;

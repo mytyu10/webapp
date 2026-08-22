@@ -99,16 +99,18 @@ function TaskCard({
               </div>
               <p className="text-sm text-slate-400 line-clamp-2">{node.description}</p>
               <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-400">
-                <span>
-                  期限:{' '}
-                  {new Date(node.due_date).toLocaleString('ja-JP', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </span>
+                {node.due_date && (
+                  <span>
+                    期限:{' '}
+                    {new Date(node.due_date).toLocaleString('ja-JP', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                )}
                 {node.assignees.length > 0 && (
                   <span>担当者: {node.assignees.join(', ')}</span>
                 )}
