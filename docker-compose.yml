@@ -6,10 +6,11 @@ services:
       - "8001:8000"   # Mac側:コンテナ内
     env_file:
       - ./backend/.env
+      - ./backend/.env.local
     environment:
       DATABASE_URL: file:/data/dev.db
-      CORS_ORIGIN: http://localhost:3001
-      WEBAUTHN_ORIGIN: http://localhost:3001
+      FRONTEND_URL: http://localhost:3001
+      BACKEND_URL: http://localhost:8001
     volumes:
       - ./backend/src:/app/src
       - db-data:/data

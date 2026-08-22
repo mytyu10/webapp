@@ -1,5 +1,5 @@
-import 'dotenv/config';
 import dotenv from 'dotenv';
+dotenv.config();
 dotenv.config({ path: '.env.local', override: true });
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, BadRequestException } from '@nestjs/common';
@@ -23,10 +23,9 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
-  const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:3000';
+  const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
   app.enableCors({
-    origin:
-      corsOrigin === '*' ? true : corsOrigin.split(',').map((o) => o.trim()),
+    origin: frontendUrl,
     credentials: true,
   });
 

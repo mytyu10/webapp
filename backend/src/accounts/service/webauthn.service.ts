@@ -50,7 +50,7 @@ export class WebAuthnService {
   ) {
     this.rpID = process.env.WEBAUTHN_RP_ID ?? 'localhost';
     this.rpName = process.env.WEBAUTHN_RP_NAME ?? 'webapp';
-    this.origin = process.env.WEBAUTHN_ORIGIN ?? 'http://localhost:3000';
+    this.origin = process.env.FRONTEND_URL ?? 'http://localhost:3000';
   }
 
   /**
