@@ -22,6 +22,8 @@ model Account {
   proxy_grants_given    EventProxyGrant[]     @relation("ProxyGranter")
   proxy_grants_received EventProxyGrant[]     @relation("ProxyGrantee")
   webauthn_credentials  WebAuthnCredential[]
+  github_token          GitHubToken?
+  github_repos          GitHubRepository[]
 }
 
 model WebAuthnCredential {
@@ -48,6 +50,26 @@ model WebAuthnChallenge {
 
   @@index([username])
   @@index([expires_at])
+}
+
+model GitHubToken {
+  username     String   @id
+  access_token String
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  account      Account  @relation(fields: [username], references: [username], onDelete: Cascade)
+}
+
+model GitHubRepository {
+  id         Int      @id @default(autoincrement())
+  username   String
+  owner      String   // リポジトリオーナー（owner/repo の owner 部分）
+  repo       String   // リポジトリ名
+  created_at DateTime @default(now())
+  account    Account  @relation(fields: [username], references: [username], onDelete: Cascade)
+
+  @@unique([username, owner, repo])
+  @@index([username])
 }
 
 model Task {

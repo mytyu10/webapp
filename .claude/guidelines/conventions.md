@@ -4,6 +4,10 @@
 
 - [2026-07-14] チャット機能のリアルタイム更新はWebSocket（Socket.io）ではなくポーリングで実装すること。WebSocketは不安定なため採用しない
 
+### DTO・バリデーション
+
+- [2026-08-22] DTOの `Record<string, unknown>` 型フィールドには必ず `@IsObject()` デコレータを付与すること（class-validatorによるバリデーションが効かなくなるため省略不可）
+
 ### 認可（Authorization）
 
 - [2026-07-15] リソースのオーナーシップチェック（更新・削除時の作成者確認）はサービス層に直接書かず、`OwnershipGuard` + `@CheckOwnership('task' | 'event' | 'link')` デコレータで宣言的に実装すること。サービス層に `if (resource.created_by !== username) throw new ForbiddenException(...)` を追加してはいけない

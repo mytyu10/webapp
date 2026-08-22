@@ -32,6 +32,22 @@ export const MESSAGE = {
     NO_CREDENTIALS: '顔認証が登録されていません。先に顔認証を登録してください',
     CREDENTIAL_ALREADY_EXISTS: 'この認証器はすでに登録されています',
   },
+  GITHUB: {
+    OAUTH_URL_FAILED: 'GitHub OAuthのURLの取得に失敗しました',
+    CALLBACK_FAILED: 'GitHubとの連携に失敗しました',
+    NOT_CONNECTED: 'GitHubと連携されていません。先にGitHub連携を行ってください',
+    REPO_ADD_SUCCESS: 'リポジトリを追加しました',
+    REPO_ADD_FAILED: 'リポジトリの追加に失敗しました',
+    REPO_ADD_DUPLICATE: 'このリポジトリはすでに登録されています',
+    REPO_NOT_FOUND: '指定されたリポジトリが見つかりません',
+    REPO_DELETE_SUCCESS: 'リポジトリを削除しました',
+    REPO_DELETE_FAILED: 'リポジトリの削除に失敗しました',
+    REPO_FETCH_FAILED: 'リポジトリ一覧の取得に失敗しました',
+    ISSUES_FETCH_FAILED: 'GitHub Issueの取得に失敗しました',
+    INVALID_REPO_FORMAT:
+      'リポジトリ名の形式が無効です（owner/repo 形式で指定してください）',
+    STATUS_FETCH_FAILED: 'GitHub連携状態の取得に失敗しました',
+  },
   TASK: {
     CREATE_SUCCESS: 'タスクを作成しました',
     QUEUE_UPDATE_SUCCESS: 'タスクをキューで処理し更新しました',

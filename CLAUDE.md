@@ -60,11 +60,13 @@ Layered structure: **Controller → Service → Repository → Prisma**.
 - `src/events/` — カレンダー予定・繰り返し・権限・代理登録
 - `src/links/` — リンク集・フォルダ管理・権限管理
 - `src/chat/` — チャット（REST ポーリング、WebSocket不使用）
+- `src/github/` — GitHub OAuth 連携・リポジトリ管理・Issue 取得。`GET /github/oauth/start`（認可URL取得・JwtAuthGuard適用）・`GET /github/oauth/callback`（公開エンドポイント・state パラメータから username を復元してトークンを DB 保存・フロントへリダイレクト）・`GET /github/status`・`GET /github/repos`・`POST /github/repos`・`DELETE /github/repos/:id`・`GET /github/issues`（全連携リポジトリのopenなIssueをGitHub REST API経由で取得・PR除外）。`GitHubToken`（アクセストークン保存）・`GitHubRepository`（連携リポジトリ設定）の2テーブルを管理する
 - `src/common/` — OwnershipGuard・ハッシュ・ロガー・共通型
 
 ### フロントエンド主要ページ
 
-- `/profile` — `ProfilePage.tsx`。`PATCH /accounts/me` で display_name を更新。保存後に `useMe().refetch()` でサイドバーの表示名を更新する
+- `/profile` — `ProfilePage.tsx`。`PATCH /accounts/me` で display_name を更新。GitHub 連携セクション（連携ボタン・リポジトリ追加・削除 UI）も提供する。OAuth コールバック後は `?github=success|error` クエリパラメータで結果を表示する
+- `/tasks` — `TaskListPage.tsx`。タスク一覧の下に `GitHubIssueSection` コンポーネントで GitHub Issues を別セクション表示する。`useGitHubIssues` フックで連携状態・リポジトリ・Issue を管理する
 
 ### 環境変数 (`backend/.env`)
 
@@ -75,6 +77,9 @@ Layered structure: **Controller → Service → Repository → Prisma**.
 | `WEBAUTHN_RP_ID` | WebAuthn Relying Party ID（デフォルト: `localhost`）|
 | `WEBAUTHN_RP_NAME` | WebAuthn Relying Party Name（デフォルト: `webapp`）|
 | `WEBAUTHN_ORIGIN` | WebAuthn 検証対象 Origin（デフォルト: `http://localhost:3000`）|
+| `GITHUB_CLIENT_ID` | GitHub OAuth App のクライアントID |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth App のクライアントシークレット |
+| `GITHUB_CALLBACK_URL` | OAuth コールバック URL（例: `http://localhost:8000/github/oauth/callback`）|
 
 ## 開発規約
 
@@ -104,6 +109,7 @@ Layered structure: **Controller → Service → Repository → Prisma**.
 - 権限付与（TaskPermission / LinkPermission / EventPermission）は作成者のみ実行可能
 - `EventProxyGrant`: 他ユーザーが `POST /events` に `created_by` を指定して代理登録できる権限。サービス層で確認する
 - OwnershipGuard: タスク（作成者 or 担当者 or WRITE権限）、リンク（作成者 or WRITE権限）、予定GET（作成者 or READ/WRITE権限）、予定PATCH/DELETE（作成者 or WRITE権限）。未存在は404・権限なしは403
+- GitHub OAuth コールバックは JWT なしのブラウザリダイレクトで呼ばれるため JwtAuthGuard を使わない。state パラメータに username を Base64 エンコードして渡す
 - チャットは REST API のみ。WebSocket（Socket.io）は使用しない
 - Rate limiting: ThrottlerModule グローバル（1分20回）。login/regist/WebAuthn エンドポイント: 1分5回
 - Backend ESLint: `no-explicit-any` 無効、`no-floating-promises` / `no-unsafe-argument` 警告

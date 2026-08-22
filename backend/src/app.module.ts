@@ -9,6 +9,7 @@ import { EventsModule } from './events/events.module';
 import { CommonModule } from './common/common.module';
 import { LinkModule } from './links/link.module';
 import { ChatModule } from './chat/chat.module';
+import { GitHubModule } from './github/github.module';
 
 /**
  * アプリケーションルートモジュール
@@ -23,6 +24,7 @@ import { ChatModule } from './chat/chat.module';
     EventsModule,
     LinkModule,
     ChatModule,
+    GitHubModule,
   ],
   controllers: [AppController],
   providers: [
