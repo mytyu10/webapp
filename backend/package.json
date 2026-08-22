@@ -17,7 +17,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "rm -f prisma/test.db && DATABASE_URL=file:./test.db JWT_SECRET=test-secret FRONTEND_URL=http://localhost:3000 npx prisma migrate deploy && DATABASE_URL=file:./test.db JWT_SECRET=test-secret FRONTEND_URL=http://localhost:3000 jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
