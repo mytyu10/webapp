@@ -263,3 +263,41 @@ AppModule
         ├── LoggerService
         └── BatchQueueService        ← LoggerService に依存（バッチ処理ログ出力）
 ```
+
+## テスト戦略
+
+### ユニットテスト（Jest）
+
+`backend/src/` 配下の各モジュールに `*.spec.ts` を配置する。
+
+**カバレッジ対象:**
+- Service: ビジネスロジック・例外処理（Mock Repository使用）
+- Repository: Prismaモック経由の呼び出し引数検証
+- Guard: JwtAuthGuard の認証フロー
+- 共通サービス: HashService（bcryptモック）・LoggerService・JwtService（jsonwebtokenモック）
+
+**モック方針:**
+- `jest.mock()` で外部ライブラリ（bcrypt, jsonwebtoken, @anthropic-ai/sdk）をモック化
+- PrismaService は `jest.fn()` で全メソッドをモック化
+- `Test.createTestingModule` + `useValue` パターンで依存性注入
+
+### Playwright E2E テスト（ブラウザ操作）
+
+`e2e/tests/` 配下にページごとの `*.spec.ts` を配置する。
+
+**テストファイル一覧:**
+| ファイル | テスト対象 |
+|---------|-----------|
+| `auth.spec.ts` | 登録・ログイン・ログアウト・未認証リダイレクト |
+| `tasks.spec.ts` | タスクCRUD（作成・完了更新・削除）・詳細パネル |
+| `calendar.spec.ts` | カレンダー表示・ビュー切替・予定CRUD（作成・削除） |
+| `links.spec.ts` | リンク集CRUD（フォルダ作成・リンク作成・削除） |
+| `chat.spec.ts` | チャット表示・ユーザー選択・メッセージ送信 |
+| `profile.spec.ts` | プロフィール表示名更新・GitHub連携セクション表示 |
+| `sidebar.spec.ts` | 全ページナビゲーション・未認証リダイレクト |
+
+**テスト実行環境:**
+- `workers: 1`（直列実行・DB競合防止）
+- テスト専用DB: `backend/prisma/playwright-test.db`（本番DBと分離）
+- バックエンド: ビルド済み `dist/src/main.js` を起動
+- フロントエンド: ビルド済み `build/` を `serve` で配信

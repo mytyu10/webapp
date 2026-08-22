@@ -6,8 +6,10 @@ import { generateUsername, registerAndLogin } from './helpers/auth';
  *
  * テスト対象:
  * 1. タスク一覧ページの表示
- * 2. タスク作成
+ * 2. タスク作成（CRUD: Create）
  * 3. タスク詳細パネルの表示
+ * 4. タスク完了（CRUD: Update）
+ * 5. タスク削除（CRUD: Delete）
  */
 
 const TEST_PASSWORD = 'testpass1';
@@ -119,5 +121,94 @@ test.describe('タスク詳細パネル', () => {
     /* 詳細パネルが表示されること（タスクタイトルがパネル内にある） */
     /* TaskDetailPanel は詳細情報を表示するため、タイトルが2箇所に表示される */
     await expect(page.getByText('詳細パネルテスト用タスク').nth(1)).toBeVisible();
+  });
+});
+
+test.describe('タスク完了（CRUD: Update）', () => {
+  let completeTestUsername: string;
+
+  test.beforeEach(async ({ page }) => {
+    completeTestUsername = generateUsername('tu');
+    await registerAndLogin(page, completeTestUsername, TEST_PASSWORD);
+
+    /* テスト用タスクを作成する */
+    await page.goto('/tasks/new');
+    await page.getByLabel('タイトル').fill('完了テスト用タスク');
+    await page.getByLabel('説明文').fill('テスト用');
+    await page.locator('input[type="datetime-local"]').fill('2026-12-31T23:59');
+    const assigneeSelect = page.locator('select').last();
+    await assigneeSelect.selectOption({ label: completeTestUsername });
+    await page.getByRole('button', { name: '作成する' }).click();
+    await page.waitForURL('**/tasks');
+  });
+
+  test('タスクを「完了にする」ボタンで完了状態に更新できる', async ({ page }) => {
+    /* タスクカードをクリックして詳細パネルを開く */
+    await page.getByText('完了テスト用タスク').first().click();
+
+    /* 詳細パネルが表示されるまで待つ */
+    await expect(page.getByText('完了テスト用タスク').nth(1)).toBeVisible();
+
+    /* 「完了にする」ボタンをクリックする */
+    await page.getByRole('button', { name: '完了にする' }).click();
+
+    /* 「未完了に戻す」ボタンが表示されること（完了済みの表示） */
+    await expect(page.getByRole('button', { name: '未完了に戻す' })).toBeVisible();
+  });
+
+  test('完了済みタスクを「未完了に戻す」ボタンで未完了状態に戻せる', async ({ page }) => {
+    /* タスクを完了にする */
+    await page.getByText('完了テスト用タスク').first().click();
+    await expect(page.getByText('完了テスト用タスク').nth(1)).toBeVisible();
+    await page.getByRole('button', { name: '完了にする' }).click();
+    await expect(page.getByRole('button', { name: '未完了に戻す' })).toBeVisible();
+
+    /* 未完了に戻す */
+    await page.getByRole('button', { name: '未完了に戻す' }).click();
+
+    /* 「完了にする」ボタンが再び表示されること */
+    await expect(page.getByRole('button', { name: '完了にする' })).toBeVisible();
+  });
+});
+
+test.describe('タスク削除（CRUD: Delete）', () => {
+  let deleteTestUsername: string;
+
+  test.beforeEach(async ({ page }) => {
+    deleteTestUsername = generateUsername('tde');
+    await registerAndLogin(page, deleteTestUsername, TEST_PASSWORD);
+
+    /* テスト用タスクを作成する */
+    await page.goto('/tasks/new');
+    await page.getByLabel('タイトル').fill('削除テスト用タスク');
+    await page.getByLabel('説明文').fill('テスト用');
+    await page.locator('input[type="datetime-local"]').fill('2026-12-31T23:59');
+    const assigneeSelect = page.locator('select').last();
+    await assigneeSelect.selectOption({ label: deleteTestUsername });
+    await page.getByRole('button', { name: '作成する' }).click();
+    await page.waitForURL('**/tasks');
+  });
+
+  test('タスクを詳細パネルから削除するとタスク一覧から消える', async ({ page }) => {
+    /* タスクカードをクリックして詳細パネルを開く */
+    await page.getByText('削除テスト用タスク').first().click();
+
+    /* 詳細パネルが表示されるまで待つ */
+    await expect(page.getByText('削除テスト用タスク').nth(1)).toBeVisible();
+
+    /* 「削除」ボタンをクリックする（作成者のみ表示） */
+    await page.getByRole('button', { name: '削除' }).click();
+
+    /* 削除確認モーダルが表示されること */
+    await expect(page.getByText('このタスクを削除しますか？')).toBeVisible();
+
+    /* 削除を確定する */
+    await page.getByRole('button', { name: '削除する' }).click();
+
+    /* タスクが一覧から消えること */
+    await expect(page.getByText('削除テスト用タスク')).not.toBeVisible();
+
+    /* 「タスクがありません」メッセージが表示されること */
+    await expect(page.getByText('タスクがありません。')).toBeVisible();
   });
 });
