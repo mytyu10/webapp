@@ -31,8 +31,8 @@ test.describe('プロフィールページ', () => {
   test('ログインユーザーのユーザー名が表示される', async ({ page }) => {
     await page.goto('/profile');
 
-    /* ユーザー名表示エリアにユーザー名が表示されること */
-    await expect(page.getByText(testUsername)).toBeVisible();
+    /* ユーザー名表示エリアにユーザー名が表示されること（サイドバーと重複しないよう main 内に絞る） */
+    await expect(page.locator('main').getByText(testUsername)).toBeVisible();
   });
 
   test('表示名入力欄が表示される', async ({ page }) => {
@@ -109,7 +109,8 @@ test.describe('GitHub 連携セクション', () => {
   test('サイドバーの「プロフィール」リンクでプロフィールページに遷移する', async ({ page }) => {
     await page.goto('/tasks');
 
-    await page.getByRole('link', { name: 'プロフィール' }).click();
+    /* サイドバーのプロフィールリンクはユーザー名を表示するため href で特定する */
+    await page.locator('a[href="/profile"]').first().click();
 
     await page.waitForURL('**/profile');
     await expect(page.getByRole('heading', { name: 'プロフィール' })).toBeVisible();

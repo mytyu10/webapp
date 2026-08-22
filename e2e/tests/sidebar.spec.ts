@@ -51,7 +51,8 @@ test.describe('サイドバーナビゲーション', () => {
 
   test('「プロフィール」リンクで /profile に遷移する', async ({ page }) => {
     await page.goto('/tasks');
-    await page.getByRole('link', { name: 'プロフィール' }).click();
+    /* サイドバーのプロフィールリンクはユーザー名を表示するため href で特定する */
+    await page.locator('a[href="/profile"]').first().click();
 
     await page.waitForURL('**/profile');
     await expect(page.getByRole('heading', { name: 'プロフィール' })).toBeVisible();

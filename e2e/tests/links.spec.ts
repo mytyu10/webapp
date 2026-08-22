@@ -142,9 +142,9 @@ test.describe('リンク削除', () => {
   });
 
   test('リンクを削除するとツリーから消える', async ({ page }) => {
-    /* 削除ボタンをホバーで表示させてクリックする */
-    await page.getByText('削除テスト用リンク').hover();
-    await page.getByRole('button', { name: '削除' }).first().click();
+    /* group-hover で表示されるボタンを force クリックで押す */
+    const deleteBtn = page.locator('button.text-red-400').first();
+    await deleteBtn.click({ force: true });
 
     /* 削除確認モーダルが表示されること */
     await expect(page.getByRole('heading', { name: '削除の確認' })).toBeVisible();
@@ -152,8 +152,9 @@ test.describe('リンク削除', () => {
     /* 削除する */
     await page.getByRole('button', { name: '削除する' }).click();
 
-    /* リンクがツリーから消えること */
-    await expect(page.getByText('削除テスト用リンク')).not.toBeVisible();
+    /* モーダルが閉じるのを待ってからリンクがツリーに存在しないことを確認 */
+    await expect(page.getByRole('heading', { name: '削除の確認' })).not.toBeVisible();
+    await expect(page.locator('span').filter({ hasText: /^削除テスト用リンク$/ })).not.toBeVisible();
   });
 });
 
@@ -176,9 +177,9 @@ test.describe('フォルダ削除', () => {
   });
 
   test('フォルダを削除するとツリーから消える', async ({ page }) => {
-    /* 削除ボタンをホバーで表示させてクリックする */
-    await page.getByText('削除テスト用フォルダ').hover();
-    await page.getByRole('button', { name: '削除' }).first().click();
+    /* group-hover で表示されるボタンを force クリックで押す */
+    const deleteBtn = page.locator('button.text-red-400').first();
+    await deleteBtn.click({ force: true });
 
     /* 削除確認モーダルが表示されること */
     await expect(page.getByRole('heading', { name: '削除の確認' })).toBeVisible();
@@ -186,7 +187,8 @@ test.describe('フォルダ削除', () => {
     /* 削除する */
     await page.getByRole('button', { name: '削除する' }).click();
 
-    /* フォルダがツリーから消えること */
-    await expect(page.getByText('削除テスト用フォルダ')).not.toBeVisible();
+    /* モーダルが閉じるのを待ってからフォルダがツリーに存在しないことを確認 */
+    await expect(page.getByRole('heading', { name: '削除の確認' })).not.toBeVisible();
+    await expect(page.locator('button').filter({ hasText: /^削除テスト用フォルダ$/ })).not.toBeVisible();
   });
 });

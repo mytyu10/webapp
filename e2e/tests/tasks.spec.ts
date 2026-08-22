@@ -200,13 +200,13 @@ test.describe('タスク削除（CRUD: Delete）', () => {
     await page.getByRole('button', { name: '削除' }).click();
 
     /* 削除確認モーダルが表示されること */
-    await expect(page.getByText('このタスクを削除しますか？')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'タスクを削除' })).toBeVisible();
 
-    /* 削除を確定する */
-    await page.getByRole('button', { name: '削除する' }).click();
+    /* 削除を確定する（ConfirmModal内のボタンに絞る） */
+    await page.getByLabel('タスクを削除').getByRole('button', { name: '削除する' }).click();
 
-    /* タスクが一覧から消えること */
-    await expect(page.getByText('削除テスト用タスク')).not.toBeVisible();
+    /* 詳細パネルが閉じること（h2 で特定して strict mode 違反を回避） */
+    await expect(page.getByRole('heading', { name: '削除テスト用タスク' })).not.toBeVisible();
 
     /* 「タスクがありません」メッセージが表示されること */
     await expect(page.getByText('タスクがありません。')).toBeVisible();
