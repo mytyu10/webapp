@@ -31,7 +31,8 @@
 
 ### GitHub Issue・エージェントフロー
 
-- [2026-08-22] バグ修正フロー（bug-fix-agent / incident-fix-agent）において、調査結果・レビュー結果・テスト結果は既存のIssueにコメントとして追記すること。新しい調査用Issueを別途起票してはいけない
+- [2026-08-22] バグ修正フローは bug-fix-agent に一本化する。調査結果・レビュー結果・テスト結果は既存のIssueにコメントとして追記すること。新しい調査用Issueを別途起票してはいけない
+- [2026-08-22] bug-fix-agent / incident-fix-agent が PR を作成する際は必ず `Closes #<number>` を PR 本文に含めること（Issue のクローズは PR マージ時に自動で行う）
 - [2026-08-22] 規約（conventions.md）および CLAUDE.md への追記は1〜3行以内に収め、最小限の変更に留めること
 
 ### ロギング

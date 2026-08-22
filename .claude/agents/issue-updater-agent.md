@@ -2,7 +2,7 @@
 name: issue-updater-agent
 description: >
   GitHub Issueへのコメント投稿・ラベル操作・クローズを実行するサブエージェント。
-  incident-fix-agentから呼び出される。Issue書き込み操作に特化しており、
+  bug-fix-agentから呼び出される。Issue書き込み操作に特化しており、
   コードの読み取りや修正は行わない。gh CLIが認証済みの環境で使用する。
 model: haiku
 color: purple
