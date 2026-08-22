@@ -62,10 +62,6 @@ plan-creator-agent に以下のフォーマットで委譲する:
 <依頼内容をそのまま記載>
 ```
 
-受け取る情報:
-- 実装計画（機能名・DBスキーマ変更有無・実装ステップ一覧）
-- 結果ファイルパス
-
 ### 2. plan-review-agent への委譲
 
 ステータスを更新してから委譲する:
@@ -125,10 +121,6 @@ echo "4a/9 backend-generator-agent 実行中..." > /tmp/claude-current-agent.txt
 ## 実装依頼
 <バックエンドの実装ステップ一覧>
 
-## 参照ファイル
-- CLAUDE.md
-- .claude/guidelines/conventions.md
-
 ## 注意事項
 <plan-review-agentが指摘したリスク・注意点>
 ```
@@ -146,10 +138,6 @@ echo "4b/9 frontend-generator-agent 実行中..." > /tmp/claude-current-agent.tx
 
 ## 実装依頼
 <フロントエンドの実装ステップ一覧>
-
-## 参照ファイル
-- CLAUDE.md
-- .claude/guidelines/conventions.md
 
 ## 注意事項
 <plan-review-agentが指摘したリスク・注意点>
@@ -188,12 +176,12 @@ test-agent に以下のフォーマットで委譲する:
 
 ## 結果出力先
 agent-work/results/YYYY-MM-DD-<機能名>-test.md
+
+## 出力形式
+箇条書き5行以内。合否・失敗ファイル名のみ。
 ```
 
-test-agent はテスト結果（実行コマンド・合否・失敗詳細・カバレッジ）を上記 md ファイルに出力する。
 テスト失敗が解決できない場合はユーザーに報告して指示を仰ぐ。
-
-完了後、結果ファイルを Read で読み込んでテスト結果サマリーを把握し、そのまま次のステップへ進む。
 
 ### 7. source-review-agent への委譲
 
@@ -223,26 +211,11 @@ source-review-agent に以下のフォーマットで委譲する:
 source-review-agent は問題のリストを返すのみで修正を行わない。
 問題があった場合、オーケストレーターは以下の手順で自動差し戻しする（最大2回）:
 
-1. レビュー内容・調査結果・対応方針を `agent-work/reviews/YYYY-MM-DD-<機能名>-review.md` に保存する
-2. バックエンド側の問題 → backend-generator-agent に「修正依頼」として委譲
-3. フロントエンド側の問題 → frontend-generator-agent に「修正依頼」として委譲
-4. test-agent を再実行
-5. source-review-agent を再実行
-6. 2回差し戻しても問題が残る場合 → ユーザーに報告して指示を仰ぐ
-
-レビュー結果ファイルのフォーマット:
-```markdown
-# <機能名> ソースレビュー結果
-
-- 日付: YYYY-MM-DD
-- 差し戻し回数: <N>回目
-
-## 検出された問題
-<source-review-agentが返した問題リスト>
-
-## 対応方針
-<各問題への対応方針>
-```
+1. バックエンド側の問題 → backend-generator-agent に「修正依頼」として委譲
+2. フロントエンド側の問題 → frontend-generator-agent に「修正依頼」として委譲
+3. test-agent を再実行
+4. source-review-agent を再実行
+5. 2回差し戻しても問題が残る場合 → ユーザーに報告して指示を仰ぐ
 
 ### 8. design-updater-agent への委譲
 

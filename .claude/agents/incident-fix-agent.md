@@ -79,13 +79,6 @@ incident-investigator-agent に以下のフォーマットで委譲する:
 ラベル: <labels>
 ```
 
-受け取る情報:
-- 調査レポートファイルのパス
-- 根本原因のサマリー（1〜3文）
-- 修正方針（箇条書き）
-- 関連ファイルパスの一覧
-- 優先度（High / Medium / Low）
-
 ### Step 3: issue-updater-agent への委譲（調査結果コメント）
 
 ステータスを更新する:
@@ -192,14 +185,7 @@ incident-fix-#<number>
 - 修正対象ファイル以外は変更しないこと
 - 修正方針に記載されていない変更は加えないこと
 
-## 参照ファイル
-- CLAUDE.md
-- .claude/guidelines/conventions.md
 ```
-
-受け取る情報:
-- 修正したファイルパスの一覧
-- 修正内容のサマリー
 
 ### Step 5: source-review-agent への委譲
 
@@ -226,10 +212,6 @@ Issue #<number>（<title>）の障害修正。根本原因: <根本原因サマ�
 ## 関連Issue番号
 <number>
 ```
-
-受け取る情報:
-- 判定（問題なし / 要修正）
-- 問題一覧（要修正の場合）: 重要度・ファイルパス・観点・問題内容・修正案
 
 ### ✅ 承認ゲート2: レビュー結果の確認
 
@@ -312,10 +294,6 @@ fix:
 commit-agent が lint/build エラーを報告した場合:
 - generator-agent に差し戻して修正させる（差し戻し回数のカウントに含める）
 - 修正後に source-review-agent → commit-agent の順で再実行する
-
-受け取る情報:
-- コミットハッシュ
-- コミットメッセージ
 
 ### Step 7: issue-updater-agent への委譲（修正完了クローズ）
 
