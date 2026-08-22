@@ -195,7 +195,7 @@ describe('useCalendar', () => {
       expect(taskEvent).toBeDefined();
 
       const expectedStart = new Date(
-        new Date(incompleteTask.due_date).getTime() - 60 * 60 * 1000,
+        new Date(incompleteTask.due_date!).getTime() - 60 * 60 * 1000,
       ).toISOString();
       expect(taskEvent!.start).toBe(expectedStart);
     });

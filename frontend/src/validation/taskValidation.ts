@@ -46,25 +46,18 @@ export function validateTaskForm(values: TaskFormValues): TaskFormErrors {
     errors.title = `タイトルは${TITLE_MAX_LENGTH}文字以内で入力してください`;
   }
 
-  if (!values.description.trim()) {
-    errors.description = '説明文を入力してください';
-  } else if (values.description.length > DESCRIPTION_MAX_LENGTH) {
+  if (values.description.length > DESCRIPTION_MAX_LENGTH) {
     errors.description = `説明文は${DESCRIPTION_MAX_LENGTH}文字以内で入力してください`;
   }
 
-  if (!values.due_date) {
-    errors.due_date = '期限を入力してください';
-  } else {
+  if (values.due_date) {
     const date = new Date(values.due_date);
     if (isNaN(date.getTime())) {
       errors.due_date = '正しい日時形式で入力してください';
     }
   }
 
-  /** 担当者は1人以上必須 */
-  if (values.assignees.length === 0) {
-    errors.assignees = '担当者を1人以上選択してください';
-  } else if (values.assignees.length > ASSIGNEES_MAX_COUNT) {
+  if (values.assignees.length > ASSIGNEES_MAX_COUNT) {
     errors.assignees = `担当者は${ASSIGNEES_MAX_COUNT}人以内で設定してください`;
   }
 
