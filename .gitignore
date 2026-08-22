@@ -1,8 +1,9 @@
 node_modules/
 
-# Claude Code: ローカル設定・ワークツリーのみ除外（agents/skills/guidelines はコミット対象）
+# Claude Code: ローカル設定・ワークツリー・エージェント生成物は除外
 .claude/settings.local.json
 .claude/worktrees/
+agent-work/
 
 # 環境変数（各サブプロジェクトの .env は各ディレクトリの .gitignore で管理）
 .env
