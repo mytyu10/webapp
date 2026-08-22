@@ -174,8 +174,9 @@ jobs:
 
     env:
       JWT_SECRET: test-secret-for-ci
-      DATABASE_URL: file:./e2e-playwright.db
+      DATABASE_URL: file:./prisma/e2e-playwright.db
       FRONTEND_URL: http://localhost:3000
+      BACKEND_URL: http://localhost:8000
       CI: true
 
     steps:
@@ -201,6 +202,10 @@ jobs:
         working-directory: backend
         run: npx prisma generate
 
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+
       - name: Reset Playwright E2E database
         working-directory: backend
         run: rm -f prisma/e2e-playwright.db
@@ -216,6 +221,11 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
+        env:
+          REACT_APP_API_SCHEME: http
+          REACT_APP_API_HOST: localhost
+          REACT_APP_API_PORT: "8000"
+          GENERATE_SOURCEMAP: "false"
         run: npm run build
 
       # --- バックエンドをバックグラウンドで起動 ---
@@ -224,8 +234,11 @@ jobs:
         run: npm run start:prod &
         env:
           JWT_SECRET: test-secret-for-ci
-          DATABASE_URL: file:./e2e-playwright.db
+          DATABASE_URL: file:./prisma/e2e-playwright.db
           FRONTEND_URL: http://localhost:3000
+          BACKEND_URL: http://localhost:8000
+          THROTTLE_LIMIT: "100"
+          THROTTLE_TTL: "1000"
 
       # --- フロントエンドをプロダクションビルドで serve ---
       - name: Install serve
