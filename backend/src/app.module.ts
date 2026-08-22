@@ -15,10 +15,18 @@ import { VoiceModule } from './voice/voice.module';
 /**
  * アプリケーションルートモジュール
  * ThrottlerModule でレートリミットを設定する（デフォルト: 1分間に20リクエスト）
+ * E2E テスト環境（THROTTLE_LIMIT 環境変数あり）ではレート制限を緩和する
  */
+const throttleLimit = process.env.THROTTLE_LIMIT
+  ? parseInt(process.env.THROTTLE_LIMIT, 10)
+  : 20;
+const throttleTtl = process.env.THROTTLE_TTL
+  ? parseInt(process.env.THROTTLE_TTL, 10)
+  : 60000;
+
 @Module({
   imports: [
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
+    ThrottlerModule.forRoot([{ ttl: throttleTtl, limit: throttleLimit }]),
     CommonModule,
     AccountsModule,
     TaskModule,
