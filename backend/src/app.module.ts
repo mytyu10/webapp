@@ -11,6 +11,7 @@ import { LinkModule } from './links/link.module';
 import { ChatModule } from './chat/chat.module';
 import { GitHubModule } from './github/github.module';
 import { VoiceModule } from './voice/voice.module';
+import { LogModule } from './log/log.module';
 
 /**
  * アプリケーションルートモジュール
@@ -35,6 +36,7 @@ const throttleTtl = process.env.THROTTLE_TTL
     ChatModule,
     GitHubModule,
     VoiceModule,
+    LogModule,
   ],
   controllers: [AppController],
   providers: [

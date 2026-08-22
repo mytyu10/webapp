@@ -48,6 +48,9 @@ export const MESSAGE = {
       'リポジトリ名の形式が無効です（owner/repo 形式で指定してください）',
     STATUS_FETCH_FAILED: 'GitHub連携状態の取得に失敗しました',
   },
+  LOG: {
+    RECEIVE_FAILED: 'ログの受け取りに失敗しました',
+  },
   TASK: {
     CREATE_SUCCESS: 'タスクを作成しました',
     QUEUE_UPDATE_SUCCESS: 'タスクをキューで処理し更新しました',

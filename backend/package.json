@@ -31,6 +31,7 @@
     "@simplewebauthn/server": "^9.0.3",
     "@simplewebauthn/types": "^9.0.1",
     "@types/node-cron": "^3.0.11",
+    "@types/winston": "^2.4.4",
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.9.0",
     "class-transformer": "^0.5.1",
@@ -38,7 +39,8 @@
     "jsonwebtoken": "^9.0.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

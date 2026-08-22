@@ -77,14 +77,20 @@ Layered structure: **Controller → Service → Repository → Prisma**.
 - `src/events/` — カレンダー予定・繰り返し・権限・代理登録
 - `src/links/` — リンク集・フォルダ管理・権限管理
 - `src/chat/` — チャット（REST ポーリング、WebSocket不使用）
-- `src/github/` — GitHub OAuth 連携・リポジトリ管理・Issue 取得。`GET /github/oauth/start`（認可URL取得・JwtAuthGuard適用）・`GET /github/oauth/callback`（公開エンドポイント・state パラメータから username を復元してトークンを DB 保存・フロントへリダイレクト）・`GET /github/status`・`GET /github/repos`・`POST /github/repos`・`DELETE /github/repos/:id`・`GET /github/issues`（全連携リポジトリのopenなIssueをGitHub REST API経由で取得・PR除外）。`GitHubToken`（アクセストークン保存）・`GitHubRepository`（連携リポジトリ設定）の2テーブルを管理する
+- `src/github/` — GitHub OAuth 連携・リポジトリ管理・Issue 取得。`GET /github/oauth/start`（認可URL取得・JwtAuthGuard適用）・`GET /github/oauth/callback`（公開エンドポイント・state パラメータから username を復元してトークンを DB 保存・フロントへリダイレクト）・`GET /github/status`・`GET /github/repos`・`POST /github/repos`・`DELETE /github/repos/:id`・`GET /github/issues`（全連携リポジトリのopenなIssueをGitHub REST API経由で取得・PR除外）。`GitHubToken`（アクセストークン保存）・`GitHubRepository`（連携リポジトリ設定）の2テーブルを管理する。`GitHubService`・`GitHubRepository` は `exports` に追加済みで他モジュールからの DI が可能
+- `src/log/` — フロントエンドログ収集。`POST /log`（JwtAuthGuard適用）でフロントエンドの warn/error ログを受け取り `logs/app.log` に Winston でファイル書き出しする。error レベルのとき GitHub Issue を自動起票する（GitHubToken・GitHubRepository を利用）。重複起票防止（同タイトルの open Issue が既存なら起票しない）。GitHub 未連携・リポジトリ未登録の場合はスキップ
 - `src/voice/` — 音声コマンド。`POST /voice/command`（JwtAuthGuard適用）で音声認識テキストを受け取り、Claude API（`@anthropic-ai/sdk`・モデル: claude-3-5-haiku-20241022）で意図解析して `{ action, params }` 形式のJSONを返す。action種別: `navigate`（画面遷移）・`create_task`（タスク作成）・`complete_task`（タスク完了）・`create_event`（予定作成）・`unknown`（認識不能）。APIキーは環境変数 `ANTHROPIC_API_KEY` で管理。フロントエンドは `useVoiceCommand` フック（`frontend/src/hooks/useVoiceCommand.ts`）と `Sidebar.tsx` のマイクボタンで操作する（Web Speech API・lang: ja-JP）
-- `src/common/` — OwnershipGuard・ハッシュ・ロガー・共通型
+- `src/common/` — OwnershipGuard・ハッシュ・ロガー（Winston）・共通型
 
 ### フロントエンド主要ページ
 
 - `/profile` — `ProfilePage.tsx`。`PATCH /accounts/me` で display_name を更新。GitHub 連携セクション（連携ボタン・リポジトリ追加・削除 UI）も提供する。OAuth コールバック後は `?github=success|error` クエリパラメータで結果を表示する
 - `/tasks` — `TaskListPage.tsx`。タスク一覧の下に `GitHubIssueSection` コンポーネントで GitHub Issues を別セクション表示する。`useGitHubIssues` フックで連携状態・リポジトリ・Issue を管理する
+
+### フロントエンド API・ユーティリティ
+
+- `src/api/logApi.ts` — ログ送信 API（`sendLog(level, context, message)`）。JWT がない場合はスキップ。失敗はサイレント処理
+- `src/logger.ts` — アプリケーション共通ロガー。warn/error 呼び出し時に `sendLog` を非同期でバックエンドに送信する。失敗はユーザーに見せない
 
 ### 環境変数 (`backend/.env`)
 
@@ -138,3 +144,4 @@ Layered structure: **Controller → Service → Repository → Prisma**.
 - Swagger: `GET /api/docs`
 - E2E tests（API）: `backend/test/app.e2e-spec.ts`。`ThrottlerGuard` を `overrideGuard` でモック
 - E2E tests（ブラウザ）: `e2e/` ディレクトリ。`@playwright/test` でブラウザ操作テスト。テストファイルは `e2e/tests/*.spec.ts`
+- LoggerService は NestJS Logger ではなく Winston を使用。warn/error レベルのみ `logs/app.log` にファイル出力する

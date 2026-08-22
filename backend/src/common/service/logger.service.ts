@@ -1,25 +1,53 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import winston from 'winston';
+import path from 'path';
+
+/** ログファイルの出力先ディレクトリ（プロジェクトルートの logs/ 配下） */
+const LOG_DIR = path.resolve(process.cwd(), 'logs');
+
+/** Winston ロガーインスタンス（モジュールスコープでシングルトン） */
+const winstonLogger = winston.createLogger({
+  transports: [
+    /** コンソール出力: 全レベル */
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.printf(
+          ({ level, message }) => `[${level}] ${String(message)}`,
+        ),
+      ),
+    }),
+    /** ファイル出力: warn / error のみ */
+    new winston.transports.File({
+      filename: path.join(LOG_DIR, 'app.log'),
+      level: 'warn',
+      format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.json(),
+      ),
+    }),
+  ],
+});
 
 /**
  * アプリケーション共通ロガー
- * NestJS の Logger をラップし、統一されたログ出力を提供する
+ * Winston をラップし、統一されたログ出力を提供する。
+ * warn / error レベルのログは logs/app.log にファイル出力する。
  */
 @Injectable()
 export class LoggerService {
-  private readonly logger = new Logger();
-
-  /** 通常ログ */
+  /** 通常ログ（コンソールのみ） */
   log(context: string, message: string): void {
-    this.logger.log(message, context);
+    winstonLogger.info(`[${context}] ${message}`);
   }
 
-  /** 警告ログ */
+  /** 警告ログ（コンソール + ファイル） */
   warn(context: string, message: string): void {
-    this.logger.warn(message, context);
+    winstonLogger.warn(`[${context}] ${message}`);
   }
 
-  /** エラーログ */
+  /** エラーログ（コンソール + ファイル） */
   error(context: string, message: string, trace?: string): void {
-    this.logger.error(message, trace, context);
+    winstonLogger.error(`[${context}] ${message}`, { trace: trace ?? null });
   }
 }
