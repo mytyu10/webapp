@@ -11,11 +11,13 @@ import { MESSAGE } from 'src/common/type/message';
 const mockAccount = {
   username: 'testuser',
   hashed_password: '$2b$10$mockedhashvalue',
+  display_name: null,
 };
 
 const mockAccountRepository = {
   getAccount: jest.fn(),
   createUser: jest.fn(),
+  updateDisplayName: jest.fn(),
 };
 
 /**
@@ -147,12 +149,25 @@ describe('AccountService', () => {
   });
 
   describe('getMe', () => {
-    it('ログインユーザー情報を返す', async () => {
+    it('ログインユーザー情報を返す（display_name あり）', async () => {
+      mockAccountRepository.getAccount.mockResolvedValue({
+        ...mockAccount,
+        display_name: '山田 太郎',
+      });
+
+      const result = await service.getMe('testuser');
+
+      expect(result.username).toBe('testuser');
+      expect(result.display_name).toBe('山田 太郎');
+    });
+
+    it('ログインユーザー情報を返す（display_name なし）', async () => {
       mockAccountRepository.getAccount.mockResolvedValue(mockAccount);
 
       const result = await service.getMe('testuser');
 
       expect(result.username).toBe('testuser');
+      expect(result.display_name).toBeNull();
     });
 
     it('アカウントが見つからない場合は InternalServerErrorException をスローする', async () => {
@@ -164,6 +179,52 @@ describe('AccountService', () => {
       await expect(service.getMe('nonexist')).rejects.toThrow(
         MESSAGE.AUTH.ME_FETCH_FAILED,
       );
+    });
+  });
+
+  describe('updateMe', () => {
+    it('display_name を更新して最新のユーザー情報を返す', async () => {
+      const updated = { ...mockAccount, display_name: '山田 太郎' };
+      mockAccountRepository.updateDisplayName.mockResolvedValue(updated);
+
+      const result = await service.updateMe('testuser', {
+        display_name: '山田 太郎',
+      });
+
+      expect(result.username).toBe('testuser');
+      expect(result.display_name).toBe('山田 太郎');
+      expect(mockAccountRepository.updateDisplayName).toHaveBeenCalledWith(
+        'testuser',
+        '山田 太郎',
+      );
+    });
+
+    it('display_name を null にすると表示名を削除できる', async () => {
+      const updated = { ...mockAccount, display_name: null };
+      mockAccountRepository.updateDisplayName.mockResolvedValue(updated);
+
+      const result = await service.updateMe('testuser', {
+        display_name: null,
+      });
+
+      expect(result.display_name).toBeNull();
+      expect(mockAccountRepository.updateDisplayName).toHaveBeenCalledWith(
+        'testuser',
+        null,
+      );
+    });
+
+    it('DB更新エラー時は InternalServerErrorException をスローする', async () => {
+      mockAccountRepository.updateDisplayName.mockRejectedValue(
+        new Error('DB error'),
+      );
+
+      await expect(
+        service.updateMe('testuser', { display_name: '山田' }),
+      ).rejects.toThrow(InternalServerErrorException);
+      await expect(
+        service.updateMe('testuser', { display_name: '山田' }),
+      ).rejects.toThrow(MESSAGE.AUTH.UPDATE_ME_FAILED);
     });
   });
 });

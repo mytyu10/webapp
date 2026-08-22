@@ -12,6 +12,12 @@ const API_BASE = REACT_APP_API_HOST
   : '';
 const CONTEXT = 'accountApi';
 
+/** ログインユーザー情報 */
+export interface AccountMe {
+  username: string;
+  display_name: string | null;
+}
+
 /**
  * ログインAPIリクエスト
  * 成功時はJWTトークンを返す
@@ -58,6 +64,59 @@ export async function registRequest(username: string, password: string): Promise
   }
 
   logger.info(CONTEXT, `アカウント登録成功: ${username}`);
+}
+
+/**
+ * ログインユーザー情報取得APIリクエスト
+ * JWTトークンを使用してログインユーザーの情報を取得する
+ */
+export async function fetchMe(): Promise<AccountMe> {
+  logger.info(CONTEXT, 'ユーザー情報取得リクエスト送信');
+
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_BASE}/accounts/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = data.message || 'ユーザー情報の取得に失敗しました。';
+    logger.warn(CONTEXT, `ユーザー情報取得失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, 'ユーザー情報取得成功');
+  return response.json();
+}
+
+/**
+ * ログインユーザーのプロフィール更新APIリクエスト
+ * display_name を更新して最新のユーザー情報を返す
+ */
+export async function updateMe(displayName: string | null): Promise<AccountMe> {
+  logger.info(CONTEXT, 'プロフィール更新リクエスト送信');
+
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_BASE}/accounts/me`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ display_name: displayName }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = data.message || 'プロフィールの更新に失敗しました。';
+    logger.warn(CONTEXT, `プロフィール更新失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, 'プロフィール更新成功');
+  return response.json();
 }
 
 // ─── WebAuthn API ─────────────────────────────────────────────────────────────

@@ -85,7 +85,8 @@ model Event {
 | カラム名 | 型 | 制約 | 説明 |
 |---------|-----|------|------|
 | `username` | String | PRIMARY KEY | ユーザー名（1〜10文字） |
-| `hashed_password` | String | NOT NULL | SHA-256ハッシュ化されたパスワード（hex文字列） |
+| `hashed_password` | String | NOT NULL | bcryptハッシュ化されたパスワード |
+| `display_name` | String | NULL 許容 | 表示名（未設定時は username で代替表示） |
 
 ### Task テーブル
 

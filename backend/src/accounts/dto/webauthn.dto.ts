@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsObject, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /** 登録開始リクエストDTO */
@@ -19,6 +19,7 @@ export class WebAuthnRegistrationFinishDto {
   @ApiProperty({
     description: 'WebAuthn登録レスポンス（ブラウザが生成したJSON）',
   })
+  @IsObject()
   readonly response: Record<string, unknown>;
 }
 
@@ -40,5 +41,6 @@ export class WebAuthnAuthenticationFinishDto {
   @ApiProperty({
     description: 'WebAuthn認証レスポンス（ブラウザが生成したJSON）',
   })
+  @IsObject()
   readonly response: Record<string, unknown>;
 }

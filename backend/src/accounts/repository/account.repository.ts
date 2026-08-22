@@ -19,9 +19,11 @@ export class AccountRepository {
    * 全アカウント一覧を取得する（username 昇順）。
    * hashed_password は返さない
    */
-  async findAll(): Promise<{ username: string }[]> {
+  async findAll(): Promise<
+    { username: string; display_name: string | null }[]
+  > {
     return this.prisma.account.findMany({
-      select: { username: true },
+      select: { username: true, display_name: true },
       orderBy: { username: 'asc' },
     });
   }
@@ -31,5 +33,19 @@ export class AccountRepository {
    */
   async createUser(data: Prisma.AccountCreateInput): Promise<Account> {
     return this.prisma.account.create({ data });
+  }
+
+  /**
+   * 表示名を更新する
+   * displayName に null を渡すと表示名を削除する
+   */
+  async updateDisplayName(
+    username: string,
+    displayName: string | null | undefined,
+  ): Promise<Account> {
+    return this.prisma.account.update({
+      where: { username },
+      data: { display_name: displayName ?? null },
+    });
   }
 }

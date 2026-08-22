@@ -19,7 +19,8 @@ tools: Bash
 - **操作**: `comment` / `label` / `close` / `close-with-comment` のいずれか
 - **Issue番号**: 数字（例: `42`）
 - **本文**（`comment` / `close-with-comment` 時）: 投稿するマークダウン文字列
-- **ラベル**（`label` 時）: 付与するラベル名（複数可）、または除去するラベル名
+- **ラベル**（`label` 時、省略可）: 付与するラベル名（複数可）
+- **削除ラベル**（`label` 時、省略可）: 除去するラベル名（複数可）
 
 ## 処理手順
 
@@ -39,6 +40,7 @@ tools: Bash
 
 ```bash
 gh label create "in-progress" --color "#f97316" --description "対応中"   --force 2>/dev/null || true
+gh label create "in-review"   --color "#3b82f6" --description "レビュー中" --force 2>/dev/null || true
 gh label create "fixed"       --color "#22c55e" --description "修正完了" --force 2>/dev/null || true
 ```
 
@@ -52,17 +54,18 @@ gh issue comment <number> --body "<本文>"
 
 #### label（ラベル操作）
 
-付与:
+付与（`ラベル` が指定されている場合）:
 ```bash
 gh issue edit <number> --add-label "<ラベル名>"
 ```
 
-除去:
+除去（`削除ラベル` が指定されている場合）:
 ```bash
 gh issue edit <number> --remove-label "<ラベル名>" 2>/dev/null || true
 ```
 
 複数ラベルが指定された場合は、付与・除去それぞれについて `--add-label` / `--remove-label` を繰り返し実行する。
+`ラベル` と `削除ラベル` の両方が指定されている場合はそれぞれ独立して実行する。
 
 #### close（クローズのみ）
 

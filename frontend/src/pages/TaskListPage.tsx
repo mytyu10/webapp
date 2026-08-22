@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTaskList, TaskTreeNode } from '../hooks/useTaskList';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useGitHubIssues } from '../hooks/useGitHubIssues';
 import { getCurrentUsername, Task } from '../api/taskApi';
 import FormErrorBanner from '../components/FormErrorBanner';
 import ConfirmModal from '../components/ConfirmModal';
@@ -10,6 +11,7 @@ import ActionButton from '../components/ActionButton';
 import CategoryFilterBar from '../components/CategoryFilterBar';
 import SectionToggleButton from '../components/SectionToggleButton';
 import TaskDetailPanel from '../components/TaskDetailPanel';
+import GitHubIssueSection from '../components/GitHubIssueSection';
 
 /** depthに対応するTailwind paddingLeftクラス */
 const DEPTH_INDENT_CLASSES: Record<number, string> = {
@@ -64,6 +66,7 @@ function findTaskById(tasks: Task[], id: number): Task | undefined {
  * タスクカードをクリックすると右側のサイドパネルにタスク詳細を表示する（ページ遷移なし）。
  * 一覧と詳細は useTaskList の同一 tasks ステートを共有する。
  * スマホ（640px未満）では詳細パネルが全画面表示になり一覧を隠す。
+ * GitHub Issues セクションを既存タスクセクションの下に表示する。
  */
 function TaskListPage() {
   const navigate = useNavigate();
@@ -84,6 +87,13 @@ function TaskListPage() {
     awaitToggle,
     setSelectedCategory,
   } = useTaskList();
+
+  const {
+    issues,
+    connected: githubConnected,
+    loading: githubLoading,
+    error: githubError,
+  } = useGitHubIssues();
 
   const [deleteError, setDeleteError] = useState('');
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
@@ -309,6 +319,14 @@ function TaskListPage() {
             )}
           </div>
         )}
+
+        {/* GitHub Issues セクション */}
+        <GitHubIssueSection
+          connected={githubConnected}
+          issues={issues}
+          loading={githubLoading}
+          error={githubError}
+        />
       </div>
 
       {/* リサイズ可能なディバイダー＋詳細パネル */}

@@ -87,17 +87,33 @@ tools: Read, Grep, Glob, Bash, Write
 
 問題なしの場合は「問題なし」と記載。
 
-## GitHub Issue起票結果
+## GitHub Issue操作結果
 
-<Critical/Major 指摘ごとのIssue URLまたはスキップ理由>
+<Critical/Major 指摘ごとのIssueコメントURL・起票URL、またはスキップ理由>
 
 ## 判定: 問題なし / 要修正
 ```
 
-### GitHub Issue の自動起票
+### GitHub Issue への記録
 
-レビュー完了後、**Critical または Major** の指摘がある場合は各指摘ごとに GitHub Issue を起票する:
+レビュー完了後、**Critical または Major** の指摘がある場合、以下の条件で GitHub Issue を操作する:
 
+**関連Issue番号が指定されている場合（バグ修正フロー）**:
+新規 Issue を起票せず、既存 Issue にコメントとして追記する:
+```bash
+gh issue comment <関連Issue番号> --body "## レビュー指摘 (<重要度>)
+
+**ファイル**: <ファイルパス>
+**観点**: <観点>
+**問題**: <問題の内容>
+**修正案**: <修正案>
+
+*source-review-agent により自動検出*"
+```
+（複数の Critical/Major 指摘がある場合は、1つのコメントにまとめて投稿する）
+
+**関連Issue番号が指定されていない場合（通常の実装フロー）**:
+指摘ごとに GitHub Issue を新規起票する:
 - タイトル: `[Review <重要度>] <観点>: <ファイルパス（短縮形）>`
   - 例: `[Review Critical] セキュリティ: src/tasks/controller/task.controller.ts`
 - 本文: ファイルパス・観点・問題の内容・修正案・「source-review-agentにより自動起票」の注記を含める
@@ -106,11 +122,12 @@ tools: Read, Grep, Glob, Bash, Write
 - ラベルを事前作成:
   - `gh label create "review-critical" --color "#dc2626" --description "ソースレビュー Critical指摘" --force 2>/dev/null || true`
   - `gh label create "review-major" --color "#ea580c" --description "ソースレビュー Major指摘" --force 2>/dev/null || true`
-- Issue起票に失敗してもレビュー結果の報告は継続する
+
+Issue操作に失敗してもレビュー結果の報告は継続する。
 
 保存後、ファイルパスと以下を親エージェント（orchestrator-agent）に返すこと:
 - 判定（問題なし / 要修正）
 - 問題一覧（要修正の場合）: 重要度・ファイルパス・観点・問題内容・修正案を含む
-- 起票したIssueのURL一覧（またはスキップした旨）
+- Issue操作の結果（コメントURL・起票URL一覧、またはスキップした旨）
 
 orchestrator-agent は問題一覧を受け取り、該当する generator-agent に差し戻す。

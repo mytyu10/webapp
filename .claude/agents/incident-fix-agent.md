@@ -79,13 +79,6 @@ incident-investigator-agent に以下のフォーマットで委譲する:
 ラベル: <labels>
 ```
 
-受け取る情報:
-- 調査レポートファイルのパス
-- 根本原因のサマリー（1〜3文）
-- 修正方針（箇条書き）
-- 関連ファイルパスの一覧
-- 優先度（High / Medium / Low）
-
 ### Step 3: issue-updater-agent への委譲（調査結果コメント）
 
 ステータスを更新する:
@@ -124,7 +117,7 @@ comment
 
 ```
 ## 操作
-add-label
+label
 
 ## Issue番号
 <number>
@@ -192,14 +185,7 @@ incident-fix-#<number>
 - 修正対象ファイル以外は変更しないこと
 - 修正方針に記載されていない変更は加えないこと
 
-## 参照ファイル
-- CLAUDE.md
-- .claude/guidelines/conventions.md
 ```
-
-受け取る情報:
-- 修正したファイルパスの一覧
-- 修正内容のサマリー
 
 ### Step 5: source-review-agent への委譲
 
@@ -222,11 +208,10 @@ incident-fix-#<number>
 
 ## 修正の背景
 Issue #<number>（<title>）の障害修正。根本原因: <根本原因サマリー>
-```
 
-受け取る情報:
-- 判定（問題なし / 要修正）
-- 問題一覧（要修正の場合）: 重要度・ファイルパス・観点・問題内容・修正案
+## 関連Issue番号
+<number>
+```
 
 ### ✅ 承認ゲート2: レビュー結果の確認
 
@@ -310,10 +295,6 @@ commit-agent が lint/build エラーを報告した場合:
 - generator-agent に差し戻して修正させる（差し戻し回数のカウントに含める）
 - 修正後に source-review-agent → commit-agent の順で再実行する
 
-受け取る情報:
-- コミットハッシュ
-- コミットメッセージ
-
 ### Step 7: issue-updater-agent への委譲（修正完了クローズ）
 
 ステータスを更新する:
@@ -321,12 +302,11 @@ commit-agent が lint/build エラーを報告した場合:
 echo "7/7 issue-updater-agent 実行中（クローズ）..." > /tmp/claude-current-agent.txt
 ```
 
-issue-updater-agent に以下のフォーマットで委譲する:
+issue-updater-agent に以下のフォーマットで委譲する（コメント投稿・ラベル更新・クローズを一括実行）:
 
-**修正完了コメントの投稿:**
 ```
 ## 操作
-comment
+close-with-comment
 
 ## Issue番号
 <number>
@@ -342,21 +322,6 @@ comment
 **レビュー結果**: 問題なし
 
 *incident-fix-agent により自動修正*
-```
-
-**ラベル更新とクローズ:**
-```
-## 操作
-close-with-labels
-
-## Issue番号
-<number>
-
-## 削除ラベル
-in-progress
-
-## 追加ラベル
-fixed
 ```
 
 `gh` が利用できない場合はこのステップをスキップし、手動クローズが必要な旨をユーザーに伝える。
