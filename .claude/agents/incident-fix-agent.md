@@ -124,7 +124,7 @@ comment
 
 ```
 ## 操作
-add-label
+label
 
 ## Issue番号
 <number>
@@ -222,6 +222,9 @@ incident-fix-#<number>
 
 ## 修正の背景
 Issue #<number>（<title>）の障害修正。根本原因: <根本原因サマリー>
+
+## 関連Issue番号
+<number>
 ```
 
 受け取る情報:
@@ -321,12 +324,11 @@ commit-agent が lint/build エラーを報告した場合:
 echo "7/7 issue-updater-agent 実行中（クローズ）..." > /tmp/claude-current-agent.txt
 ```
 
-issue-updater-agent に以下のフォーマットで委譲する:
+issue-updater-agent に以下のフォーマットで委譲する（コメント投稿・ラベル更新・クローズを一括実行）:
 
-**修正完了コメントの投稿:**
 ```
 ## 操作
-comment
+close-with-comment
 
 ## Issue番号
 <number>
@@ -342,21 +344,6 @@ comment
 **レビュー結果**: 問題なし
 
 *incident-fix-agent により自動修正*
-```
-
-**ラベル更新とクローズ:**
-```
-## 操作
-close-with-labels
-
-## Issue番号
-<number>
-
-## 削除ラベル
-in-progress
-
-## 追加ラベル
-fixed
 ```
 
 `gh` が利用できない場合はこのステップをスキップし、手動クローズが必要な旨をユーザーに伝える。

@@ -124,7 +124,7 @@ comment
 **in-progress ラベル付与:**
 ```
 ## 操作
-add-label
+label
 
 ## Issue番号
 <number>
@@ -198,6 +198,9 @@ bug-fix-#<number>
 
 ## 修正の背景
 Issue #<number>（<title>）の障害修正。根本原因: <根本原因サマリー>
+
+## 関連Issue番号
+<number>
 ```
 
 **Critical/Major が検出された場合**: generator-agent に差し戻して修正させる（最大2回）。差し戻し後は source-review-agent を再実行する。
@@ -306,7 +309,7 @@ PR をレビューしてマージすると、この Issue は自動的にクロ�
 
 ```
 ## 操作
-add-label
+label
 
 ## Issue番号
 <number>
@@ -317,12 +320,12 @@ in-review
 
 ```
 ## 操作
-remove-label
+label
 
 ## Issue番号
 <number>
 
-## ラベル
+## 削除ラベル
 in-progress
 ```
 

@@ -65,15 +65,30 @@ cd backend && npm run test -- --testPathPattern=<テスト対象パス>
 3. 失敗したテストがある場合:
    - 実装バグか、テストの誤りかを判断する
    - 実装バグと判断した場合:
-     1. **GitHub Issue を起票する**（重複チェック込み）:
+     1. **関連Issue番号が指定されている場合（バグ修正フロー）**: 新規 Issue を起票せず、既存 Issue にコメントを追記する:
+        ```bash
+        gh issue comment <関連Issue番号> --body "## テスト失敗を検出
+
+        **テストファイル**: <テストファイルパス>
+        **失敗件数**: <N>件
+        **再現コマンド**: <コマンド>
+
+        **エラー（抜粋）**:
+        \`\`\`
+        <エラーメッセージ抜粋>
+        \`\`\`
+
+        *test-agent により自動検出*"
+        ```
+     2. **関連Issue番号が指定されていない場合（通常の実装フロー）**: GitHub Issue を新規起票する（重複チェック込み）:
         - タイトル: `[Test Failure] <テストファイル名>: <失敗テスト名（複数あれば代表1件）>`
         - 本文: テストファイルパス・失敗テスト数・エラーメッセージ（抜粋）・再現コマンド・「test-agentにより自動起票」の注記を含める
         - ラベル: `bug`, `test-failure`
         - 起票前に `gh issue list --state open --search "in:title <title>" --json number --jq length` で重複チェックし、0件の場合のみ作成
         - `gh label create "test-failure" --color "#f59e0b" --description "テスト失敗による障害" --force 2>/dev/null || true` でラベルを事前作成
         - `gh issue create --title "..." --body "..." --label "bug" --label "test-failure"` で起票
-     2. 起票したIssueのURL（または重複スキップの旨）を結果レポートと親エージェントへの報告に含める
-     3. ユーザーに報告して指示を仰ぐ
+     3. Issue操作の結果（コメントURL または 起票URL）を結果レポートと親エージェントへの報告に含める
+     4. ユーザーに報告して指示を仰ぐ
    - テストの誤りの場合は修正して再実行する
    - 3回以上失敗が続く場合はユーザーに報告して指示を仰ぐ
 
