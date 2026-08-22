@@ -100,6 +100,7 @@ export class AccountService {
     }
     return {
       username: account.username,
+      display_name: account.display_name,
     };
   }
 }

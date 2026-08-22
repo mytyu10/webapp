@@ -9,6 +9,7 @@ datasource db {
 model Account {
   username              String                @id
   hashed_password       String
+  display_name          String?
   task_assignees        TaskAssignee[]
   created_tasks         Task[]                @relation("TaskCreator")
   created_events        Event[]               @relation("EventCreator")

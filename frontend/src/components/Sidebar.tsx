@@ -1,5 +1,6 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, Link } from 'react-router-dom';
 import { logger } from '../logger';
+import { useMe } from '../hooks/useMe';
 
 const CONTEXT = 'Sidebar';
 
@@ -27,6 +28,7 @@ interface SidebarProps {
  */
 function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const navigate = useNavigate();
+  const { me } = useMe();
 
   /**
    * ログアウト処理
@@ -59,6 +61,32 @@ function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
       {/* コンテンツ: サイドバーが閉じているときはPCで非表示 */}
       <div className={`flex flex-row sm:flex-col flex-1 min-w-0 ${isOpen ? '' : 'sm:hidden'}`}>
+
+        {/* プロフィールセクション（PC のみ表示） */}
+        <Link
+          to="/profile"
+          className="hidden sm:block px-4 py-4 border-b border-slate-700 hover:bg-slate-800 transition-colors group"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            {/* アバター代替（イニシャル表示） */}
+            <div className="w-9 h-9 rounded-full bg-sky-700 flex items-center justify-center shrink-0">
+              <span className="text-sm font-bold text-white">
+                {me ? (me.display_name ?? me.username).charAt(0).toUpperCase() : '?'}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-100 truncate group-hover:text-white">
+                {me?.display_name ?? me?.username ?? '...'}
+              </p>
+              {me?.display_name && (
+                <p className="text-xs text-slate-400 truncate group-hover:text-slate-300">
+                  @{me.username}
+                </p>
+              )}
+            </div>
+          </div>
+        </Link>
+
         <div className="px-4 sm:px-6 py-3 sm:py-5 border-r sm:border-r-0 sm:border-b border-slate-700 flex items-center shrink-0 min-w-0">
           <h2 className="text-base sm:text-lg font-bold text-slate-100 whitespace-nowrap">WebApp</h2>
         </div>

@@ -75,6 +75,7 @@ SidebarLayout（スマホ: flex-col、PC[sm:]: flex-row）
 
 | 要素 | 説明 |
 |------|------|
+| プロフィール | `useMe` フックで取得した `display_name`（未設定時は `username`）と `@username` を表示。`/profile` へのリンク（ページ未実装）|
 | ブランド名 | "WebApp" |
 | NavLink | タスク管理（/tasks、アクティブ時 `bg-sky-700`） |
 | NavLink | カレンダー（/calendar、アクティブ時 `bg-sky-700`） |
@@ -229,6 +230,15 @@ function useIsMobile(): boolean
 
 `window.innerWidth < 640` を初期値として返し、`window.resize` イベントでリアクティブに追従する。
 スマホ判定のブレークポイントは 640px（Tailwind の `sm:` と同一）。
+
+
+### useMe
+
+```typescript
+function useMe(): { me: AccountMe | null; loading: boolean; error: string | null }
+```
+
+マウント時に `GET /accounts/me` を呼び出し `username` と `display_name` を返す。`Sidebar` のプロフィールセクションで使用する。
 
 ### useTaskList
 
@@ -420,6 +430,7 @@ interface TaskNotification {
 
 | 要素 | 説明 |
 |------|------|
+| プロフィール | `useMe` フックで取得した `display_name`（未設定時は `username`）と `@username` を表示。`/profile` へのリンク（ページ未実装）|
 | ブランド名 | "WebApp" |
 | NavLink | タスク管理・カレンダー |
 | ログアウト | `localStorage.removeItem('token')` → `/login` |

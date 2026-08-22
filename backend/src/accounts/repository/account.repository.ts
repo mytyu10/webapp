@@ -19,9 +19,11 @@ export class AccountRepository {
    * 全アカウント一覧を取得する（username 昇順）。
    * hashed_password は返さない
    */
-  async findAll(): Promise<{ username: string }[]> {
+  async findAll(): Promise<
+    { username: string; display_name: string | null }[]
+  > {
     return this.prisma.account.findMany({
-      select: { username: true },
+      select: { username: true, display_name: true },
       orderBy: { username: 'asc' },
     });
   }

@@ -11,6 +11,7 @@ import { MESSAGE } from 'src/common/type/message';
 const mockAccount = {
   username: 'testuser',
   hashed_password: '$2b$10$mockedhashvalue',
+  display_name: null,
 };
 
 const mockAccountRepository = {
@@ -147,12 +148,25 @@ describe('AccountService', () => {
   });
 
   describe('getMe', () => {
-    it('ログインユーザー情報を返す', async () => {
+    it('ログインユーザー情報を返す（display_name あり）', async () => {
+      mockAccountRepository.getAccount.mockResolvedValue({
+        ...mockAccount,
+        display_name: '山田 太郎',
+      });
+
+      const result = await service.getMe('testuser');
+
+      expect(result.username).toBe('testuser');
+      expect(result.display_name).toBe('山田 太郎');
+    });
+
+    it('ログインユーザー情報を返す（display_name なし）', async () => {
       mockAccountRepository.getAccount.mockResolvedValue(mockAccount);
 
       const result = await service.getMe('testuser');
 
       expect(result.username).toBe('testuser');
+      expect(result.display_name).toBeNull();
     });
 
     it('アカウントが見つからない場合は InternalServerErrorException をスローする', async () => {

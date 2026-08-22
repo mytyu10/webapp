@@ -117,7 +117,7 @@ Authorization: Bearer <JWT>
 
 | ステータス | 条件 | レスポンスボディ |
 |-----------|------|----------------|
-| 200 | 取得成功 | `{ "username": "string" }` |
+| 200 | 取得成功 | `{ "username": "string", "display_name": "string | null" }` |
 | 401 | 認証エラー | `{ "message": "認証が必要です" }` |
 | 500 | 取得失敗 | `{ "message": "ユーザー情報の取得に失敗しました" }` |
 
@@ -419,6 +419,7 @@ class AccountDto {
 ```typescript
 interface AccountMeResponseDto {
   username: string;
+  display_name: string | null;
 }
 ```
 
