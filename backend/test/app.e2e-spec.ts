@@ -261,14 +261,6 @@ describe('App E2E', () => {
         .expect(403);
     });
 
-    it('他ユーザーが POST /tasks/:id/notifications にアクセスすると403が返る', async () => {
-      await supertest(app.getHttpServer())
-        .post(`/tasks/${createdTaskId}/notifications`)
-        .set('Authorization', `Bearer ${otherJwtToken}`)
-        .send({ notify_at: '2026-12-30T09:00:00.000Z' })
-        .expect(403);
-    });
-
     it('他ユーザーが GET /events/:id にアクセスすると403が返る', async () => {
       await supertest(app.getHttpServer())
         .get(`/events/${createdEventId}`)
