@@ -20,17 +20,17 @@ webapp/
 │   │   ├── test-agent.md
 │   │   ├── source-review-agent.md
 │   │   ├── design-updater-agent.md
-│   │   └── commit-agent.md
-│   ├── skills/                ← スキル定義ファイル
+│   │   ├── commit-agent.md
+│   │   ├── incident-fix-agent.md      ← GitHub Issue バグ修正オーケストレーター
+│   │   ├── incident-investigator-agent.md
+│   │   ├── issue-reporter-agent.md
+│   │   └── issue-updater-agent.md
+│   ├── commands/              ← スキル定義ファイル（/スキル名 で呼び出す）
 │   │   ├── implement.md        ← /implement スキル定義
 │   │   └── commit.md           ← /commit スキル定義
 │   ├── guidelines/
 │   │   └── conventions.md     ← 開発規約（全エージェントが参照）
 │   └── settings.json
-│
-├── ai-agent/                  ← Anthropic SDK アプリケーション
-│   ├── src/
-│   └── package.json
 │
 ├── agent-work/                ← エージェント生成物（.gitignore 対象）
 │   ├── plans/                 ← 承認済み実装計画の保存先
@@ -88,9 +88,74 @@ webapp/
 
 ---
 
+### `/bug-fix` — GitHub Issue のバグ一括修正
+
+`bug` ラベル付きの open Issue を修正する。承認ゲートなし・Issue ごとにブランチ + PR を作成し、調査結果と修正内容を Issue にコメントする。人間は PR レビュー時にまとめて確認する。
+
+```
+/bug-fix <Issue番号>
+/bug-fix
+```
+
+**使用例**
+
+```
+/bug-fix 42          # Issue #42 を単体修正
+/bug-fix #42         # 同上（# あり・なし両対応）
+/bug-fix             # bug ラベル付き open Issue を全件修正
+```
+
+引数なしの場合、`bug` ラベル付きの open Issue を全件取得して順番に修正する（0件なら終了）。
+修正ごとに PR を作成し、全件処理後に「修正済み: N件 / 失敗: M件」のサマリーを出力する。
+
+#### `/bug-fix` の実行フロー（1件あたり）
+
+```
+1. Issue情報取得（gh issue view）
+        ↓
+2. fix/issue-<number>-<slug> ブランチ作成
+        ↓
+3. incident-investigator-agent
+   └─ 根本原因・修正方針・関連ファイルを特定
+        ↓
+4. issue-updater-agent
+   └─ Issue に調査結果をコメント + in-progress ラベル付与
+        ↓
+5. backend / frontend-generator-agent
+   └─ 修正実装（バグ修正のみ・修正対象ファイルのみ）
+        ↓
+6. source-review-agent
+   └─ レビュー（Critical/Major は自動差し戻し・最大2回）
+        ↓
+7. commit-agent
+   └─ fix: #<number> でコミット
+        ↓
+8. gh pr create → PR作成（Closes #<number> 付き）
+   issue-updater-agent → PR URL + 修正内容を Issue にコメント + in-review ラベル
+        ↓
+   完了報告（PR URL・コミットハッシュ）
+```
+
+**承認ゲートはなし。** PR レビューが人間による確認ポイントになる。
+
+---
+
+## GitHub Issue のバグを修正する（`incident-fix-agent`）
+
+承認ゲートを挟みながら1件ずつ手動確認したい場合は `incident-fix-agent` に直接話しかける。
+
+```
+#42 のバグを直して
+Issue 42 を修正して
+```
+
+こちらは承認ゲートあり・PR ではなく直接コミットする点が `/bug-fix` と異なる。
+
+---
+
 ## エージェント一覧
 
-エージェントはサブエージェントとして orchestrator-agent から委譲される。ユーザーが直接呼ぶことは通常ない。
+エージェントはサブエージェントとして orchestrator-agent または bug-fix コマンドから委譲される。
 
 ### 構成図
 
@@ -104,21 +169,32 @@ webapp/
                                       ├─ source-review-agent
                                       ├─ design-updater-agent
                                       └─ commit-agent
+
+【直接呼び出し】
+  "Issue #42 を直して" ─── incident-fix-agent ─┬─ incident-investigator-agent
+                                               ├─ backend/frontend-generator-agent
+                                               ├─ source-review-agent
+                                               ├─ commit-agent
+                                               └─ issue-updater-agent
 ```
 
 ### 各エージェントの責務
 
-| エージェント | 責務 | 入力 | 出力先 |
-|------------|------|------|--------|
-| **orchestrator-agent** | フロー制御・承認ゲート管理。コードは書かない | ユーザーの依頼 | — |
-| **plan-creator-agent** | ユーザーの依頼を分析し実装計画を作成 | 依頼内容 | `agent-work/results/YYYY-MM-DD-<機能名>-plan.md` |
-| **plan-review-agent** | 計画をチェックリスト（15項目）で評価・判定 | 実装計画 | `agent-work/results/YYYY-MM-DD-<機能名>-plan-review.md` |
-| **backend-generator-agent** | NestJS コードの生成・修正 | 実装ステップ一覧 | `agent-work/results/YYYY-MM-DD-<機能名>-backend.md` |
-| **frontend-generator-agent** | React コードの生成・修正 | 実装ステップ一覧 | `agent-work/results/YYYY-MM-DD-<機能名>-frontend.md` |
-| **test-agent** | Jest テストの生成と実行 | 実装ファイル一覧 | `agent-work/results/YYYY-MM-DD-<機能名>-test.md` |
-| **source-review-agent** | コードの評価・問題報告（修正しない） | 実装ファイル一覧 | `agent-work/results/YYYY-MM-DD-<機能名>-source-review.md` |
-| **design-updater-agent** | 実装内容を `detailed-design/` に反映 | 実装済みファイル一覧 | `agent-work/results/YYYY-MM-DD-<機能名>-design-update.md` |
-| **commit-agent** | git コミットの実行 | コミット対象ファイル一覧 | `agent-work/results/YYYY-MM-DD-<機能名>-commit.md` |
+| エージェント | 責務 | 出力先 |
+|------------|------|--------|
+| **orchestrator-agent** | /implement フロー制御・承認ゲート管理 | — |
+| **incident-fix-agent** | GitHub Issue バグ修正フロー制御 | — |
+| **plan-creator-agent** | 実装計画の作成 | `agent-work/results/YYYY-MM-DD-<機能名>-plan.md` |
+| **plan-review-agent** | 計画をチェックリストで評価・判定 | `agent-work/results/YYYY-MM-DD-<機能名>-plan-review.md` |
+| **incident-investigator-agent** | 障害の根本原因調査・レポート作成 | `agent-work/results/YYYY-MM-DD-incident-<number>.md` |
+| **backend-generator-agent** | NestJS コードの生成・修正 | `agent-work/results/YYYY-MM-DD-<機能名>-backend.md` |
+| **frontend-generator-agent** | React コードの生成・修正 | `agent-work/results/YYYY-MM-DD-<機能名>-frontend.md` |
+| **test-agent** | Jest テストの生成と実行 | `agent-work/results/YYYY-MM-DD-<機能名>-test.md` |
+| **source-review-agent** | コードの評価・問題報告（修正しない） | `agent-work/results/YYYY-MM-DD-<機能名>-source-review.md` |
+| **design-updater-agent** | 実装内容を `detailed-design/` に反映 | `agent-work/results/YYYY-MM-DD-<機能名>-design-update.md` |
+| **commit-agent** | git コミットの実行 | `agent-work/results/YYYY-MM-DD-<機能名>-commit.md` |
+| **issue-reporter-agent** | GitHub Issue の自動起票（重複チェックあり） | — |
+| **issue-updater-agent** | Issue へのコメント・ラベル操作・クローズ | — |
 
 ---
 
@@ -191,7 +267,7 @@ tools: Read, Grep, Glob, Write
 
 ### スキルを追加する
 
-1. `.claude/skills/<名前>.md` を作成する
+1. `.claude/commands/<名前>.md` を作成する
 2. フロントマターに `name`, `description` を記載する
 3. ユーザーが `/<名前>` で呼び出せるようになる
 
