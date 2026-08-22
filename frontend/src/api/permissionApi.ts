@@ -165,3 +165,70 @@ export async function deleteLinkPermission(linkItemId: number, username: string)
 
   logger.info(CONTEXT, `リンク権限削除成功: linkItemId=${linkItemId}, target=${username}`);
 }
+
+/**
+ * 予定の権限一覧を取得する（作成者のみ）
+ */
+export async function fetchEventPermissions(eventId: number): Promise<Permission[]> {
+  logger.info(CONTEXT, `予定権限一覧取得リクエスト送信: eventId=${eventId}`);
+
+  const response = await fetch(`${API_BASE}/events/${eventId}/permissions`, {
+    method: 'GET',
+    headers: authHeaders(),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = (data as { message?: string }).message || '権限一覧の取得に失敗しました。';
+    logger.warn(CONTEXT, `予定権限一覧取得失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, `予定権限一覧取得成功: eventId=${eventId}`);
+  return (await response.json()) as Permission[];
+}
+
+/**
+ * 予定へ権限を付与する（作成者のみ）
+ */
+export async function addEventPermission(eventId: number, input: PermissionInput): Promise<Permission> {
+  logger.info(CONTEXT, `予定権限付与リクエスト送信: eventId=${eventId}, target=${input.username}`);
+
+  const response = await fetch(`${API_BASE}/events/${eventId}/permissions`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = (data as { message?: string }).message || '権限の付与に失敗しました。';
+    logger.warn(CONTEXT, `予定権限付与失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, `予定権限付与成功: eventId=${eventId}, target=${input.username}`);
+  const data = await response.json() as { message: string; permission: Permission };
+  return data.permission;
+}
+
+/**
+ * 予定の権限を削除する（作成者のみ）
+ */
+export async function deleteEventPermission(eventId: number, username: string): Promise<void> {
+  logger.info(CONTEXT, `予定権限削除リクエスト送信: eventId=${eventId}, target=${username}`);
+
+  const response = await fetch(`${API_BASE}/events/${eventId}/permissions/${username}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = (data as { message?: string }).message || '権限の削除に失敗しました。';
+    logger.warn(CONTEXT, `予定権限削除失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, `予定権限削除成功: eventId=${eventId}, target=${username}`);
+}

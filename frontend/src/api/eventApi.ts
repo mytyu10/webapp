@@ -6,6 +6,12 @@ const API_BASE = REACT_APP_API_HOST
   : '';
 const CONTEXT = 'eventApi';
 
+/** 予定に付与された権限 */
+export interface EventPermission {
+  username: string;
+  permission: 'READ' | 'WRITE';
+}
+
 /** カレンダー予定レスポンス型 */
 export interface CalendarEvent {
   id: number;
@@ -18,9 +24,11 @@ export interface CalendarEvent {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** 共有されている場合の権限一覧（権限が付与されている予定のみ含む） */
+  permissions?: EventPermission[];
 }
 
-/** 予定作成・更新リクエスト型。作成者はJWT認証済みユーザー名をサーバー側で自動セットするため含めない */
+/** 予定作成・更新リクエスト型 */
 export interface EventInput {
   title: string;
   description?: string;
@@ -28,6 +36,11 @@ export interface EventInput {
   end_at: string;
   /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は cyan */
   color?: string;
+  /**
+   * 代理登録時の作成者ユーザー名。
+   * 指定した場合はサーバー側でEventProxyGrant権限を確認する。未指定時はJWT認証済みユーザー名を使用する
+   */
+  created_by?: string;
 }
 
 /** 繰り返しタイプ */
@@ -60,6 +73,8 @@ export interface MultipleEventInput {
   end_times: string[];
   /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は cyan */
   color?: string;
+  /** 代理登録時の作成者ユーザー名。未指定時はJWT認証済みユーザー名を使用する */
+  created_by?: string;
 }
 
 /** 繰り返し予定作成リクエスト型 */
@@ -77,6 +92,8 @@ export interface RepeatEventInput {
   repeat: RepeatRule;
   /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は cyan */
   color?: string;
+  /** 代理登録時の作成者ユーザー名。未指定時はJWT認証済みユーザー名を使用する */
+  created_by?: string;
 }
 
 /** 繰り返しグループ全件更新リクエスト型 */
@@ -89,6 +106,17 @@ export interface UpdateRepeatGroupInput {
   end_diff_ms?: number;
   /** 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）。未指定時は変更なし */
   color?: string;
+}
+
+/** 権限付与リクエスト型 */
+export interface EventPermissionInput {
+  username: string;
+  permission: 'READ' | 'WRITE';
+}
+
+/** 代理登録権限レスポンス型 */
+export interface ProxyGrantUser {
+  username: string;
 }
 
 /**
@@ -266,4 +294,163 @@ export async function deleteEvent(id: number): Promise<void> {
   }
 
   logger.info(CONTEXT, `予定削除成功: id=${id}`);
+}
+
+/**
+ * 予定の権限一覧を取得する（作成者のみ）
+ */
+export async function fetchEventPermissions(eventId: number): Promise<EventPermission[]> {
+  logger.info(CONTEXT, `予定権限一覧取得リクエスト送信: eventId=${eventId}`);
+
+  const response = await fetch(`${API_BASE}/events/${eventId}/permissions`, {
+    method: 'GET',
+    headers: authHeaders(),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = (data as { message?: string }).message || '権限一覧の取得に失敗しました。';
+    logger.warn(CONTEXT, `予定権限一覧取得失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, `予定権限一覧取得成功: eventId=${eventId}`);
+  return (await response.json()) as EventPermission[];
+}
+
+/**
+ * 予定へ権限を付与する（作成者のみ）
+ */
+export async function addEventPermission(
+  eventId: number,
+  input: EventPermissionInput,
+): Promise<EventPermission> {
+  logger.info(CONTEXT, `予定権限付与リクエスト送信: eventId=${eventId}, target=${input.username}`);
+
+  const response = await fetch(`${API_BASE}/events/${eventId}/permissions`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = (data as { message?: string }).message || '権限の付与に失敗しました。';
+    logger.warn(CONTEXT, `予定権限付与失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, `予定権限付与成功: eventId=${eventId}, target=${input.username}`);
+  const data = (await response.json()) as { message: string; permission: EventPermission };
+  return data.permission;
+}
+
+/**
+ * 予定の権限を削除する（作成者のみ）
+ */
+export async function deleteEventPermission(eventId: number, username: string): Promise<void> {
+  logger.info(CONTEXT, `予定権限削除リクエスト送信: eventId=${eventId}, target=${username}`);
+
+  const response = await fetch(`${API_BASE}/events/${eventId}/permissions/${username}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = (data as { message?: string }).message || '権限の削除に失敗しました。';
+    logger.warn(CONTEXT, `予定権限削除失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, `予定権限削除成功: eventId=${eventId}, target=${username}`);
+}
+
+/**
+ * 自分が代理登録を許可しているユーザー一覧を取得する
+ */
+export async function fetchProxyGrantees(): Promise<ProxyGrantUser[]> {
+  logger.info(CONTEXT, '代理登録許可ユーザー一覧取得リクエスト送信');
+
+  const response = await fetch(`${API_BASE}/events/proxy-grants/grantees`, {
+    method: 'GET',
+    headers: authHeaders(),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = (data as { message?: string }).message || '代理登録許可ユーザー一覧の取得に失敗しました。';
+    logger.warn(CONTEXT, `代理登録許可ユーザー一覧取得失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, '代理登録許可ユーザー一覧取得成功');
+  return (await response.json()) as ProxyGrantUser[];
+}
+
+/**
+ * 自分が代理登録できるユーザー一覧を取得する
+ */
+export async function fetchProxyGranters(): Promise<ProxyGrantUser[]> {
+  logger.info(CONTEXT, '代理登録可能ユーザー一覧取得リクエスト送信');
+
+  const response = await fetch(`${API_BASE}/events/proxy-grants/granters`, {
+    method: 'GET',
+    headers: authHeaders(),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = (data as { message?: string }).message || '代理登録可能ユーザー一覧の取得に失敗しました。';
+    logger.warn(CONTEXT, `代理登録可能ユーザー一覧取得失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, '代理登録可能ユーザー一覧取得成功');
+  return (await response.json()) as ProxyGrantUser[];
+}
+
+/**
+ * 指定ユーザーに自分の予定への代理登録権限を付与する
+ */
+export async function addProxyGrant(granteeUsername: string): Promise<ProxyGrantUser> {
+  logger.info(CONTEXT, `代理登録権限付与リクエスト送信: grantee=${granteeUsername}`);
+
+  const response = await fetch(`${API_BASE}/events/proxy-grants`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ grantee_username: granteeUsername }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = (data as { message?: string }).message || '代理登録権限の付与に失敗しました。';
+    logger.warn(CONTEXT, `代理登録権限付与失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, `代理登録権限付与成功: grantee=${granteeUsername}`);
+  const data = (await response.json()) as { message: string; grant: ProxyGrantUser };
+  return data.grant;
+}
+
+/**
+ * 指定ユーザーへの代理登録権限を削除する
+ */
+export async function deleteProxyGrant(granteeUsername: string): Promise<void> {
+  logger.info(CONTEXT, `代理登録権限削除リクエスト送信: grantee=${granteeUsername}`);
+
+  const response = await fetch(`${API_BASE}/events/proxy-grants/${granteeUsername}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const message = (data as { message?: string }).message || '代理登録権限の削除に失敗しました。';
+    logger.warn(CONTEXT, `代理登録権限削除失敗: ${message}`);
+    throw new Error(message);
+  }
+
+  logger.info(CONTEXT, `代理登録権限削除成功: grantee=${granteeUsername}`);
 }

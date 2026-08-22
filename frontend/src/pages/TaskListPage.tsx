@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTaskList, TaskTreeNode } from '../hooks/useTaskList';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { getCurrentUsername, Task, deleteNotification } from '../api/taskApi';
+import { getCurrentUsername, Task } from '../api/taskApi';
 import FormErrorBanner from '../components/FormErrorBanner';
 import ConfirmModal from '../components/ConfirmModal';
 import TaskCard from '../components/TaskCard';
@@ -10,9 +10,6 @@ import ActionButton from '../components/ActionButton';
 import CategoryFilterBar from '../components/CategoryFilterBar';
 import SectionToggleButton from '../components/SectionToggleButton';
 import TaskDetailPanel from '../components/TaskDetailPanel';
-import { logger } from '../logger';
-
-const CONTEXT = 'TaskListPage';
 
 /** depthに対応するTailwind paddingLeftクラス */
 const DEPTH_INDENT_CLASSES: Record<number, string> = {
@@ -86,7 +83,6 @@ function TaskListPage() {
     handleToggleComplete,
     awaitToggle,
     setSelectedCategory,
-    reload,
   } = useTaskList();
 
   const [deleteError, setDeleteError] = useState('');
@@ -203,20 +199,6 @@ function TaskListPage() {
   function closeDetailPanel(): void {
     setSelectedTaskId(null);
   }
-
-  /**
-   * 通知削除後に指定タスクをサーバーから再取得してリストを更新する
-   */
-  /**
-   * 通知削除を実行し一覧を再取得する
-   * TaskDetailPanel の onDeleteNotification として渡す
-   */
-  const handleDeleteNotification = useCallback(async (taskId: number, notificationId: number): Promise<void> => {
-    logger.info(CONTEXT, `通知削除: taskId=${taskId}, notificationId=${notificationId}`);
-    await deleteNotification(taskId, notificationId);
-    reload();
-    logger.info(CONTEXT, `通知削除完了: notificationId=${notificationId}`);
-  }, [reload]);
 
   /**
    * タスクカードを1件分レンダリングする
@@ -356,7 +338,6 @@ function TaskListPage() {
               onSelectTask={(id) => setSelectedTaskId(id)}
               onDeleteClick={onDeleteClick}
               onUpdate={handleUpdate}
-              onDeleteNotification={handleDeleteNotification}
             />
           </div>
         </>

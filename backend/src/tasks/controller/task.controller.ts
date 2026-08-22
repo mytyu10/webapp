@@ -12,13 +12,8 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { TaskService } from '../service/task.service';
-import { TaskNotificationService } from '../service/task-notification.service';
 import { TaskPermissionService } from '../service/task-permission.service';
-import {
-  CreateTaskDto,
-  UpdateTaskDto,
-  CreateNotificationDto,
-} from '../dto/task.dto';
+import { CreateTaskDto, UpdateTaskDto } from '../dto/task.dto';
 import { CreatePermissionDto } from 'src/permissions/permission.dto';
 import { JwtAuthGuard } from 'src/jwt/jwt-auth.guard';
 import { OwnershipGuard } from 'src/common/guards/ownership.guard';
@@ -40,7 +35,6 @@ const CONTEXT = 'TaskController';
 export class TaskController {
   constructor(
     private readonly taskService: TaskService,
-    private readonly taskNotificationService: TaskNotificationService,
     private readonly taskPermissionService: TaskPermissionService,
     private readonly logger: LoggerService,
   ) {}
@@ -143,67 +137,6 @@ export class TaskController {
     return response
       .status(HttpStatus.OK)
       .json({ message: MESSAGE.TASK.DELETE_SUCCESS });
-  }
-
-  /**
-   * タスク通知追加エンドポイント
-   * 作成者・担当者・WRITE権限保持者のみ操作可能（OwnershipGuard）
-   */
-  @Post(':id/notifications')
-  @CheckOwnership('task')
-  @UseGuards(OwnershipGuard)
-  async addNotification(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CreateNotificationDto,
-    @Res() response: Response,
-  ): Promise<Response> {
-    this.logger.log(CONTEXT, `通知追加リクエスト: taskId=${id}`);
-    const notification = await this.taskNotificationService.addNotification(
-      id,
-      dto.notify_at,
-    );
-    return response
-      .status(HttpStatus.CREATED)
-      .json({ message: MESSAGE.NOTIFICATION.CREATE_SUCCESS, notification });
-  }
-
-  /**
-   * タスク通知一覧取得エンドポイント
-   * 作成者・担当者・権限保持者のみアクセス可能（OwnershipGuard）
-   */
-  @Get(':id/notifications')
-  @CheckOwnership('task')
-  @UseGuards(OwnershipGuard)
-  async getNotifications(
-    @Param('id', ParseIntPipe) id: number,
-    @Res() response: Response,
-  ): Promise<Response> {
-    this.logger.log(CONTEXT, `通知一覧取得リクエスト: taskId=${id}`);
-    const notifications =
-      await this.taskNotificationService.getNotifications(id);
-    return response.status(HttpStatus.OK).json(notifications);
-  }
-
-  /**
-   * タスク通知削除エンドポイント
-   * 作成者・担当者・WRITE権限保持者のみ操作可能（OwnershipGuard）
-   */
-  @Delete(':id/notifications/:notificationId')
-  @CheckOwnership('task')
-  @UseGuards(OwnershipGuard)
-  async removeNotification(
-    @Param('id', ParseIntPipe) id: number,
-    @Param('notificationId', ParseIntPipe) notificationId: number,
-    @Res() response: Response,
-  ): Promise<Response> {
-    this.logger.log(
-      CONTEXT,
-      `通知削除リクエスト: taskId=${id}, notificationId=${notificationId}`,
-    );
-    await this.taskNotificationService.removeNotification(notificationId);
-    return response
-      .status(HttpStatus.OK)
-      .json({ message: MESSAGE.NOTIFICATION.DELETE_SUCCESS });
   }
 
   /**

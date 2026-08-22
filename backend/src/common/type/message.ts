@@ -1,7 +1,6 @@
 /** メッセージを管理する定数ファイル */
 export const MESSAGE = {
   AUTH: {
-    LOGIN_SUCCESS: 'ログイン成功',
     LOGIN_FAILED: 'ユーザーネームまたはパスワードが間違っています',
     REGIST_SUCCESS: 'アカウントの登録に成功しました',
     REGIST_FAILED: 'アカウントの作成に失敗しました',
@@ -9,6 +8,7 @@ export const MESSAGE = {
     UNAUTHORIZED: '認証が必要です',
     AUTH_INFO_FAILED: '認証情報の取得に失敗しました',
     ME_FETCH_FAILED: 'ユーザー情報の取得に失敗しました',
+    NOT_FOUND: '指定されたユーザーが見つかりません',
   },
   DB: {
     DB_ERROR: 'データベースエラーが発生しました',
@@ -16,9 +16,22 @@ export const MESSAGE = {
   VALIDATION: {
     INVALID_INPUT: '入力値が不正です',
   },
+  WEBAUTHN: {
+    REGISTRATION_START_SUCCESS: '顔認証の登録を開始しました',
+    REGISTRATION_SUCCESS: '顔認証の登録が完了しました',
+    REGISTRATION_FAILED: '顔認証の登録に失敗しました',
+    AUTHENTICATION_START_SUCCESS: '顔認証の認証を開始しました',
+    AUTHENTICATION_SUCCESS: '顔認証による認証が完了しました',
+    AUTHENTICATION_FAILED: '顔認証による認証に失敗しました',
+    CHALLENGE_NOT_FOUND:
+      '認証チャレンジが見つかりません。もう一度お試しください',
+    CHALLENGE_EXPIRED:
+      '認証チャレンジの有効期限が切れました。もう一度お試しください',
+    NO_CREDENTIALS: '顔認証が登録されていません。先に顔認証を登録してください',
+    CREDENTIAL_ALREADY_EXISTS: 'この認証器はすでに登録されています',
+  },
   TASK: {
     CREATE_SUCCESS: 'タスクを作成しました',
-    UPDATE_SUCCESS: 'タスクを更新しました',
     QUEUE_UPDATE_SUCCESS: 'タスクをキューで処理し更新しました',
     DELETE_SUCCESS: 'タスクを削除しました',
     NOT_FOUND: '指定されたタスクが見つかりません',
@@ -27,15 +40,6 @@ export const MESSAGE = {
     DELETE_FAILED: 'タスクの削除に失敗しました',
     CATEGORIES_FETCH_FAILED: 'カテゴリ一覧の取得に失敗しました',
     FORBIDDEN: 'このタスクを操作する権限がありません',
-  },
-  NOTIFICATION: {
-    CREATE_SUCCESS: '通知を追加しました',
-    DELETE_SUCCESS: '通知を削除しました',
-    FETCH_SUCCESS: '通知一覧を取得しました',
-    NOT_FOUND: '指定された通知が見つかりません',
-    CREATE_FAILED: '通知の追加に失敗しました',
-    DELETE_FAILED: '通知の削除に失敗しました',
-    FETCH_FAILED: '通知一覧の取得に失敗しました',
   },
   EVENT: {
     CREATE_SUCCESS: '予定を作成しました',
@@ -56,6 +60,20 @@ export const MESSAGE = {
     UPDATE_GROUP_FAILED: '繰り返し予定の更新に失敗しました',
     REPEAT_GROUP_NOT_FOUND: '指定された繰り返しグループの予定が見つかりません',
     REPEAT_GROUP_FORBIDDEN: 'この繰り返し予定を操作する権限がありません',
+    PERMISSION_FETCH_FAILED: '予定の権限一覧の取得に失敗しました',
+    PERMISSION_ADD_SUCCESS: '予定の権限を付与しました',
+    PERMISSION_ADD_FAILED: '予定の権限の付与に失敗しました',
+    PERMISSION_REMOVE_SUCCESS: '予定の権限を削除しました',
+    PERMISSION_REMOVE_FAILED: '予定の権限の削除に失敗しました',
+    PROXY_GRANT_ADD_SUCCESS: '代理登録権限を付与しました',
+    PROXY_GRANT_ADD_FAILED: '代理登録権限の付与に失敗しました',
+    PROXY_GRANT_REMOVE_SUCCESS: '代理登録権限を削除しました',
+    PROXY_GRANT_REMOVE_FAILED: '代理登録権限の削除に失敗しました',
+    PROXY_GRANT_FETCH_FAILED: '代理登録権限一覧の取得に失敗しました',
+    PROXY_GRANT_SELF_FORBIDDEN:
+      '自分自身に代理登録権限を付与することはできません',
+    PROXY_GRANT_NOT_FOUND: '指定された代理登録権限が見つかりません',
+    PROXY_GRANT_FORBIDDEN: 'この予定に代理登録する権限がありません',
   },
   LINK: {
     CREATE_SUCCESS: 'リンクを作成しました',
@@ -73,7 +91,6 @@ export const MESSAGE = {
   PERMISSION: {
     ADD_SUCCESS: '権限を付与しました',
     REMOVE_SUCCESS: '権限を削除しました',
-    FETCH_SUCCESS: '権限一覧を取得しました',
     NOT_FOUND: '指定された権限が見つかりません',
     ADD_FAILED: '権限の付与に失敗しました',
     REMOVE_FAILED: '権限の削除に失敗しました',

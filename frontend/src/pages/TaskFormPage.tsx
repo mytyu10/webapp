@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTaskForm } from '../hooks/useTaskForm';
 import { PRIORITY_VALUES, PRIORITY_LABELS } from '../api/taskApi';
@@ -15,7 +14,6 @@ import CancelButton from '../components/CancelButton';
  * タスク作成・編集ページ
  * URLパラメータにidが存在する場合は編集モード、存在しない場合は作成モードで動作する
  * クエリパラメータ parent_id が存在する場合は子タスク作成モードになる
- * 通知日時を複数追加できるUIを提供する
  */
 function TaskFormPage() {
   const { id } = useParams<{ id?: string }>();
@@ -25,24 +23,21 @@ function TaskFormPage() {
   const parentIdParam = searchParams.get('parent_id');
   const parentId = parentIdParam !== null ? Number(parentIdParam) : undefined;
 
-  /** 通知日時入力の一時値 */
-  const [notificationInput, setNotificationInput] = useState('');
-
   const {
     values,
     errors,
     apiError,
     loading,
     isEditMode,
-    notifications,
+    availableUsers,
+    usersLoading,
     setTitle,
     setDescription,
     setDueDate,
-    setAssigneesText,
     setPriority,
     setCategory,
-    addNotificationDatetime,
-    removeNotificationDatetime,
+    addAssignee,
+    removeAssignee,
     handleSubmit,
   } = useTaskForm({ id: taskId, parentId });
 
@@ -64,11 +59,12 @@ function TaskFormPage() {
     }
   }
 
-  /** 通知日時を追加する */
-  function handleAddNotification(): void {
-    if (!notificationInput) return;
-    addNotificationDatetime(notificationInput);
-    setNotificationInput('');
+  /** 担当者を選択して追加する */
+  function handleAssigneeSelect(e: React.ChangeEvent<HTMLSelectElement>): void {
+    const username = e.target.value;
+    if (!username) return;
+    addAssignee(username);
+    e.target.value = '';
   }
 
   /** 優先度の選択肢を生成する */
@@ -76,6 +72,11 @@ function TaskFormPage() {
     value: p,
     label: PRIORITY_LABELS[p],
   }));
+
+  /** まだ選択されていないユーザーのみ選択肢に表示する */
+  const selectableUsers = availableUsers.filter(
+    (u) => !values.assignees.includes(u.username)
+  );
 
   return (
     <div className="max-w-xl mx-auto">
@@ -135,62 +136,47 @@ function TaskFormPage() {
           maxLength={100}
         />
 
-        <FormField
-          id="assignees"
-          label="担当者（カンマ区切りで複数入力）"
-          value={values.assigneesText}
-          onChange={setAssigneesText}
-          error={errors.assignees}
-          disabled={loading}
-        />
-
-        {/* 通知日時セクション */}
+        {/* 担当者セクション */}
         <div>
-          <p className="block text-sm font-medium text-slate-300 mb-1">通知日時（任意・複数設定可）</p>
-          <div className="flex gap-2 mb-2">
-            <DateTimeField
-              id="notification_input"
-              label=""
-              value={notificationInput}
-              onChange={setNotificationInput}
-              disabled={loading}
-            />
-            <button
-              type="button"
-              onClick={handleAddNotification}
-              disabled={loading || !notificationInput}
-              className="shrink-0 px-3 py-2 bg-sky-700 hover:bg-sky-600 disabled:opacity-50 text-white text-sm font-medium rounded-md transition-colors self-end mb-0"
-            >
-              追加
-            </button>
-          </div>
-          {notifications.length > 0 && (
-            <ul className="space-y-1">
-              {notifications.map((datetime, index) => (
-                <li
-                  key={index}
-                  className="flex items-center justify-between px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-sm text-slate-200"
+          <p className="block text-sm font-medium text-slate-300 mb-1">担当者</p>
+          <select
+            onChange={handleAssigneeSelect}
+            disabled={loading || usersLoading}
+            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-sm text-slate-200 outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/30 disabled:opacity-50 mb-2"
+            defaultValue=""
+          >
+            <option value="" disabled>
+              {usersLoading ? '読み込み中...' : 'ユーザーを選択してください'}
+            </option>
+            {selectableUsers.map((u) => (
+              <option key={u.username} value={u.username}>
+                {u.username}
+              </option>
+            ))}
+          </select>
+          {values.assignees.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-1">
+              {values.assignees.map((username, index) => (
+                <span
+                  key={username}
+                  className="flex items-center gap-1 px-2 py-1 bg-sky-800 border border-sky-600 rounded-full text-xs text-sky-100"
                 >
-                  <span>
-                    {new Date(datetime).toLocaleString('ja-JP', {
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
+                  {username}
                   <button
                     type="button"
-                    onClick={() => removeNotificationDatetime(index)}
+                    onClick={() => removeAssignee(index)}
                     disabled={loading}
-                    className="ml-3 text-red-400 hover:text-red-300 disabled:opacity-50 text-xs font-medium transition-colors"
+                    className="ml-1 text-sky-300 hover:text-white disabled:opacity-50 leading-none"
+                    aria-label={`${username}を担当者から削除`}
                   >
-                    削除
+                    ×
                   </button>
-                </li>
+                </span>
               ))}
-            </ul>
+            </div>
+          )}
+          {errors.assignees && (
+            <p className="mt-1 text-xs text-red-400">{errors.assignees}</p>
           )}
         </div>
 

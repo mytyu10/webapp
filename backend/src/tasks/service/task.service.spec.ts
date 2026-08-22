@@ -9,7 +9,7 @@ import { LoggerService } from 'src/common/service/logger.service';
 import { BatchQueueService } from 'src/common/service/batch-queue.service';
 import { MESSAGE } from 'src/common/type/message';
 
-/** モック用タスクデータ（notifications フィールドを含む） */
+/** モック用タスクデータ */
 const mockTask = {
   id: 1,
   title: 'テストタスク',
@@ -24,7 +24,6 @@ const mockTask = {
   is_completed: false,
   closed_by: null,
   assignees: [{ task_id: 1, username: 'testuser' }],
-  notifications: [],
   children: [],
 };
 
@@ -102,39 +101,6 @@ describe('TaskService', () => {
 
       expect(result[0].is_completed).toBe(true);
     });
-
-    it('findAll の戻り値に notifications が含まれる', async () => {
-      mockTaskRepository.findAll.mockResolvedValue([mockTask]);
-
-      const result = await service.findAll('testuser');
-
-      expect(result[0]).toHaveProperty('notifications');
-      expect(result[0].notifications).toEqual([]);
-    });
-
-    it('通知が設定されているタスクの notifications を正しく変換する', async () => {
-      const taskWithNotification = {
-        ...mockTask,
-        notifications: [
-          {
-            id: 10,
-            task_id: 1,
-            notify_at: new Date('2026-12-01T09:00:00.000Z'),
-            is_sent: false,
-          },
-        ],
-      };
-      mockTaskRepository.findAll.mockResolvedValue([taskWithNotification]);
-
-      const result = await service.findAll('testuser');
-
-      expect(result[0].notifications).toHaveLength(1);
-      expect(result[0].notifications[0].id).toBe(10);
-      expect(result[0].notifications[0].notify_at).toBe(
-        '2026-12-01T09:00:00.000Z',
-      );
-      expect(result[0].notifications[0].is_sent).toBe(false);
-    });
   });
 
   describe('findById', () => {
@@ -163,15 +129,6 @@ describe('TaskService', () => {
 
       expect(result).toHaveProperty('is_completed');
       expect(result.is_completed).toBe(false);
-    });
-
-    it('findById の戻り値に notifications が含まれる', async () => {
-      mockTaskRepository.findById.mockResolvedValue(mockTask);
-
-      const result = await service.findById(1);
-
-      expect(result).toHaveProperty('notifications');
-      expect(result.notifications).toEqual([]);
     });
   });
 

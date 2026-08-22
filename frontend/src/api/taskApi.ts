@@ -43,8 +43,6 @@ export interface Task {
   closed_by: string | null;
   assignees: string[];
   children: Task[];
-  /** タスクに設定された通知一覧（取得時のみ含まれる） */
-  notifications?: TaskNotification[];
 }
 
 /** タスク作成・更新リクエスト型 */
@@ -239,79 +237,4 @@ export async function deleteTask(id: number): Promise<void> {
   }
 
   logger.info(CONTEXT, `タスク削除成功: id=${id}`);
-}
-
-/** タスク通知レスポンス型 */
-export interface TaskNotification {
-  id: number;
-  task_id: number;
-  notify_at: string;
-  is_sent: boolean;
-}
-
-/**
- * 指定タスクの通知一覧を取得する
- */
-export async function fetchNotifications(taskId: number): Promise<TaskNotification[]> {
-  logger.info(CONTEXT, `通知一覧取得リクエスト送信: taskId=${taskId}`);
-
-  const response = await fetch(`${API_BASE}/tasks/${taskId}/notifications`, {
-    method: 'GET',
-    headers: authHeaders(),
-  });
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    const message = (data as { message?: string }).message || '通知の取得に失敗しました。';
-    logger.warn(CONTEXT, `通知一覧取得失敗: ${message}`);
-    throw new Error(message);
-  }
-
-  logger.info(CONTEXT, `通知一覧取得成功: taskId=${taskId}`);
-  return (await response.json()) as TaskNotification[];
-}
-
-/**
- * タスクに通知を追加する
- */
-export async function addNotification(taskId: number, notify_at: string): Promise<TaskNotification> {
-  logger.info(CONTEXT, `通知追加リクエスト送信: taskId=${taskId}`);
-
-  const response = await fetch(`${API_BASE}/tasks/${taskId}/notifications`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({ notify_at }),
-  });
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    const message = (data as { message?: string }).message || '通知の追加に失敗しました。';
-    logger.warn(CONTEXT, `通知追加失敗: ${message}`);
-    throw new Error(message);
-  }
-
-  logger.info(CONTEXT, `通知追加成功: taskId=${taskId}`);
-  const data = await response.json() as { message: string; notification: TaskNotification };
-  return data.notification;
-}
-
-/**
- * タスクの通知を削除する
- */
-export async function deleteNotification(taskId: number, notificationId: number): Promise<void> {
-  logger.info(CONTEXT, `通知削除リクエスト送信: taskId=${taskId}, notificationId=${notificationId}`);
-
-  const response = await fetch(`${API_BASE}/tasks/${taskId}/notifications/${notificationId}`, {
-    method: 'DELETE',
-    headers: authHeaders(),
-  });
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    const message = (data as { message?: string }).message || '通知の削除に失敗しました。';
-    logger.warn(CONTEXT, `通知削除失敗: ${message}`);
-    throw new Error(message);
-  }
-
-  logger.info(CONTEXT, `通知削除成功: taskId=${taskId}, notificationId=${notificationId}`);
 }

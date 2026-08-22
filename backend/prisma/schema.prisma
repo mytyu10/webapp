@@ -7,37 +7,66 @@ datasource db {
 }
 
 model Account {
-  username           String           @id
-  hashed_password    String
-  task_assignees     TaskAssignee[]
-  created_tasks      Task[]           @relation("TaskCreator")
-  created_events     Event[]          @relation("EventCreator")
-  created_links      LinkItem[]       @relation("LinkCreator")
-  sent_messages      ChatMessage[]    @relation("ChatSender")
-  received_messages  ChatMessage[]    @relation("ChatReceiver")
-  task_permissions   TaskPermission[]
-  link_permissions   LinkPermission[]
+  username              String                @id
+  hashed_password       String
+  task_assignees        TaskAssignee[]
+  created_tasks         Task[]                @relation("TaskCreator")
+  created_events        Event[]               @relation("EventCreator")
+  created_links         LinkItem[]            @relation("LinkCreator")
+  sent_messages         ChatMessage[]         @relation("ChatSender")
+  received_messages     ChatMessage[]         @relation("ChatReceiver")
+  task_permissions      TaskPermission[]
+  link_permissions      LinkPermission[]
+  event_permissions     EventPermission[]
+  proxy_grants_given    EventProxyGrant[]     @relation("ProxyGranter")
+  proxy_grants_received EventProxyGrant[]     @relation("ProxyGrantee")
+  webauthn_credentials  WebAuthnCredential[]
+}
+
+model WebAuthnCredential {
+  id          String   @id                        // credential ID（base64url）
+  username    String
+  public_key  Bytes                               // 公開鍵（COSE形式）
+  counter     Int      @default(0)                // リプレイアタック防止用カウンター
+  device_type String   @default("singleDevice")   // singleDevice | multiDevice
+  backed_up   Boolean  @default(false)
+  transports  String?                             // JSON配列シリアライズ
+  created_at  DateTime @default(now())
+  account     Account  @relation(fields: [username], references: [username], onDelete: Cascade)
+
+  @@index([username])
+}
+
+model WebAuthnChallenge {
+  id         String   @id @default(cuid())
+  username   String
+  challenge  String                               // base64url チャレンジ
+  type       String                               // "registration" | "authentication"
+  expires_at DateTime                             // TTL: 5分
+  created_at DateTime @default(now())
+
+  @@index([username])
+  @@index([expires_at])
 }
 
 model Task {
-  id            Int                @id @default(autoincrement())
+  id            Int              @id @default(autoincrement())
   title         String
   description   String
   due_date      DateTime
-  priority      String             @default("MEDIUM")
+  priority      String           @default("MEDIUM")
   category      String?
   parent_id     Int?
   created_by    String
-  created_at    DateTime           @default(now())
-  updated_at    DateTime           @updatedAt
-  is_completed  Boolean            @default(false)
+  created_at    DateTime         @default(now())
+  updated_at    DateTime         @updatedAt
+  is_completed  Boolean          @default(false)
   closed_by     String?
   assignees     TaskAssignee[]
-  notifications TaskNotification[]
   permissions   TaskPermission[]
-  creator       Account            @relation("TaskCreator", fields: [created_by], references: [username])
-  parent        Task?              @relation("TaskChildren", fields: [parent_id], references: [id])
-  children      Task[]             @relation("TaskChildren")
+  creator       Account          @relation("TaskCreator", fields: [created_by], references: [username])
+  parent        Task?            @relation("TaskChildren", fields: [parent_id], references: [id])
+  children      Task[]           @relation("TaskChildren")
 
   @@index([created_by])
   @@index([parent_id])
@@ -54,14 +83,6 @@ model TaskAssignee {
   @@index([username])
 }
 
-model TaskNotification {
-  id        Int      @id @default(autoincrement())
-  task_id   Int
-  notify_at DateTime
-  is_sent   Boolean  @default(false)
-  task      Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
-}
-
 model TaskPermission {
   task_id    Int
   username   String
@@ -74,20 +95,42 @@ model TaskPermission {
 }
 
 model Event {
-  id              Int      @id @default(autoincrement())
+  id              Int               @id @default(autoincrement())
   title           String
-  description     String   @default("")
+  description     String            @default("")
   start_at        DateTime
   end_at          DateTime
-  color           String   @default("cyan")  // 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）
+  color           String            @default("cyan")  // 予定の色識別子（cyan/indigo/emerald/violet/rose/amber）
   repeat_group_id String?
   created_by      String
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-  creator         Account  @relation("EventCreator", fields: [created_by], references: [username])
+  created_at      DateTime          @default(now())
+  updated_at      DateTime          @updatedAt
+  creator         Account           @relation("EventCreator", fields: [created_by], references: [username])
+  permissions     EventPermission[]
 
   @@index([created_by])
   @@index([start_at])
+}
+
+model EventPermission {
+  event_id   Int
+  username   String
+  permission String    // "READ" | "WRITE"
+  event      Event   @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  account    Account @relation(fields: [username], references: [username], onDelete: Cascade)
+
+  @@id([event_id, username])
+  @@index([username])
+}
+
+model EventProxyGrant {
+  granter_username String
+  grantee_username String
+  granter          Account @relation("ProxyGranter", fields: [granter_username], references: [username], onDelete: Cascade)
+  grantee          Account @relation("ProxyGrantee", fields: [grantee_username], references: [username], onDelete: Cascade)
+
+  @@id([granter_username, grantee_username])
+  @@index([grantee_username])
 }
 
 model LinkItem {

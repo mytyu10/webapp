@@ -15,7 +15,8 @@ export interface TaskFormValues {
   title: string;
   description: string;
   due_date: string;
-  assigneesText: string;
+  /** 担当者ユーザー名リスト */
+  assignees: string[];
   priority: Priority;
   category: string;
 }
@@ -61,10 +62,9 @@ export function validateTaskForm(values: TaskFormValues): TaskFormErrors {
   }
 
   /** 担当者は1人以上必須 */
-  const assignees = parseAssignees(values.assigneesText);
-  if (assignees.length === 0) {
-    errors.assignees = '担当者を1人以上入力してください';
-  } else if (assignees.length > ASSIGNEES_MAX_COUNT) {
+  if (values.assignees.length === 0) {
+    errors.assignees = '担当者を1人以上選択してください';
+  } else if (values.assignees.length > ASSIGNEES_MAX_COUNT) {
     errors.assignees = `担当者は${ASSIGNEES_MAX_COUNT}人以内で設定してください`;
   }
 
@@ -77,14 +77,4 @@ export function validateTaskForm(values: TaskFormValues): TaskFormErrors {
   }
 
   return errors;
-}
-
-/**
- * 担当者テキスト（カンマ区切り）をユーザー名リストに変換する
- */
-export function parseAssignees(assigneesText: string): string[] {
-  return assigneesText
-    .split(',')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
 }

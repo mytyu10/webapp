@@ -13,6 +13,8 @@ import {
   updateEvent,
   updateRepeatGroupEvent,
   deleteEvent,
+  addEventPermission,
+  EventPermissionInput,
 } from '../api/eventApi';
 import { fetchTasks, Task } from '../api/taskApi';
 import { getCurrentUsername } from '../api/taskApi';
@@ -22,6 +24,14 @@ const CONTEXT = 'useCalendar';
 
 /** カレンダービューの種別 */
 export type CalendarView = 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay';
+
+/** 予定作成時のオプション */
+export interface CreateEventOptions {
+  /** 代理登録時の作成者ユーザー名。未指定時はJWTのユーザー名を使用する */
+  proxyUsername?: string;
+  /** 共有登録時の共有先ユーザーと権限のリスト。作成後にEventPermissionを付与する */
+  sharePermissions?: EventPermissionInput[];
+}
 
 /** useCalendarフックの戻り値型 */
 export interface UseCalendarReturn {
@@ -39,12 +49,12 @@ export interface UseCalendarReturn {
   currentUsername: string | null;
   /** ビューを切り替える */
   setCurrentView: (view: CalendarView) => void;
-  /** 予定を作成する */
-  handleCreateEvent: (input: EventInput) => Promise<void>;
-  /** 複数日付で予定を一括作成する */
-  handleCreateMultipleEvents: (input: MultipleEventInput) => Promise<void>;
-  /** 繰り返しルールで予定を一括作成する */
-  handleCreateRepeatEvent: (input: RepeatEventInput) => Promise<void>;
+  /** 予定を作成する（代理登録・共有登録オプション対応） */
+  handleCreateEvent: (input: EventInput, options?: CreateEventOptions) => Promise<void>;
+  /** 複数日付で予定を一括作成する（代理登録・共有登録オプション対応） */
+  handleCreateMultipleEvents: (input: MultipleEventInput, options?: CreateEventOptions) => Promise<void>;
+  /** 繰り返しルールで予定を一括作成する（代理登録・共有登録オプション対応） */
+  handleCreateRepeatEvent: (input: RepeatEventInput, options?: CreateEventOptions) => Promise<void>;
   /** 予定を更新する */
   handleUpdateEvent: (id: number, input: Partial<EventInput>) => Promise<void>;
   /** 繰り返しグループの全予定を一括更新する */
@@ -137,6 +147,27 @@ function calendarEventToEventInput(event: CalendarEvent): FullCalendarEventInput
 }
 
 /**
+ * 作成後の予定に共有権限を付与する。
+ * エラーが発生してもメインフローを止めないよう内部でハンドリングする
+ */
+async function applySharePermissions(
+  eventId: number,
+  sharePermissions: EventPermissionInput[],
+): Promise<void> {
+  for (const perm of sharePermissions) {
+    try {
+      await addEventPermission(eventId, perm);
+      logger.info(CONTEXT, `予定共有権限付与完了: eventId=${eventId}, target=${perm.username}`);
+    } catch (err) {
+      logger.warn(
+        CONTEXT,
+        `予定共有権限付与失敗: eventId=${eventId}, target=${perm.username} - ${err instanceof Error ? err.message : '不明なエラー'}`,
+      );
+    }
+  }
+}
+
+/**
  * カレンダー予定・タスク表示・ビュー切り替えを管理するカスタムフック
  */
 export function useCalendar(): UseCalendarReturn {
@@ -216,14 +247,27 @@ export function useCalendar(): UseCalendarReturn {
   }, [events, tasks, currentView]);
 
   /**
-   * 予定を作成する。作成後はローカルステートに追加する
+   * 予定を作成する。代理登録・共有登録オプション対応。
+   * proxyUsername が指定されている場合は created_by として送信する。
+   * sharePermissions が指定されている場合は作成後に権限を付与する
    */
-  const handleCreateEvent = useCallback(async (input: EventInput): Promise<void> => {
+  const handleCreateEvent = useCallback(async (
+    input: EventInput,
+    options?: CreateEventOptions,
+  ): Promise<void> => {
     logger.info(CONTEXT, `予定作成実行: ${input.title}`);
     try {
-      const created = await createEvent(input);
+      const payload: EventInput = {
+        ...input,
+        ...(options?.proxyUsername ? { created_by: options.proxyUsername } : {}),
+      };
+      const created = await createEvent(payload);
       setEvents((prev) => [...prev, created]);
       logger.info(CONTEXT, `予定作成完了: id=${created.id}`);
+
+      if (options?.sharePermissions && options.sharePermissions.length > 0) {
+        await applySharePermissions(created.id, options.sharePermissions);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : '予定の作成に失敗しました。';
       logger.warn(CONTEXT, `予定作成失敗: ${message}`);
@@ -233,14 +277,27 @@ export function useCalendar(): UseCalendarReturn {
 
   /**
    * 複数の開始日時と終了日時を指定して同じ内容の予定を一括作成する。
-   * 作成後はローカルステートに全件追加する
+   * 代理登録・共有登録オプション対応。作成後はローカルステートに全件追加する
    */
-  const handleCreateMultipleEvents = useCallback(async (input: MultipleEventInput): Promise<void> => {
+  const handleCreateMultipleEvents = useCallback(async (
+    input: MultipleEventInput,
+    options?: CreateEventOptions,
+  ): Promise<void> => {
     logger.info(CONTEXT, `複数予定作成実行: ${input.title}, 件数=${input.start_times.length}`);
     try {
-      const created = await createMultipleEvents(input);
+      const payload: MultipleEventInput = {
+        ...input,
+        ...(options?.proxyUsername ? { created_by: options.proxyUsername } : {}),
+      };
+      const created = await createMultipleEvents(payload);
       setEvents((prev) => [...prev, ...created]);
       logger.info(CONTEXT, `複数予定作成完了: ${created.length}件`);
+
+      if (options?.sharePermissions && options.sharePermissions.length > 0) {
+        for (const event of created) {
+          await applySharePermissions(event.id, options.sharePermissions);
+        }
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : '複数予定の作成に失敗しました。';
       logger.warn(CONTEXT, `複数予定作成失敗: ${message}`);
@@ -250,14 +307,27 @@ export function useCalendar(): UseCalendarReturn {
 
   /**
    * 繰り返しルールに基づいて予定を一括作成する。
-   * 作成後はローカルステートに全件追加する
+   * 代理登録・共有登録オプション対応。作成後はローカルステートに全件追加する
    */
-  const handleCreateRepeatEvent = useCallback(async (input: RepeatEventInput): Promise<void> => {
+  const handleCreateRepeatEvent = useCallback(async (
+    input: RepeatEventInput,
+    options?: CreateEventOptions,
+  ): Promise<void> => {
     logger.info(CONTEXT, `繰り返し予定作成実行: ${input.title}`);
     try {
-      const created = await createRepeatEvent(input);
+      const payload: RepeatEventInput = {
+        ...input,
+        ...(options?.proxyUsername ? { created_by: options.proxyUsername } : {}),
+      };
+      const created = await createRepeatEvent(payload);
       setEvents((prev) => [...prev, ...created]);
       logger.info(CONTEXT, `繰り返し予定作成完了: ${created.length}件`);
+
+      if (options?.sharePermissions && options.sharePermissions.length > 0) {
+        for (const event of created) {
+          await applySharePermissions(event.id, options.sharePermissions);
+        }
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : '繰り返し予定の作成に失敗しました。';
       logger.warn(CONTEXT, `繰り返し予定作成失敗: ${message}`);
