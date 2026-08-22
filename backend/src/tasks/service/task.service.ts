@@ -65,8 +65,8 @@ export class TaskService {
       const priority = this.normalizePriority(dto.priority);
       const task = await this.taskRepository.create({
         title: dto.title,
-        description: dto.description,
-        due_date: new Date(dto.due_date),
+        description: dto.description ?? '',
+        due_date: dto.due_date ? new Date(dto.due_date) : null,
         priority,
         category: dto.category ?? null,
         parent_id: dto.parent_id ?? null,
@@ -200,7 +200,7 @@ export class TaskService {
       id: task.id,
       title: task.title,
       description: task.description,
-      due_date: task.due_date.toISOString(),
+      due_date: task.due_date?.toISOString() ?? null,
       priority: this.normalizePriority(task.priority as Priority),
       category: task.category,
       parent_id: task.parent_id,
@@ -214,7 +214,7 @@ export class TaskService {
         id: child.id,
         title: child.title,
         description: child.description,
-        due_date: child.due_date.toISOString(),
+        due_date: child.due_date?.toISOString() ?? null,
         priority: this.normalizePriority(child.priority as Priority),
         category: child.category,
         parent_id: child.parent_id,

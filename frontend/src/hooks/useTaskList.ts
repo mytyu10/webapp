@@ -73,9 +73,14 @@ function updateIsCompletedInTree(tasks: Task[], id: number, is_completed: boolea
  * タスクの有効な期限日を返すヘルパー関数
  * 子タスクを持つ親タスクは子タスクの最短 due_date を基準とする
  */
+const FAR_FUTURE = new Date('9999-12-31');
+
 function getEffectiveDueDate(task: Task): Date {
-  if (!task.children || task.children.length === 0) return new Date(task.due_date);
-  const childDates = task.children.map((c) => new Date(c.due_date).getTime());
+  if (!task.children || task.children.length === 0) {
+    return task.due_date ? new Date(task.due_date) : FAR_FUTURE;
+  }
+  const childDates = task.children
+    .map((c) => (c.due_date ? new Date(c.due_date).getTime() : FAR_FUTURE.getTime()));
   return new Date(Math.min(...childDates));
 }
 

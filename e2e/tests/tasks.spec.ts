@@ -14,6 +14,14 @@ import { generateUsername, registerAndLogin } from './helpers/auth';
 
 const TEST_PASSWORD = 'testpass1';
 
+/** タイトルのみでタスクを作成するヘルパー */
+async function createTaskByTitle(page: import('@playwright/test').Page, title: string): Promise<void> {
+  await page.goto('/tasks/new');
+  await page.getByLabel('タイトル').fill(title);
+  await page.getByRole('button', { name: '作成する' }).click();
+  await page.waitForURL('**/tasks');
+}
+
 test.describe('タスク一覧', () => {
   test.beforeEach(async ({ page }) => {
     const username = generateUsername('t');
@@ -51,31 +59,32 @@ test.describe('タスク作成', () => {
     await expect(page.getByRole('heading', { name: 'タスクを作成' })).toBeVisible();
   });
 
-  test('タスク作成フォームで必須項目を入力して送信すると一覧にタスクが追加される', async ({ page }) => {
+  test('タイトルのみ入力して送信するとタスクが作成される', async ({ page }) => {
     const taskTitle = `E2Eタスク${Date.now()}`;
 
     await page.goto('/tasks/new');
-
-    /* タイトルを入力する */
     await page.getByLabel('タイトル').fill(taskTitle);
-
-    /* 説明文を入力する */
-    await page.getByLabel('説明文').fill('E2Eテスト用の説明');
-
-    /* 期限を入力する（datetime-local 形式） */
-    await page.locator('input[type="datetime-local"]').fill('2026-12-31T23:59');
-
-    /* 担当者を選択する（自分自身を選ぶ） */
-    const assigneeSelect = page.locator('select').last();
-    await assigneeSelect.selectOption({ label: testUsername });
-
-    /* 送信する */
     await page.getByRole('button', { name: '作成する' }).click();
 
     /* /tasks に戻ること */
     await page.waitForURL('**/tasks');
 
     /* 作成したタスクが一覧に表示されること */
+    await expect(page.getByText(taskTitle)).toBeVisible();
+  });
+
+  test('タイトル・説明・期限・担当者を全て入力して送信するとタスクが作成される', async ({ page }) => {
+    const taskTitle = `E2Eタスク全項目${Date.now()}`;
+
+    await page.goto('/tasks/new');
+    await page.getByLabel('タイトル').fill(taskTitle);
+    await page.getByLabel('説明文').fill('E2Eテスト用の説明');
+    await page.locator('input[type="datetime-local"]').fill('2026-12-31T23:59');
+    const assigneeSelect = page.locator('select').last();
+    await assigneeSelect.selectOption({ label: testUsername });
+    await page.getByRole('button', { name: '作成する' }).click();
+
+    await page.waitForURL('**/tasks');
     await expect(page.getByText(taskTitle)).toBeVisible();
   });
 
@@ -102,16 +111,7 @@ test.describe('タスク詳細パネル', () => {
   test.beforeEach(async ({ page }) => {
     panelTestUsername = generateUsername('td');
     await registerAndLogin(page, panelTestUsername, TEST_PASSWORD);
-
-    /* テスト用タスクを作成する */
-    await page.goto('/tasks/new');
-    await page.getByLabel('タイトル').fill('詳細パネルテスト用タスク');
-    await page.getByLabel('説明文').fill('テスト用');
-    await page.locator('input[type="datetime-local"]').fill('2026-12-31T23:59');
-    const assigneeSelect = page.locator('select').last();
-    await assigneeSelect.selectOption({ label: panelTestUsername });
-    await page.getByRole('button', { name: '作成する' }).click();
-    await page.waitForURL('**/tasks');
+    await createTaskByTitle(page, '詳細パネルテスト用タスク');
   });
 
   test('タスクカードをクリックすると詳細パネルが開く', async ({ page }) => {
@@ -130,16 +130,7 @@ test.describe('タスク完了（CRUD: Update）', () => {
   test.beforeEach(async ({ page }) => {
     completeTestUsername = generateUsername('tu');
     await registerAndLogin(page, completeTestUsername, TEST_PASSWORD);
-
-    /* テスト用タスクを作成する */
-    await page.goto('/tasks/new');
-    await page.getByLabel('タイトル').fill('完了テスト用タスク');
-    await page.getByLabel('説明文').fill('テスト用');
-    await page.locator('input[type="datetime-local"]').fill('2026-12-31T23:59');
-    const assigneeSelect = page.locator('select').last();
-    await assigneeSelect.selectOption({ label: completeTestUsername });
-    await page.getByRole('button', { name: '作成する' }).click();
-    await page.waitForURL('**/tasks');
+    await createTaskByTitle(page, '完了テスト用タスク');
   });
 
   test('タスクを「完了にする」ボタンで完了状態に更新できる', async ({ page }) => {
@@ -177,16 +168,7 @@ test.describe('タスク削除（CRUD: Delete）', () => {
   test.beforeEach(async ({ page }) => {
     deleteTestUsername = generateUsername('tde');
     await registerAndLogin(page, deleteTestUsername, TEST_PASSWORD);
-
-    /* テスト用タスクを作成する */
-    await page.goto('/tasks/new');
-    await page.getByLabel('タイトル').fill('削除テスト用タスク');
-    await page.getByLabel('説明文').fill('テスト用');
-    await page.locator('input[type="datetime-local"]').fill('2026-12-31T23:59');
-    const assigneeSelect = page.locator('select').last();
-    await assigneeSelect.selectOption({ label: deleteTestUsername });
-    await page.getByRole('button', { name: '作成する' }).click();
-    await page.waitForURL('**/tasks');
+    await createTaskByTitle(page, '削除テスト用タスク');
   });
 
   test('タスクを詳細パネルから削除するとタスク一覧から消える', async ({ page }) => {

@@ -11,8 +11,9 @@ const INPUT_CLASS =
 const LABEL_CLASS = 'block text-xs font-medium text-slate-400 uppercase tracking-wide mb-1';
 const ERROR_CLASS = 'mt-1 text-xs text-red-400';
 
-/** ISO文字列をdatetime-local input用のローカル時刻文字列に変換する */
-function toDatetimeLocal(iso: string): string {
+/** ISO文字列をdatetime-local input用のローカル時刻文字列に変換する（nullの場合は空文字） */
+function toDatetimeLocal(iso: string | null): string {
+  if (!iso) return '';
   const d = new Date(iso);
   const pad = (n: number): string => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -105,9 +106,9 @@ function TaskEditForm({ task, onSave, onCancel }: TaskEditFormProps) {
     try {
       await onSave(task.id, {
         title: editValues.title,
-        description: editValues.description,
-        due_date: new Date(editValues.due_date).toISOString(),
-        assignees: editValues.assignees,
+        description: editValues.description || undefined,
+        due_date: editValues.due_date ? new Date(editValues.due_date).toISOString() : undefined,
+        assignees: editValues.assignees.length > 0 ? editValues.assignees : undefined,
         priority: editValues.priority,
         category: editValues.category || undefined,
       });

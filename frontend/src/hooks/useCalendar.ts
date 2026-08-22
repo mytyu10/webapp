@@ -97,7 +97,8 @@ function resolveEventColor(color: string): { bg: string; text: string } {
  * due_date-1時間をstart、due_dateをendに設定して期限がイベントの終了時刻となるようにする。
  * 日表示（timeGridDay）ビュー専用として呼び出し側でフィルターする
  */
-function taskToEventInput(task: Task): FullCalendarEventInput {
+function taskToEventInput(task: Task): FullCalendarEventInput | null {
+  if (!task.due_date) return null;
   const end = task.due_date;
   const start = new Date(new Date(task.due_date).getTime() - TASK_EVENT_DURATION_MS).toISOString();
   const bgColor = task.is_completed ? '#374151' : '#6d28d9';
@@ -240,7 +241,7 @@ export function useCalendar(): UseCalendarReturn {
   const calendarEvents = useMemo((): FullCalendarEventInput[] => {
     const eventInputs = events.map(calendarEventToEventInput);
     if (currentView === 'timeGridDay') {
-      const taskInputs = tasks.map(taskToEventInput);
+      const taskInputs = tasks.map(taskToEventInput).filter((e): e is FullCalendarEventInput => e !== null);
       return [...eventInputs, ...taskInputs];
     }
     return eventInputs;

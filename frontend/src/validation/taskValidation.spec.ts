@@ -1,18 +1,28 @@
 import { validateTaskForm, TaskFormValues } from './taskValidation';
 
-/** テスト用の有効なフォーム値 */
+/** テスト用の有効なフォーム値（タイトルのみ必須） */
 const validValues: TaskFormValues = {
   title: 'テストタスク',
-  description: 'テスト説明文',
-  due_date: '2026-12-31T23:59',
-  assignees: ['user1', 'user2'],
+  description: '',
+  due_date: '',
+  assignees: [],
   priority: 'MEDIUM',
   category: '',
 };
 
 describe('validateTaskForm', () => {
-  it('全て正常な値の場合はエラーなしを返す', () => {
+  it('タイトルのみ入力した場合はエラーなしを返す', () => {
     const errors = validateTaskForm(validValues);
+    expect(Object.keys(errors)).toHaveLength(0);
+  });
+
+  it('全て入力した場合はエラーなしを返す', () => {
+    const errors = validateTaskForm({
+      ...validValues,
+      description: 'テスト説明文',
+      due_date: '2026-12-31T23:59',
+      assignees: ['user1', 'user2'],
+    });
     expect(Object.keys(errors)).toHaveLength(0);
   });
 
@@ -39,9 +49,9 @@ describe('validateTaskForm', () => {
   });
 
   describe('description', () => {
-    it('説明文が空の場合はエラーを返す', () => {
+    it('説明文が空の場合はエラーなし', () => {
       const errors = validateTaskForm({ ...validValues, description: '' });
-      expect(errors.description).toBeTruthy();
+      expect(errors.description).toBeUndefined();
     });
 
     it('説明文が1000文字以内の場合はエラーなし', () => {
@@ -56,9 +66,9 @@ describe('validateTaskForm', () => {
   });
 
   describe('due_date', () => {
-    it('期限が空の場合はエラーを返す', () => {
+    it('期限が空の場合はエラーなし', () => {
       const errors = validateTaskForm({ ...validValues, due_date: '' });
-      expect(errors.due_date).toBeTruthy();
+      expect(errors.due_date).toBeUndefined();
     });
 
     it('不正な日時形式の場合はエラーを返す', () => {
@@ -73,9 +83,9 @@ describe('validateTaskForm', () => {
   });
 
   describe('assignees', () => {
-    it('担当者が空の場合はエラーになる', () => {
+    it('担当者が空の場合はエラーなし', () => {
       const errors = validateTaskForm({ ...validValues, assignees: [] });
-      expect(errors.assignees).toBeDefined();
+      expect(errors.assignees).toBeUndefined();
     });
 
     it('担当者が50人以内の場合はエラーなし', () => {
