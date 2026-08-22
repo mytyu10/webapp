@@ -7,6 +7,19 @@ import { logger } from '../logger';
 
 const CONTEXT = 'useVoiceCommand';
 
+const SPEECH_LANG = 'ja-JP';
+const SPEECH_RATE = 1.0;
+const SPEECH_PITCH = 1.0;
+
+function speakReply(text: string): void {
+  if (!text || !window.speechSynthesis) return;
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = SPEECH_LANG;
+  utter.rate = SPEECH_RATE;
+  utter.pitch = SPEECH_PITCH;
+  window.speechSynthesis.speak(utter);
+}
+
 /**
  * Web Speech API の型定義（ブラウザグローバル）
  * TypeScript の標準型定義には含まれないため手動定義する
@@ -208,7 +221,10 @@ export function useVoiceCommand(onSuccess?: () => void): UseVoiceCommandReturn {
         setIsProcessing(true);
 
         sendVoiceCommand(text)
-          .then((response) => executeAction(response))
+          .then((response) => {
+            speakReply(response.reply);
+            return executeAction(response);
+          })
           .catch((err: unknown) => {
             const message =
               err instanceof Error
