@@ -6,13 +6,19 @@ import type { VoiceCommandResult } from '../dto/voice.dto';
 
 const CONTEXT = 'VoiceService';
 
+const JST_OFFSET_HOURS = 9;
+const MINUTES_PER_HOUR = 60;
+const MS_PER_MINUTE = 60 * 1000;
+const JST_OFFSET_MS = JST_OFFSET_HOURS * MINUTES_PER_HOUR * MS_PER_MINUTE;
+
 /** Claude に渡すシステムプロンプト */
 const SYSTEM_PROMPT = `あなたは日本語の音声コマンドを解析するアシスタントです。
 ユーザーの発話を解析し、以下のJSON形式のみを返してください。説明文やコードブロックは不要です。
 
 {
   "action": "<アクション種別>",
-  "params": { <パラメーター> }
+  "params": { <パラメーター> },
+  "reply": "<ユーザーへの完了報告（日本語・1文・30文字以内）>"
 }
 
 アクション種別と対応するパラメーター:
@@ -61,15 +67,17 @@ export class VoiceService {
     this.logger.log(CONTEXT, `音声コマンド解析開始: "${text}"`);
 
     try {
-      const currentDate = new Date().toISOString();
+      const now = new Date();
+      const jstDate = new Date(now.getTime() + JST_OFFSET_MS);
+      const jstDateStr = jstDate.toISOString().replace('Z', '+09:00');
       const response = await this.anthropic.messages.create({
-        model: 'claude-3-5-haiku-20241022',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 512,
         system: SYSTEM_PROMPT,
         messages: [
           {
             role: 'user',
-            content: `現在日時: ${currentDate}\n\n音声コマンド: ${text}`,
+            content: `現在日時(JST): ${jstDateStr}\nタイムゾーン: Asia/Tokyo (UTC+9)\nユーザーが指定する時刻はJSTです。ISO8601のstart_at/end_at/due_dateはUTCに変換して出力してください。\n\n音声コマンド: ${text}`,
           },
         ],
       });
@@ -107,7 +115,7 @@ export class VoiceService {
 
     if (jsonStart === -1 || jsonEnd === -1) {
       this.logger.warn(CONTEXT, 'JSON が見つかりませんでした');
-      return { action: 'unknown', params: {} };
+      return { action: 'unknown', params: {}, reply: '' };
     }
 
     const jsonStr = cleaned.slice(jsonStart, jsonEnd + 1);
@@ -116,10 +124,12 @@ export class VoiceService {
       const parsed = JSON.parse(jsonStr) as {
         action?: string;
         params?: Record<string, unknown>;
+        reply?: string;
       };
 
       const action = parsed.action as VoiceCommandResult['action'];
       const params = parsed.params ?? {};
+      const reply = parsed.reply ?? '';
 
       const validActions: VoiceCommandResult['action'][] = [
         'navigate',
@@ -131,13 +141,13 @@ export class VoiceService {
 
       if (!validActions.includes(action)) {
         this.logger.warn(CONTEXT, `不明なアクション: ${String(parsed.action)}`);
-        return { action: 'unknown', params: {} };
+        return { action: 'unknown', params: {}, reply: '' };
       }
 
-      return { action, params } as VoiceCommandResult;
+      return { action, params, reply } as VoiceCommandResult;
     } catch (parseError) {
       this.logger.warn(CONTEXT, `JSONパース失敗: ${String(parseError)}`);
-      return { action: 'unknown', params: {} };
+      return { action: 'unknown', params: {}, reply: '' };
     }
   }
 }

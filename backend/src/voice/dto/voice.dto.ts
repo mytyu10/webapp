@@ -57,4 +57,5 @@ export interface VoiceCommandResult {
     | CompleteTaskParams
     | CreateEventParams
     | Record<string, never>;
+  reply: string;
 }
