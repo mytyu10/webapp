@@ -130,5 +130,6 @@ export const MESSAGE = {
   VOICE: {
     COMMAND_FAILED: '音声コマンドの解析に失敗しました',
     COMMAND_INVALID: '音声コマンドを認識できませんでした',
+    FOLLOWUP_FAILED: 'フォローアップの解析に失敗しました',
   },
 };

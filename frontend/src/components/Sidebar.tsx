@@ -33,6 +33,7 @@ function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const {
     isListening,
     isProcessing,
+    isFollowingUp,
     error: voiceError,
     startListening,
     stopListening,
@@ -59,6 +60,14 @@ function Sidebar({ isOpen, onToggle }: SidebarProps) {
     } else {
       startListening();
     }
+  }
+
+  /** 音声コマンドボタンのラベルを返す */
+  function getMicLabel(): string {
+    if (isListening) return '録音中...';
+    if (isProcessing) return '解析中...';
+    if (isFollowingUp) return '追加情報を確認中...';
+    return '音声コマンド';
   }
 
   return (
@@ -137,11 +146,11 @@ function Sidebar({ isOpen, onToggle }: SidebarProps) {
               <button
                 type="button"
                 onClick={handleMicClick}
-                disabled={isProcessing}
+                disabled={isProcessing || isFollowingUp}
                 className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap w-full ${
                   isListening
                     ? 'bg-red-700 text-white animate-pulse'
-                    : isProcessing
+                    : isProcessing || isFollowingUp
                       ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
                       : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                 }`}
@@ -149,17 +158,19 @@ function Sidebar({ isOpen, onToggle }: SidebarProps) {
               >
                 {isProcessing ? (
                   <span className="inline-block w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                ) : isFollowingUp ? (
+                  <span aria-hidden="true">...</span>
                 ) : (
                   <span aria-hidden="true">{isListening ? '■' : '🎤'}</span>
                 )}
-                <span>
-                  {isListening
-                    ? '録音中...'
-                    : isProcessing
-                      ? '解析中...'
-                      : '音声コマンド'}
-                </span>
+                <span>{getMicLabel()}</span>
               </button>
+              {/* フォローアップ中のヒント表示 */}
+              {isFollowingUp && !isListening && !isProcessing && (
+                <p className="mt-1 px-3 text-xs text-sky-400 break-words max-w-full">
+                  追加情報を音声で答えてください
+                </p>
+              )}
               {/* エラー表示 */}
               {voiceError && (
                 <p className="mt-1 px-3 text-xs text-red-400 break-words max-w-full">
