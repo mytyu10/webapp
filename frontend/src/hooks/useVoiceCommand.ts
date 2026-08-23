@@ -121,6 +121,7 @@ export function useVoiceCommand(onSuccess?: () => void): UseVoiceCommandReturn {
 
   const navigate = useNavigate();
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const startListeningInternalRef = useRef<(() => void) | null>(null);
 
   /** フォローアップ状態をリセットする */
   const resetFollowup = useCallback((): void => {
@@ -299,7 +300,7 @@ export function useVoiceCommand(onSuccess?: () => void): UseVoiceCommandReturn {
         // 発話完了後にマイクを自動再起動
         speakReply(reply, () => {
           logger.info(CONTEXT, 'フォローアップのためマイクを自動再起動します');
-          startListeningInternal();
+          startListeningInternalRef.current?.();
         });
         return;
       }
@@ -397,6 +398,8 @@ export function useVoiceCommand(onSuccess?: () => void): UseVoiceCommandReturn {
     setIsListening(true);
     logger.info(CONTEXT, '音声認識開始');
   }, [handleResponse, resetFollowup]);
+
+  startListeningInternalRef.current = startListeningInternal;
 
   /** 録音を開始する（外部から呼ばれる） */
   const startListening = useCallback((): void => {
