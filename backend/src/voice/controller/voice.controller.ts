@@ -18,7 +18,8 @@ export class VoiceController {
   ) {}
 
   /**
-   * 音声認識テキストをClaude APIで解析し、実行すべきアクションを返す
+   * 音声認識テキストをClaude APIで解析し、実行すべきアクションを返す。
+   * context が含まれる場合はフォローアップ（マルチターン）として処理する
    */
   @Post('command')
   @UseGuards(JwtAuthGuard)
@@ -26,7 +27,10 @@ export class VoiceController {
   async processCommand(
     @Body() dto: VoiceCommandRequestDto,
   ): Promise<VoiceCommandResult> {
-    this.logger.log(CONTEXT, `音声コマンドリクエスト受信: "${dto.text}"`);
-    return this.voiceService.processCommand(dto.text);
+    this.logger.log(
+      CONTEXT,
+      `音声コマンドリクエスト受信: "${dto.text}" hasContext=${!!dto.context}`,
+    );
+    return this.voiceService.processCommand(dto.text, dto.context);
   }
 }
